@@ -1,0 +1,10 @@
+.DS_Store
+
+# Secrets : jamais dans le dépôt
+.env
+.env.*
+*.key
+
+# Fichiers de travail du CLI Supabase
+supabase/.temp/
+supabase/.branches/

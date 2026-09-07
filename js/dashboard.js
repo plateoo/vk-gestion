@@ -1,0 +1,166 @@
+// =====================================================================
+// dashboard.js — KPI du mois sélectionné, alertes, top fournisseurs
+// =====================================================================
+import { getInvoices, setInvoiceFilters } from './invoices.js';
+import {
+  $, fmtEUR, escapeHtml, toast, errorMessage, getMonth, setMonth, shiftMonth,
+  currentMonthKey, monthLabel, inMonth, isOverdue, ICONS
+} from './ui.js';
+
+export async function renderDashboard() {
+  const month = getMonth();
+  $('#dash-month-label').textContent = monthLabel(month);
+  $('#print-month').textContent = monthLabel(month);
+
+  const tbody = $('#top-tbody');
+  let invoices;
+  try {
+    invoices = await getInvoices();
+  } catch (err) {
+    console.error(err);
+    toast(errorMessage(err, 'Chargement du tableau de bord impossible.'), 'error');
+    tbody.innerHTML = `<tr class="empty-row"><td colspan="4"><div class="empty"><p>Données indisponibles.</p></div></td></tr>`;
+    return;
+  }
+
+  const rows = invoices.filter((i) => inMonth(i.invoice_date, month));
+  const prevKey = shiftMonth(month, -1);
+  const prevRows = invoices.filter((i) => inMonth(i.invoice_date, prevKey));
+
+  // ---------- 6 KPI ----------
+  const htva = rows.reduce((s, i) => s + (Number(i.amount_htva) || 0), 0);
+  const tvac = rows.reduce((s, i) => s + (Number(i.amount_tvac) || 0), 0);
+  const tva = tvac - htva;
+  const due = rows.filter((i) => i.payment_status !== 'paye')
+    .reduce((s, i) => s + (Number(i.amount_tvac) || 0), 0);
+  const late = rows.filter(isOverdue);
+
+  // Mois précédent, pour les variations
+  const pHtva = prevRows.reduce((s, i) => s + (Number(i.amount_htva) || 0), 0);
+  const pTvac = prevRows.reduce((s, i) => s + (Number(i.amount_tvac) || 0), 0);
+  const vs = `vs ${shortMonth(prevKey)}`;
+
+  $('#kpi-count').textContent = rows.length;
+  $('#kpi-htva').textContent = fmtEUR(htva);
+  $('#kpi-tva').textContent = fmtEUR(tva);
+  $('#kpi-tvac').textContent = fmtEUR(tvac);
+  $('#kpi-due').textContent = fmtEUR(due);
+  $('#kpi-due').classList.toggle('txt-red', due > 0);
+  $('#card-due').classList.toggle('is-alert', due > 0);
+
+  setVariation('#kpi-count-sub', rows.length, prevRows.length, vs);
+  setVariation('#kpi-htva-sub', htva, pHtva, vs);
+  setVariation('#kpi-tva-sub', tvac - htva, pTvac - pHtva, vs);
+  setVariation('#kpi-tvac-sub', tvac, pTvac, vs);
+  $('#kpi-late').textContent = late.length;
+  $('#kpi-late-sub').textContent = late.length
+    ? fmtEUR(late.reduce((s, i) => s + (Number(i.amount_tvac) || 0), 0)) + ' en souffrance'
+    : 'Rien en retard';
+  $('#card-late').classList.toggle('is-alert', late.length > 0);
+
+  // ---------- 3 blocs d'alerte ----------
+  const noSmart = rows.filter((i) => !i.in_smart).length;
+  const noWin = rows.filter((i) => !i.in_winauditor).length;
+  const noStock = rows.filter((i) => !i.stock_in).length;
+  setAlert('#alert-smart', noSmart, 'facture', 'pas encore encodée dans Smart', 'pas encore encodées dans Smart', 'Tout est encodé dans Smart');
+  setAlert('#alert-win', noWin, 'facture', 'pas encore envoyée à WinAuditor', 'pas encore envoyées à WinAuditor', 'Tout est envoyé à WinAuditor');
+  setAlert('#alert-stock', noStock, 'facture', 'sans entrée en stock', 'sans entrée en stock', 'Tout est entré en stock');
+
+  // ---------- Barres de progression du mois ----------
+  setProgress('smart', rows.length - noSmart, rows.length, 'encodée dans Smart', 'encodées dans Smart');
+  setProgress('win', rows.length - noWin, rows.length, 'envoyée à WinAuditor', 'envoyées à WinAuditor');
+
+  // ---------- Top fournisseurs du mois ----------
+  const map = new Map();
+  for (const i of rows) {
+    const key = i.supplier_id;
+    if (!map.has(key)) map.set(key, { name: i.supplier_name, count: 0, total: 0, due: 0 });
+    const e = map.get(key);
+    e.count += 1;
+    e.total += Number(i.amount_tvac) || 0;
+    if (i.payment_status !== 'paye') e.due += Number(i.amount_tvac) || 0;
+  }
+  const top = [...map.values()].sort((a, b) => b.total - a.total);
+
+  if (!top.length) {
+    tbody.innerHTML = `<tr class="empty-row"><td colspan="4">
+      <div class="empty">
+        ${ICONS.empty}
+        <p>Aucune facture en ${escapeHtml(monthLabel(month).toLowerCase())}</p>
+        <button type="button" class="btn btn-primary" id="dash-empty-new">Encoder la première</button>
+      </div></td></tr>`;
+    const b = $('#dash-empty-new');
+    if (b) b.addEventListener('click', () => window.dispatchEvent(new CustomEvent('vk:new-invoice')));
+    return;
+  }
+  tbody.innerHTML = top.map((t) => `
+    <tr>
+      <td data-label="Fournisseur">${escapeHtml(t.name)}</td>
+      <td data-label="Factures" class="num">${t.count}</td>
+      <td data-label="Total TVAC" class="num">${fmtEUR(t.total)}</td>
+      <td data-label="Reste dû" class="num ${t.due > 0 ? 'txt-red' : ''}">${fmtEUR(t.due)}</td>
+    </tr>`).join('');
+}
+
+/** '2026-08' -> 'août' */
+function shortMonth(key) {
+  const [y, m] = key.split('-').map(Number);
+  return new Date(y, m - 1, 1).toLocaleDateString('fr-BE', { month: 'long' });
+}
+
+/** Variation en % par rapport au mois précédent (affichée sous le chiffre) */
+function setVariation(sel, cur, prev, vsLabel) {
+  const el = $(sel);
+  if (!el) return;
+  if (!prev) {
+    el.textContent = cur ? `— ${vsLabel}` : '';
+    el.className = 'kpi-sub';
+    return;
+  }
+  const pct = Math.round(((cur - prev) / prev) * 100);
+  el.textContent = `${pct > 0 ? '+' : ''}${pct} % ${vsLabel}`;
+  el.className = `kpi-sub ${pct > 0 ? 'up' : pct < 0 ? 'down' : ''}`;
+}
+
+/** Barre de progression fine « 34 factures sur 41 envoyées à WinAuditor » */
+function setProgress(key, done, total, singular, plural) {
+  const bar = $(`#prog-${key}-bar`);
+  const txt = $(`#prog-${key}-text`);
+  if (!bar || !txt) return;
+  const pct = total ? Math.round((done / total) * 100) : 0;
+  bar.style.width = `${pct}%`;
+  bar.classList.toggle('full', total > 0 && done === total);
+  // « 34 factures sur 41 envoyées » / « 1 facture sur 4 envoyée » : tout s'accorde avec `done`
+  txt.textContent = total
+    ? `${done} facture${done > 1 ? 's' : ''} sur ${total} ${done > 1 ? plural : singular}`
+    : 'Aucune facture ce mois-ci';
+}
+
+/** Met à jour un bloc d'alerte (vert avec une coche quand le compteur est à 0) */
+function setAlert(sel, n, noun, singular, plural, okText) {
+  const box = $(sel);
+  box.classList.toggle('ok', n === 0);
+  box.querySelector('.alert-text').textContent = n === 0
+    ? `✓ ${okText}`
+    : `${n} ${noun}${n > 1 ? 's' : ''} ${n > 1 ? plural : singular}`;
+}
+
+export function initDashboard() {
+  // Le sélecteur de mois est unique et vit dans le bandeau supérieur (voir index.html)
+
+  // Chaque bloc d'alerte filtre la liste des factures
+  $('#alert-smart').addEventListener('click', () => gotoInvoices({ smart: 'non' }));
+  $('#alert-win').addEventListener('click', () => gotoInvoices({ winauditor: 'non' }));
+  $('#alert-stock').addEventListener('click', () => gotoInvoices({ stock: 'sans' }));
+  $('#card-late').addEventListener('click', () => gotoInvoices({}));
+
+  window.addEventListener('vk:month', () => renderDashboard());
+}
+
+function gotoInvoices(patch) {
+  window.dispatchEvent(new CustomEvent('vk:goto-invoices'));
+  setInvoiceFilters(Object.assign(
+    { q: '', period: 'month', supplier: '', status: '', smart: '', winauditor: '', stock: '' },
+    patch
+  ));
+}

@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mode d'emploi — VK Gestion</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+<style>
+  /* Le mode d'emploi s'imprime en portrait (l'app, elle, s'imprime en paysage) */
+  @page { size: A4 portrait; margin: 14mm; }
+</style>
+</head>
+<body class="guide-body">
+
+<header class="appbar no-print">
+  <a class="appbar-logo" href="index.html" title="Retour à l'application">
+    <img src="assets/logo-vbk-blanc.svg" alt="Vanden Borre Kitchen" width="120">
+  </a>
+  <div class="appbar-center"><span class="guide-appbar-title">Mode d'emploi</span></div>
+  <div class="appbar-right">
+    <button type="button" class="appbar-btn" onclick="window.print()">Imprimer</button>
+    <a class="appbar-btn" href="index.html">Retour à l'application</a>
+  </div>
+</header>
+
+<!-- En-tête d'impression -->
+<div class="print-only guide-print-head">
+  <img src="assets/logo-vbk.svg" alt="Vanden Borre Kitchen" width="170">
+  <div><strong>Suivi des factures fournisseurs — mode d'emploi</strong></div>
+</div>
+
+<div class="guide">
+
+  <!-- Sommaire -->
+  <nav class="guide-toc no-print" aria-label="Sommaire">
+    <p class="guide-toc-title">Sommaire</p>
+    <a href="#a-quoi-ca-sert">1. À quoi sert cette application</a>
+    <a href="#se-connecter">2. Se connecter</a>
+    <a href="#qui-fait-quoi">3. Qui fait quoi</a>
+    <a href="#encoder">4. Encoder une facture</a>
+    <a href="#fournisseur">5. Créer un fournisseur</a>
+    <a href="#couleurs">6. Le code couleur</a>
+    <a href="#paiement">7. Valider un paiement</a>
+    <a href="#cloture">8. La clôture de fin de mois</a>
+    <a href="#export">9. Exporter les données</a>
+    <a href="#faq">10. Questions fréquentes</a>
+  </nav>
+
+  <main class="guide-content">
+
+    <h1 class="guide-title">Suivi des factures fournisseurs</h1>
+    <p class="guide-lead">Ce document explique, pas à pas, comment utiliser l'application.
+       Aucune connaissance technique n'est nécessaire.</p>
+
+    <!-- 1 -->
+    <section id="a-quoi-ca-sert">
+      <h2>1. À quoi sert cette application</h2>
+      <p>Cette application <strong>ne remplace ni Smart ni WinAuditor</strong>. Les factures continuent
+         d'être encodées dans Smart, et la comptabilité continue de passer par WinAuditor.</p>
+      <p>Ici, c'est le <strong>tableau de contrôle</strong>. En un coup d'œil, il montre pour chaque facture :</p>
+      <ul>
+        <li>si elle a été <strong>encodée dans Smart</strong> ;</li>
+        <li>si elle a été <strong>envoyée au comptable</strong> (WinAuditor) ;</li>
+        <li>si la marchandise est <strong>entrée en stock</strong> ;</li>
+        <li>et surtout, si elle est <strong>payée ou non</strong>.</li>
+      </ul>
+      <p>Tout ce qui s'affiche concerne le mois choisi dans le bandeau noir, en haut de l'écran.</p>
+    </section>
+
+    <!-- 2 -->
+    <section id="se-connecter">
+      <h2>2. Se connecter</h2>
+      <p>L'application s'ouvre sur un écran de connexion. Entrez votre adresse et votre mot de passe,
+         puis cliquez sur <em>Se connecter</em>. La session reste ouverte : inutile de se reconnecter
+         à chaque fois, sauf si vous cliquez sur <em>Se déconnecter</em>.</p>
+      <p><strong>Mot de passe oublié ?</strong> Il n'y a pas de récupération automatique.
+         Contactez Jordan, qui vous en attribuera un nouveau.</p>
+      <p>Les comptes sont créés à la main : personne d'autre ne peut s'inscrire ni voir les factures.</p>
+    </section>
+
+    <!-- 3 -->
+    <section id="qui-fait-quoi">
+      <h2>3. Qui fait quoi</h2>
+      <table class="guide-table">
+        <thead><tr><th>Marie — secrétaire</th><th>Jordan — gérant</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>Encode les factures reçues</td>
+            <td>Voit tout ce que voit Marie</td>
+          </tr>
+          <tr>
+            <td>Coche Smart, WinAuditor et l'entrée en stock</td>
+            <td>Valide les paiements</td>
+          </tr>
+          <tr>
+            <td>Crée et modifie les fournisseurs</td>
+            <td>Supprime une facture ou un fournisseur si nécessaire</td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="guide-note"><strong>C'est normal et voulu :</strong> chez Marie, les boutons de paiement
+         n'apparaissent pas. Elle voit l'état de chaque facture (payée, à payer, en retard) mais ne peut
+         pas le modifier. Seul Jordan valide les paiements.</p>
+    </section>
+
+    <!-- 4 -->
+    <section id="encoder">
+      <h2>4. Encoder une facture, pas à pas</h2>
+      <p>Onglet <em>Factures</em>, bouton <strong>+ Nouvelle facture</strong> (ou la touche
+         <kbd>N</kbd> du clavier). Le formulaire se remplit entièrement au clavier : la touche
+         <kbd>Tab</kbd> passe au champ suivant, <kbd>Entrée</kbd> enregistre.</p>
+      <table class="guide-table">
+        <thead><tr><th>Champ</th><th>Ce qu'il faut savoir</th></tr></thead>
+        <tbody>
+          <tr><td>Fournisseur</td><td>Tapez les premières lettres, la liste se filtre. S'il n'existe pas encore, cliquez sur <em>+ créer un fournisseur</em> : votre saisie n'est pas perdue.</td></tr>
+          <tr><td>N° facture</td><td>Le numéro imprimé sur la facture. <strong>Un même numéro ne peut pas être encodé deux fois pour le même fournisseur</strong> : l'application le signale et propose d'aller voir la ligne existante.</td></tr>
+          <tr><td>Date facture</td><td>La date imprimée sur le document. C'est elle qui détermine le mois d'affichage.</td></tr>
+          <tr><td>Échéance</td><td><strong>Calculée automatiquement</strong> : date de la facture + délai de paiement du fournisseur. Vous pouvez la corriger si la facture indique autre chose.</td></tr>
+          <tr><td>Montant HTVA</td><td>Le montant hors TVA.</td></tr>
+          <tr><td>Taux TVA</td><td>21 % par défaut (taux belge standard), sinon 12 %, 6 % ou 0 %.</td></tr>
+          <tr><td>Total TVAC</td><td><strong>Calculé automatiquement</strong> et affiché en direct sous les montants. Il n'y a rien à saisir.</td></tr>
+          <tr><td>Smart / WinAuditor</td><td>Cochez si c'est déjà fait au moment de l'encodage. Sinon, vous cocherez plus tard d'un simple clic dans le tableau.</td></tr>
+          <tr><td>Entrée en stock / Sortie</td><td>Dates d'arrivée de la marchandise au magasin et de livraison au client. Facultatif.</td></tr>
+          <tr><td>Type de dépense</td><td>Marchandise, transport, frais généraux… Utile pour les exports.</td></tr>
+          <tr><td>Date d'encodage</td><td>La date du jour par défaut. C'est la trace de « quand » la facture est entrée dans le circuit.</td></tr>
+        </tbody>
+      </table>
+      <p><strong>Astuce :</strong> le bouton <em>Enregistrer et suivant</em> enregistre la facture et rouvre
+         un formulaire vide sur le même fournisseur. Idéal pour encoder une pile de factures d'un même fournisseur.</p>
+      <p><strong>Facture qui revient chaque mois</strong> (énergie, loyer, transport) : dans le menu
+         <em>⋯</em> au bout de la ligne, choisissez <em>Dupliquer</em>. Le montant et le type de dépense sont
+         repris, il ne reste qu'à saisir le numéro et les dates.</p>
+    </section>
+
+    <!-- 5 -->
+    <section id="fournisseur">
+      <h2>5. Créer un fournisseur</h2>
+      <p>Onglet <em>Fournisseurs</em>, bouton <strong>+ Nouveau fournisseur</strong>. On peut aussi le faire
+         directement depuis le formulaire de facture, sans perdre sa saisie.</p>
+      <p>Le champ le plus important est le <strong>délai de paiement en jours</strong> (30 par défaut) :
+         c'est lui qui calcule automatiquement l'échéance de toutes les factures de ce fournisseur.
+         Si un fournisseur accorde 60 jours, indiquez 60, et toutes ses échéances suivront.</p>
+      <p>Cliquer sur le nom d'un fournisseur ouvre sa <strong>fiche</strong> : coordonnées, nombre de factures,
+         total, montant payé, reste dû, et l'historique complet de ses factures.</p>
+      <p>Un fournisseur qui ne travaille plus avec le magasin peut être <em>archivé</em> plutôt que supprimé :
+         il disparaît des listes, mais ses factures restent.</p>
+    </section>
+
+    <!-- 6 -->
+    <section id="couleurs" class="guide-highlight">
+      <h2>6. Le code couleur</h2>
+      <p>C'est la section la plus importante : toute l'application repose sur ces quatre couleurs.</p>
+      <table class="guide-table guide-colors">
+        <thead><tr><th>Couleur</th><th>Signification</th><th>Où vous la voyez</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><span class="swatch sw-ok"></span> Vert</td>
+            <td><strong>Fait, ou payé</strong></td>
+            <td>Pastille Smart ou WinAuditor cochée, entrée en stock enregistrée, mention « Payé le … », bloc d'alerte à zéro.</td>
+          </tr>
+          <tr>
+            <td><span class="swatch sw-warn"></span> Orange</td>
+            <td><strong>À faire, ou échéance proche</strong></td>
+            <td>Bouton « Marquer payé », factures encore à payer, échéance dans les 5 jours, blocs d'alerte non résolus.</td>
+          </tr>
+          <tr>
+            <td><span class="swatch sw-danger"></span> Rouge</td>
+            <td><strong>En retard, ou litige</strong></td>
+            <td>Barre verticale à gauche de la ligne et date d'échéance en rouge dès que la date est dépassée et que la facture n'est pas payée.</td>
+          </tr>
+          <tr>
+            <td><span class="swatch sw-todo"></span> Gris</td>
+            <td><strong>Pas encore fait</strong></td>
+            <td>Pastille Smart ou WinAuditor non cochée (contour en pointillés), pas d'entrée en stock.</td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="guide-note">Le rouge vif du logo Vanden Borre Kitchen est la couleur de la <strong>marque</strong>
+         (bandeau, bouton d'ajout). Le rouge des <strong>alertes</strong> est plus sombre et toujours posé sur
+         un fond pâle : les deux ne se confondent pas.</p>
+      <p>Une petite <strong>coche verte tout à gauche de la ligne</strong> signale une facture entièrement
+         traitée : encodée dans Smart, envoyée à WinAuditor et payée. Il n'y a plus rien à en faire.</p>
+    </section>
+
+    <!-- 7 -->
+    <section id="paiement">
+      <h2>7. Valider un paiement</h2>
+      <p><em>Réservé à Jordan.</em></p>
+      <ul>
+        <li><strong>Un seul clic</strong> sur le bouton <em>Marquer payé</em> : la facture est payée et la
+            date du jour s'inscrit toute seule. Aucune confirmation à valider.</li>
+        <li><strong>Annuler</strong> : un message apparaît en bas à droite pendant 6 secondes avec un lien
+            <em>Annuler</em>. Passé ce délai, cliquez sur la pastille verte « Payé le … » et confirmez par <em>Oui</em>.</li>
+        <li><strong>Corriger la date</strong> (paiement effectué la semaine dernière, par exemple) : cliquez
+            sur la date affichée dans la pastille verte, choisissez la bonne date, puis <em>Enregistrer</em>.</li>
+        <li><strong>Plusieurs factures d'un coup</strong> : cochez les cases à gauche des lignes concernées.
+            Une barre noire apparaît en bas avec le nombre de factures, leur total, et le bouton
+            <em>Marquer payées</em>. C'est le geste à utiliser après un virement groupé.</li>
+        <li><strong>Litige ou acompte</strong> : menu <em>⋯</em> au bout de la ligne. Un acompte signifie
+            qu'une partie du montant a été payée d'avance et que le solde reste dû.</li>
+      </ul>
+      <p>« En retard » ne se choisit pas à la main : l'application le calcule seule dès que l'échéance est
+         dépassée et que la facture n'est pas payée.</p>
+    </section>
+
+    <!-- 8 -->
+    <section id="cloture">
+      <h2>8. La clôture de fin de mois</h2>
+      <p>La routine, en cinq points :</p>
+      <ol>
+        <li>Ouvrir le <strong>tableau de bord</strong> et vérifier que les <strong>trois blocs d'alerte sont verts</strong>
+            (rien à encoder dans Smart, rien à envoyer à WinAuditor, rien sans entrée en stock).</li>
+        <li>Contrôler le <strong>total du mois</strong> : nombre de factures, total HTVA, TVA, total TVAC.</li>
+        <li><strong>Pointer les paiements</strong> : filtrer sur « À payer », cocher les factures réglées et
+            cliquer sur <em>Marquer payées</em>.</li>
+        <li><strong>Exporter le CSV du mois</strong> depuis l'onglet Factures.</li>
+        <li><strong>Envoyer le fichier au comptable</strong>, éventuellement accompagné du récapitulatif imprimé.</li>
+      </ol>
+    </section>
+
+    <!-- 9 -->
+    <section id="export">
+      <h2>9. Exporter les données</h2>
+      <p>Bouton <strong>Exporter</strong> dans l'onglet Factures, trois possibilités :</p>
+      <ul>
+        <li><strong>CSV du mois affiché</strong> — toutes les factures du mois sélectionné ;</li>
+        <li><strong>CSV de la sélection courante</strong> — exactement ce qui est affiché à l'écran, filtres compris ;</li>
+        <li><strong>CSV complet</strong> — toutes les factures, toutes périodes.</li>
+      </ul>
+      <p>Le fichier <strong>s'ouvre directement dans Excel</strong> : les accents s'affichent correctement,
+         les dates sont au format jour/mois/année et les montants utilisent la virgule décimale.
+         Le nom du fichier indique le mois, par exemple <code>VK_factures_2026-09.csv</code>.</p>
+      <p>La fiche d'un fournisseur possède aussi son propre bouton d'export. Enfin, le bouton
+         <strong>Imprimer / PDF</strong> produit un récapitulatif papier propre, sans menus ni boutons.</p>
+    </section>
+
+    <!-- 10 -->
+    <section id="faq">
+      <h2>10. Questions fréquentes</h2>
+
+      <p class="faq-q">J'ai encodé une facture en double.</p>
+      <p>Normalement, c'est impossible : l'application refuse deux fois le même numéro pour le même
+         fournisseur et propose d'aller voir la ligne existante. Si un doublon est passé malgré tout
+         (numéro écrit différemment), demandez à Jordan de supprimer la ligne en trop via le menu <em>⋯</em>.</p>
+
+      <p class="faq-q">Je me suis trompé de montant.</p>
+      <p>Cliquez sur l'icône crayon au bout de la ligne, corrigez le montant, enregistrez. Le total TVAC
+         se recalcule automatiquement.</p>
+
+      <p class="faq-q">J'ai marqué une facture payée par erreur.</p>
+      <p>Utilisez le lien <em>Annuler</em> du message qui apparaît en bas à droite. S'il a disparu, cliquez
+         sur la pastille verte « Payé le … » et répondez <em>Oui</em> à la question « Annuler ce paiement ? ».</p>
+
+      <p class="faq-q">Je ne trouve pas un fournisseur.</p>
+      <p>Vérifiez d'abord l'orthographe dans la recherche. Il est peut-être archivé : cochez
+         <em>Afficher les archivés</em> dans l'onglet Fournisseurs. Sinon, créez-le.</p>
+
+      <p class="faq-q">L'application ne répond plus.</p>
+      <p>Rechargez la page (<kbd>Ctrl</kbd>+<kbd>R</kbd>, ou <kbd>Cmd</kbd>+<kbd>R</kbd> sur Mac).
+         <strong>Les données sont enregistrées sur le serveur : rien n'est perdu.</strong>
+         Si le problème persiste, vérifiez la connexion internet, puis prévenez Jordan.</p>
+
+      <p class="faq-q">Je veux revoir la visite guidée.</p>
+      <p>Cliquez sur le <strong>?</strong> dans le bandeau noir, puis <em>Revoir la visite guidée</em>.</p>
+    </section>
+
+    <div class="guide-foot no-print">
+      <button type="button" class="btn btn-primary" onclick="window.print()">Imprimer ce guide</button>
+      <a class="btn" href="index.html">Retour à l'application</a>
+    </div>
+
+  </main>
+</div>
+
+</body>
+</html>

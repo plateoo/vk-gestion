@@ -1,0 +1,929 @@
+/* =====================================================================
+   VK Gestion — feuille de style unique
+   Outil interne : sobre, dense, lisible. Aucune animation décorative.
+   ===================================================================== */
+
+/* ---------------------------------------------------------------
+   SOURCE UNIQUE DE VÉRITÉ POUR LES COULEURS
+   Aucune valeur hexadécimale ne doit apparaître ailleurs dans ce fichier.
+   --------------------------------------------------------------- */
+:root {
+  /* Marque Vanden Borre Kitchen */
+  --vbk-red:        #FF3640;   /* rouge de marque officiel (identité + actions primaires) */
+  --vbk-red-dark:   #D92630;   /* survol / état actif */
+  --vbk-black:      #1A1A1A;   /* bandeau, texte fort */
+  --vbk-graphite:   #2E2E2E;
+  --vbk-white:      #FFFFFF;
+
+  /* Neutres d'interface */
+  --bg:             #F5F6F7;
+  --surface:        #FFFFFF;
+  --border:         #E4E7EA;
+  --text:           #1A1A1A;
+  --text-muted:     #6B7280;
+
+  /* Statuts fonctionnels — jamais le rouge de marque */
+  --ok:             #127A45;   /* payé, fait */
+  --ok-soft:        #E7F5EC;
+  --warn:           #B26A00;   /* à payer, échéance proche */
+  --warn-soft:      #FDF3E2;
+  --danger:         #9B1C1C;   /* en retard, litige, erreur */
+  --danger-soft:    #FCE9E9;
+
+  /* Dérivés (teintes de bordure, survols, fonds) */
+  --border-strong:  #CBD1D8;
+  --border-ok:      #BFE3D0;
+  --border-warn:    #EBCB94;
+  --border-danger:  #F0C9C9;
+  --border-dashed:  #C7CDD6;
+  --line-soft:      #F0F2F5;
+  --surface-alt:    #FAFBFC;
+  --surface-hover:  #F1F3F5;
+  --surface-sunken: #EEF0F3;
+  --row-hover:      #FAFBFC;
+  --row-danger:     #FDF4F4;
+  --row-danger-hover: #FBECEC;
+  --row-select:     #F0F3F8;
+  --row-select-hover: #E9EEF6;
+  --row-flash:      #DFF3E7;
+  --ok-soft-hover:  #DAEEE3;
+  --ok-dark:        #0F6A3B;
+  --skeleton-a:     #EDEFF2;
+  --skeleton-b:     #F6F7F9;
+  --art:            #C8D0DB;
+  --print-line:     #999999;
+  --print-rule:     #DDDDDD;
+  --print-zebra:    #F5F5F5;
+  --toast-bg:       #21272F;
+  --toast-link:     #FFB3B7;
+  --row-highlight:  #FFF5CC;
+
+  /* Transparences sur fond foncé */
+  --on-dark:        rgba(255, 255, 255, .92);
+  --on-dark-soft:   rgba(255, 255, 255, .60);
+  --on-dark-fill:   rgba(255, 255, 255, .10);
+  --on-dark-fill-2: rgba(255, 255, 255, .20);
+  --on-dark-line:   rgba(255, 255, 255, .18);
+  --overlay:        rgba(26, 26, 26, .45);
+
+  /* Alias hérités : une seule définition, pas de couleur en dur */
+  --muted:     var(--text-muted);
+  --primary:   var(--vbk-black);
+  --accent:    var(--vbk-red);
+  --green:     var(--ok);
+  --green-bg:  var(--ok-soft);
+  --red:       var(--danger);
+  --red-bg:    var(--danger-soft);
+  --orange:    var(--warn);
+  --orange-bg: var(--warn-soft);
+  --grey:      var(--text-muted);
+  --grey-bg:   var(--surface-hover);
+
+  --radius: 8px;
+  --radius-card: 10px;
+  --shadow: 0 1px 2px rgba(16, 24, 40, .06), 0 1px 3px rgba(16, 24, 40, .08);
+  --shadow-pop: 0 8px 24px rgba(16, 24, 40, .16);
+  --shadow-modal: 0 12px 40px rgba(16, 24, 40, .22);
+  --appbar-h: 64px;   /* laisse respirer le logo VBK (120px de large) */
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 14px;
+  line-height: 1.45;
+  -webkit-text-size-adjust: 100%;
+  overflow-x: hidden;
+}
+
+h1 { font-size: 20px; margin: 0; font-weight: 600; }
+h2 { font-size: 15px; margin: 0; font-weight: 600; }
+a { color: var(--accent); }
+
+.num { text-align: right; font-variant-numeric: tabular-nums; }
+.strong { font-weight: 600; }
+.muted { color: var(--muted); }
+.small { font-size: 12px; }
+.txt-red { color: var(--red); }
+.spacer { flex: 1; }
+.sep { color: var(--border); }
+.print-only { display: none; }
+
+/* ---------------------------------------------------------------
+   Boutons & champs
+   --------------------------------------------------------------- */
+.btn {
+  font: inherit;
+  font-weight: 500;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px 12px;
+  min-height: 36px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.btn:hover { border-color: var(--border-strong); }
+.btn:disabled { opacity: .55; cursor: default; }
+/* Bouton primaire = rouge de marque (identité), jamais le rouge d'alerte */
+.btn-primary { background: var(--vbk-red); border-color: var(--vbk-red); color: var(--vbk-white); }
+.btn-primary:hover { background: var(--vbk-red-dark); border-color: var(--vbk-red-dark); }
+/* Variante contour : utilisée quand un bouton de marque côtoie une zone d'alerte */
+.btn-outline { background: var(--surface); border-color: var(--vbk-red); color: var(--vbk-red); }
+.btn-outline:hover { background: var(--surface-hover); border-color: var(--vbk-red-dark); color: var(--vbk-red-dark); }
+.btn-danger { background: var(--red); border-color: var(--red); color: var(--vbk-white); }
+.btn-ghost { background: transparent; border-color: transparent; color: var(--muted); }
+.btn-ghost:hover { background: var(--grey-bg); border-color: transparent; color: var(--text); }
+.btn-sm { padding: 5px 9px; min-height: 30px; font-size: 13px; }
+.btn-icon { padding: 4px 10px; min-height: 32px; font-size: 16px; line-height: 1; }
+.btn-block { width: 100%; }
+
+input, select, textarea {
+  font: inherit;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 7px 9px;
+  min-height: 36px;
+  max-width: 100%;
+}
+input:focus, select:focus, textarea:focus, .btn:focus-visible, button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+textarea { min-height: 54px; resize: vertical; }
+label { font-size: 12px; color: var(--muted); font-weight: 500; }
+.check { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text); }
+.check input { min-height: 0; width: 16px; height: 16px; }
+
+.link-btn {
+  background: none; border: none; padding: 0; font: inherit; font-weight: 500;
+  color: var(--accent); cursor: pointer; text-align: left;
+}
+.link-btn:hover { text-decoration: underline; }
+
+.icon-btn {
+  background: none; border: 1px solid transparent; border-radius: 6px;
+  cursor: pointer; font-size: 14px; padding: 6px 8px; color: var(--muted); min-height: 32px;
+}
+.icon-btn:hover { background: var(--grey-bg); color: var(--text); }
+.icon-btn.danger:hover { background: var(--red-bg); color: var(--red); }
+
+/* ---------------------------------------------------------------
+   Écran de connexion
+   --------------------------------------------------------------- */
+.login-screen {
+  position: fixed; inset: 0; z-index: 60;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--bg); padding: 20px;
+}
+.login-card {
+  width: 100%; max-width: 360px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px; padding: 28px 24px; box-shadow: var(--shadow);
+  display: flex; flex-direction: column; gap: 6px;
+}
+.login-logo { display: block; width: 180px; max-width: 100%; height: auto; margin: 0 auto 4px; }
+.login-sub { margin: 0 0 14px; color: var(--muted); font-size: 13px; text-align: center; }
+.login-card label { margin-top: 10px; }
+.login-card .btn { margin-top: 18px; }
+.login-error {
+  margin: 12px 0 0; padding: 8px 10px; font-size: 13px;
+  background: var(--red-bg); color: var(--red); border-radius: var(--radius);
+}
+
+/* ---------------------------------------------------------------
+   Structure de l'application
+   --------------------------------------------------------------- */
+.app { min-height: 100vh; }
+
+/* Bandeau supérieur — logo VBK blanc + liseré rouge de marque : la signature visuelle */
+.appbar {
+  position: fixed; top: 0; left: 0; right: 0; height: var(--appbar-h); z-index: 30;
+  background: var(--vbk-black); color: var(--vbk-white);
+  border-bottom: 3px solid var(--vbk-red);
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 16px; gap: 12px;
+}
+.appbar-logo {
+  display: flex; align-items: center; background: none; border: none;
+  padding: 0; cursor: pointer; flex: 0 0 auto;
+}
+.appbar-logo img { width: 120px; height: auto; display: block; }
+.appbar-center { display: flex; justify-content: center; flex: 1 1 auto; min-width: 0; }
+.appbar-right { display: flex; align-items: center; gap: 10px; min-width: 0; flex: 0 0 auto; }
+.appbar .user { display: flex; align-items: baseline; gap: 7px; min-width: 0; padding: 0; }
+.appbar .user-name { font-weight: 600; font-size: 13px; color: var(--vbk-white); }
+.appbar .user-role { font-size: 12px; color: var(--on-dark-soft); }
+.appbar-btn {
+  font: inherit; font-size: 13px; font-weight: 500; color: var(--on-dark);
+  background: var(--on-dark-fill); border: 1px solid var(--on-dark-line);
+  border-radius: var(--radius); padding: 6px 10px; min-height: 32px; cursor: pointer;
+  transition: background .15s ease, color .15s ease;
+}
+.appbar-btn:hover { background: var(--on-dark-fill-2); color: var(--vbk-white); }
+.appbar-btn.round { width: 32px; padding: 0; text-align: center; font-weight: 700; }
+
+/* Sélecteur de mois dans le bandeau */
+.appbar .month-picker .btn-icon,
+.appbar .month-picker .btn {
+  background: var(--on-dark-fill); border-color: var(--on-dark-line); color: var(--on-dark);
+}
+.appbar .month-picker .btn:hover { background: var(--on-dark-fill-2); color: var(--vbk-white); }
+.appbar .month-label { color: var(--vbk-white); }
+
+.sidebar {
+  position: fixed; top: var(--appbar-h); left: 0; bottom: 0; width: 220px;
+  background: var(--surface); border-right: 1px solid var(--border);
+  display: flex; flex-direction: column; padding: 14px 12px; z-index: 20;
+}
+.side-note { font-size: 11px; color: var(--muted); line-height: 1.4; margin: 0; padding: 0 8px; }
+
+.nav { display: flex; flex-direction: column; gap: 2px; }
+.nav-item {
+  display: flex; align-items: center; gap: 10px;
+  font: inherit; font-weight: 500; text-align: left;
+  background: none; border: none; border-radius: var(--radius);
+  padding: 9px 10px; color: var(--text); cursor: pointer;
+}
+.nav-item .ico { color: var(--muted); font-size: 13px; }
+.nav-item:hover { background: var(--grey-bg); }
+/* Onglet actif : souligné rouge de marque, 2px */
+.nav-item.active {
+  background: var(--surface-hover); color: var(--text); font-weight: 600;
+  box-shadow: inset 2px 0 0 var(--vbk-red);
+}
+.nav-item.active .ico { color: var(--vbk-red); }
+
+.sidebar-foot { margin-top: auto; border-top: 1px solid var(--border); padding-top: 12px; }
+.user { padding: 4px 8px 10px; }
+.user-name { font-weight: 600; }
+.user-role { font-size: 12px; color: var(--muted); }
+
+.main { margin-left: 220px; padding: calc(var(--appbar-h) + 18px) 22px 40px; max-width: 1500px; }
+
+.page-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; flex-wrap: wrap; margin-bottom: 14px;
+}
+.head-left { display: flex; align-items: center; gap: 10px; }
+.page-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* Sélecteur de mois */
+.month-picker { display: flex; align-items: center; gap: 6px; }
+.month-label { font-weight: 600; min-width: 130px; text-align: center; }
+.month-picker.compact .month-label { min-width: 110px; font-size: 13px; }
+
+/* Barre d'outils de filtres */
+.toolbar {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.toolbar select, .toolbar input { min-height: 34px; font-size: 13px; }
+.search { flex: 1 1 260px; min-width: 180px; }
+
+/* ---------------------------------------------------------------
+   Cartes
+   --------------------------------------------------------------- */
+.card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 10px; box-shadow: var(--shadow); margin-bottom: 14px;
+}
+.card.pad { padding: 12px 14px; }
+.card-head { padding: 12px 14px; border-bottom: 1px solid var(--border); }
+
+.kpi-grid {
+  display: grid; gap: 10px; margin-bottom: 14px;
+  grid-template-columns: repeat(4, 1fr);
+}
+.kpi-grid-4 { grid-template-columns: repeat(4, 1fr); }
+.kpi { padding: 12px 14px; margin: 0; min-width: 0; }
+.kpi-label { font-size: 12px; color: var(--muted); font-weight: 500; }
+.kpi-value {
+  font-size: 26px; font-weight: 600; font-variant-numeric: tabular-nums;
+  margin-top: 2px; letter-spacing: -.4px; line-height: 1.2;
+}
+.kpi-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+/* La variation reste neutre : l'orange et le vert sont réservés aux statuts fonctionnels */
+.kpi-sub.up, .kpi-sub.down { color: var(--text-muted); }
+
+/* « Reste à payer » : carte plus large, liseré d'alerte dès qu'il reste quelque chose */
+.kpi-hero { grid-column: span 2; background: var(--surface-alt); border-color: var(--border-strong); }
+.kpi-hero .kpi-value { font-size: 32px; font-weight: 700; }
+.kpi-hero.is-alert { border-left: 4px solid var(--danger); }
+#card-late { grid-column: span 2; }
+.kpi.clickable { cursor: pointer; transition: border-color .15s ease, background .15s ease; }
+.kpi.clickable:hover { border-color: var(--border-strong); }
+.kpi.is-alert .kpi-value { color: var(--red); }
+
+/* Avancement du mois */
+.progress-card { display: flex; flex-direction: column; gap: 10px; }
+.progress-row { display: flex; align-items: center; gap: 14px; }
+.progress-text { font-size: 13px; color: var(--muted); flex: 0 0 auto; min-width: 250px; }
+.progress-track { flex: 1; height: 6px; background: var(--grey-bg); border-radius: 3px; overflow: hidden; }
+/* Barre d'avancement neutre : le rouge de marque ne doit pas voisiner le rouge d'alerte */
+.progress-bar { height: 100%; width: 0; background: var(--vbk-graphite); border-radius: 3px; transition: width .2s ease; }
+.progress-bar.full { background: var(--ok); }
+
+/* Blocs d'alerte */
+.alerts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 14px; }
+.alert {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  font: inherit; text-align: left; cursor: pointer;
+  background: var(--orange-bg); color: var(--warn);
+  border: 1px solid var(--border-warn); border-radius: 10px; padding: 12px 14px; min-height: 52px;
+}
+.alert:hover { border-color: var(--border-warn); }
+.alert.ok { background: var(--green-bg); color: var(--ok); border-color: var(--border-ok); }
+.alert-text { font-weight: 500; }
+.alert-go { font-size: 12px; opacity: .75; white-space: nowrap; }
+
+/* ---------------------------------------------------------------
+   Tableaux
+   --------------------------------------------------------------- */
+.table-wrap { overflow-x: auto; }
+.table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.table th {
+  text-align: left; font-weight: 600; font-size: 12px; color: var(--muted);
+  padding: 9px 10px; border-bottom: 1px solid var(--border); white-space: nowrap;
+  background: var(--surface); position: sticky; top: 0; z-index: 1;
+}
+.table th[data-sort] { cursor: pointer; user-select: none; }
+.table th[data-sort]:hover { color: var(--text); }
+/* En-tête trié : neutre et gras. Le rouge de marque n'entre pas dans le tableau,
+   qui contient déjà le rouge d'alerte des retards. */
+.table th.sorted { color: var(--text); font-weight: 700; }
+.table th.sorted[data-dir="asc"]::after  { content: " ▲"; font-size: 9px; }
+.table th.sorted[data-dir="desc"]::after { content: " ▼"; font-size: 9px; }
+.table td { padding: 7px 10px; border-bottom: 1px solid var(--line-soft); vertical-align: middle; }
+.table tbody tr:hover { background: var(--row-hover); }
+.table td.num, .table th.num { text-align: right; font-variant-numeric: tabular-nums; }
+.cell-supplier, .td-supplier { font-weight: 500; }
+.td-number { font-variant-numeric: tabular-nums; }
+.mob-meta { display: none; }
+.txt-orange { color: var(--orange); }
+
+/* Repères de ligne : barre verticale rouge (en retard) ou orange (échéance ≤ 5 jours).
+   Les trois sélecteurs ont la même spécificité, l'ordre suffit à les départager. */
+.table-invoices tbody tr td:first-child { box-shadow: inset 3px 0 0 transparent; }
+.table-invoices tbody tr.row-late td:first-child { box-shadow: inset 3px 0 0 var(--danger); }
+.table-invoices tbody tr.row-soon td:first-child { box-shadow: inset 3px 0 0 var(--warn); }
+.row-late  { background: var(--row-danger); }
+.row-late:hover { background: var(--row-danger-hover); }
+.row-checked { background: var(--row-select); }
+.row-checked:hover { background: var(--row-select-hover); }
+.row-paid-flash { animation: paidflash .6s ease-out; }
+@keyframes paidflash { from { background: var(--row-flash); } to { background: transparent; } }
+
+/* Case à cocher + coche « facture complète » */
+.th-check, .td-check { width: 46px; white-space: nowrap; }
+.row-check { width: 16px; height: 16px; vertical-align: middle; cursor: pointer; accent-color: var(--accent); }
+.done-mark { color: var(--green); margin-left: 2px; vertical-align: middle; }
+.done-mark .ico-svg { width: 14px; height: 14px; }
+
+/* Boutons d'action : discrets, révélés au survol de la ligne */
+.td-actions { text-align: right; white-space: nowrap; }
+.td-actions .icon-btn { opacity: 0; transition: opacity .15s ease, background .15s ease; }
+.table-invoices tbody tr:hover .td-actions .icon-btn,
+.td-actions .icon-btn:focus-visible { opacity: 1; }
+.icon-btn .ico-svg { width: 16px; height: 16px; display: block; }
+
+.row-flash { animation: flash 2.2s ease-out; }
+@keyframes flash { from { background: var(--row-highlight); } to { background: transparent; } }
+.actions { white-space: nowrap; text-align: right; }
+.tag {
+  display: inline-block; font-size: 11px; padding: 1px 6px; border-radius: 10px;
+  background: var(--grey-bg); color: var(--muted); margin-left: 6px;
+}
+
+.table-foot {
+  position: sticky; bottom: 0; z-index: 3;
+  display: flex; justify-content: flex-end; gap: 22px; flex-wrap: wrap;
+  padding: 10px 14px; border-top: 1px solid var(--border); font-size: 13px; color: var(--muted);
+  background: var(--surface); border-radius: 0 0 var(--radius-card) var(--radius-card);
+}
+.table-foot strong { color: var(--text); font-variant-numeric: tabular-nums; }
+.table-foot .big { font-size: 15px; }
+
+/* Pastilles Smart / WinAuditor / Stock (zone tactile 44px de large) */
+.pill {
+  display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+  min-width: 44px; min-height: 34px; padding: 0 8px;
+  border-radius: 6px; border: 1px solid transparent;
+  font: inherit; font-weight: 600; font-size: 12px; cursor: pointer; line-height: 1;
+  transition: background .15s ease, border-color .15s ease, color .15s ease;
+}
+.pill .ico-svg { width: 15px; height: 15px; flex: none; }
+.pill.wide { min-width: 74px; }
+.pill.on  { background: var(--green-bg); color: var(--green); border-color: var(--border-ok); }
+.pill.off { background: var(--skeleton-b); color: var(--grey); border: 1px dashed var(--border-dashed); }
+.pill.on:hover  { background: var(--ok-soft-hover); }
+.pill.off:hover { background: var(--surface-hover); border-color: var(--green); color: var(--green); }
+.pill-txt { font-variant-numeric: tabular-nums; }
+
+/* Bouton « Marquer payé » — le geste principal du gérant */
+.btn-pay {
+  display: inline-flex; align-items: center; gap: 6px;
+  font: inherit; font-size: 12px; font-weight: 600; cursor: pointer;
+  background: var(--orange-bg); color: var(--orange);
+  border: 1px solid var(--border-warn); border-radius: var(--radius);
+  padding: 0 10px; min-height: 34px; white-space: nowrap;
+  transition: background .15s ease, border-color .15s ease, color .15s ease;
+}
+.btn-pay .ico-svg { width: 15px; height: 15px; transition: transform .15s ease; }
+.btn-pay:hover { background: var(--green-bg); border-color: var(--border-ok); color: var(--green); }
+.btn-pay:hover .ico-svg { transform: scale(1.18); }
+.btn-pay:disabled { opacity: .6; cursor: default; }
+
+/* Pastille verte « Payé le … » */
+.paid-badge {
+  display: inline-flex; align-items: stretch;
+  background: var(--green-bg); color: var(--green);
+  border: 1px solid var(--border-ok); border-radius: var(--radius); overflow: hidden;
+  font-size: 12px; font-weight: 600;
+}
+.paid-badge .ico-svg { width: 15px; height: 15px; }
+.paid-badge.static { padding: 0 10px; min-height: 34px; align-items: center; gap: 6px; }
+.paid-main, .paid-date {
+  display: inline-flex; align-items: center; gap: 6px;
+  font: inherit; font-weight: 600; color: inherit; background: none;
+  border: none; cursor: pointer; padding: 0 8px; min-height: 34px;
+  transition: background .15s ease;
+}
+.paid-date { border-left: 1px solid var(--border-ok); font-variant-numeric: tabular-nums; }
+.paid-main:hover, .paid-date:hover { background: var(--ok-soft-hover); }
+
+/* Statut secondaire (litige, acompte) */
+.status-select { display: none; }
+.st-green  { background: var(--green-bg);  color: var(--green);  border-color: var(--border-ok); }
+.st-orange { background: var(--orange-bg); color: var(--orange); border-color: var(--border-warn); }
+.st-red    { background: var(--red-bg);    color: var(--red);    border-color: var(--border-danger); }
+.st-grey   { background: var(--grey-bg);   color: var(--muted);  border-color: var(--border); }
+
+.badge {
+  display: inline-block; font-size: 12px; font-weight: 600;
+  padding: 3px 8px; border-radius: 10px; border: 1px solid transparent;
+}
+
+/* États vide / chargement */
+.empty {
+  padding: 34px 10px; text-align: center; color: var(--muted);
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+}
+.empty p { margin: 0; font-size: 14px; }
+.empty-art { width: 110px; height: 74px; color: var(--art); }
+.skeleton {
+  display: block; height: 12px; border-radius: 4px;
+  background: linear-gradient(90deg, var(--skeleton-a) 25%, var(--skeleton-b) 50%, var(--skeleton-a) 75%);
+  background-size: 300% 100%; animation: sk 1.2s infinite linear;
+}
+@keyframes sk { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+
+/* ---------------------------------------------------------------
+   Fiche fournisseur
+   --------------------------------------------------------------- */
+.contact-line { font-size: 13px; }
+.notes-line { font-size: 13px; margin-top: 6px; white-space: pre-wrap; }
+.sd-toolbar { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 12px; }
+.segmented { display: inline-flex; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.segmented button {
+  font: inherit; font-size: 13px; background: var(--surface); border: none;
+  padding: 7px 12px; cursor: pointer; color: var(--muted); min-height: 34px;
+}
+.segmented button.active { background: var(--primary); color: var(--vbk-white); }
+
+/* ---------------------------------------------------------------
+   Menu déroulant (export)
+   --------------------------------------------------------------- */
+.dropdown { position: relative; }
+.dd-menu {
+  position: absolute; right: 0; top: calc(100% + 4px); z-index: 30;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); box-shadow: 0 6px 20px rgba(26,31,38,.12);
+  min-width: 240px; padding: 4px; display: flex; flex-direction: column;
+}
+.dd-menu button {
+  font: inherit; font-size: 13px; text-align: left; background: none; border: none;
+  padding: 9px 10px; border-radius: 6px; cursor: pointer; color: var(--text);
+}
+.dd-menu button:hover { background: var(--grey-bg); }
+
+/* ---------------------------------------------------------------
+   Modales
+   --------------------------------------------------------------- */
+body.modal-open { overflow: hidden; }
+.modal { position: fixed; inset: 0; z-index: 70; display: flex; align-items: flex-start; justify-content: center; padding: 24px 16px; overflow-y: auto; }
+.modal-top { z-index: 80; }
+.modal-backdrop { position: fixed; inset: 0; background: rgba(17, 22, 29, .42); }
+.modal-box {
+  position: relative; width: 100%; max-width: 760px;
+  background: var(--surface); border-radius: 12px; box-shadow: 0 12px 40px rgba(17,22,29,.22);
+  margin: auto 0;
+}
+.modal-box.narrow { max-width: 520px; }
+.modal-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 16px; border-bottom: 1px solid var(--border);
+}
+.modal-body { padding: 16px; }
+
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 14px; }
+.field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.col-2 { grid-column: 1 / -1; }
+.inline { display: flex; gap: 8px; align-items: center; }
+.inline.wrap { flex-wrap: wrap; }
+.inline > input { flex: 1; min-width: 0; }
+.sub { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+.preview {
+  background: var(--grey-bg); border-radius: var(--radius); padding: 8px 10px;
+  font-weight: 600; font-variant-numeric: tabular-nums; min-height: 36px;
+}
+.hint { font-size: 12px; margin: 2px 0 0; }
+.hint.warn { color: var(--orange); }
+.payment-block { border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 12px; margin: 0; }
+.payment-block legend { font-size: 12px; color: var(--muted); font-weight: 600; padding: 0 4px; }
+.dup-warning {
+  background: var(--orange-bg); color: var(--warn); border: 1px solid var(--border-warn);
+  border-radius: var(--radius); padding: 10px 12px; margin: 0; font-size: 13px;
+}
+.modal-foot { display: flex; justify-content: flex-end; gap: 8px; align-items: center; flex-wrap: wrap; padding-top: 4px; }
+
+/* ---------------------------------------------------------------
+   Toasts
+   --------------------------------------------------------------- */
+.toasts { position: fixed; right: 16px; bottom: 16px; z-index: 90; display: flex; flex-direction: column; gap: 8px; max-width: min(360px, calc(100vw - 32px)); }
+.toast {
+  background: var(--toast-bg); color: var(--vbk-white); border-radius: var(--radius);
+  padding: 10px 13px; font-size: 13px; box-shadow: 0 6px 20px rgba(17,22,29,.24);
+}
+.toast { display: flex; align-items: center; gap: 12px; }
+.toast-msg { flex: 1; }
+.toast-error { background: var(--red); }
+.toast-action {
+  font: inherit; font-size: 13px; font-weight: 600; color: var(--toast-link);
+  background: none; border: none; cursor: pointer; padding: 2px 0; white-space: nowrap;
+}
+.toast-action:hover { color: var(--vbk-white); text-decoration: underline; }
+
+/* ---------------------------------------------------------------
+   Popover (confirmation de paiement, date, menu ⋯)
+   --------------------------------------------------------------- */
+.popover {
+  position: absolute; z-index: 85; min-width: 190px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  box-shadow: 0 8px 24px rgba(16,24,40,.16); padding: 10px;
+}
+.popover.pop-right { min-width: 210px; padding: 4px; }
+.pop-msg { margin: 0 0 8px; font-size: 13px; color: var(--text); font-weight: 500; }
+.popover input[type="date"] { width: 100%; }
+.pop-actions { display: flex; justify-content: flex-end; gap: 6px; margin-top: 10px; }
+.pop-menu { display: flex; flex-direction: column; }
+.pop-menu hr { border: none; border-top: 1px solid var(--border); margin: 4px 0; }
+.pop-menu button {
+  display: flex; align-items: center; gap: 9px;
+  font: inherit; font-size: 13px; text-align: left; color: var(--text);
+  background: none; border: none; border-radius: 6px; padding: 8px 9px; cursor: pointer;
+  transition: background .15s ease;
+}
+.pop-menu button:hover { background: var(--grey-bg); }
+.pop-menu button.danger { color: var(--red); }
+.pop-menu button.danger:hover { background: var(--red-bg); }
+.pop-menu .ico-svg { width: 16px; height: 16px; color: var(--muted); flex: none; }
+.pop-menu button.danger .ico-svg { color: var(--red); }
+
+/* ---------------------------------------------------------------
+   Visite guidée (premier lancement)
+   --------------------------------------------------------------- */
+.tour-overlay { position: fixed; inset: 0; z-index: 95; }
+.tour-hole {
+  position: fixed; border-radius: var(--radius-card); pointer-events: none;
+  box-shadow: 0 0 0 9999px var(--overlay);
+  outline: 2px solid var(--vbk-red); outline-offset: 0;
+  transition: top .2s ease, left .2s ease, width .2s ease, height .2s ease;
+}
+.tour-bubble {
+  position: fixed; width: 300px; max-width: calc(100vw - 20px);
+  background: var(--surface); border-radius: var(--radius-card);
+  box-shadow: var(--shadow-modal); padding: 14px; z-index: 96;
+}
+.tour-step { font-size: 11px; font-weight: 600; color: var(--vbk-red); text-transform: uppercase; letter-spacing: .04em; }
+.tour-title { font-size: 15px; font-weight: 600; margin: 3px 0 6px; }
+.tour-text { font-size: 13px; color: var(--text); margin: 0 0 14px; line-height: 1.5; }
+.tour-actions { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+
+/* ---------------------------------------------------------------
+   Barre d'actions en lot (fin de mois)
+   --------------------------------------------------------------- */
+.bulk-bar {
+  position: fixed; left: 220px; right: 0; bottom: 0; z-index: 45;
+  display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap;
+  background: var(--toast-bg); color: var(--vbk-white); padding: 10px 18px;
+  box-shadow: 0 -2px 12px rgba(16,24,40,.18);
+}
+.bulk-summary { font-weight: 600; font-variant-numeric: tabular-nums; }
+.bulk-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.bulk-actions .btn { background: rgba(255,255,255,.10); border-color: rgba(255,255,255,.2); color: var(--vbk-white); }
+.bulk-actions .btn:hover { background: rgba(255,255,255,.2); }
+.bulk-actions .btn-primary { background: var(--green); border-color: var(--green); }
+.bulk-actions .btn-primary:hover { background: var(--ok-dark); }
+.bulk-actions .btn-ghost { background: none; border-color: transparent; color: rgba(255,255,255,.7); }
+
+/* ---------------------------------------------------------------
+   Bouton flottant (mobile) + aide clavier
+   --------------------------------------------------------------- */
+.fab { display: none; }
+.shortcuts { list-style: none; margin: 0 0 12px; padding: 0; display: flex; flex-direction: column; gap: 9px; }
+.shortcuts li { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.shortcuts span { color: var(--muted); }
+kbd {
+  display: inline-block; min-width: 24px; text-align: center;
+  font-family: inherit; font-size: 12px; font-weight: 600;
+  background: var(--grey-bg); border: 1px solid var(--border); border-bottom-width: 2px;
+  border-radius: 5px; padding: 2px 6px;
+}
+
+/* Infobulles d'aide contextuelle (« ? » à côté des libellés) */
+.help-dot {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 16px; height: 16px; margin-left: 5px; vertical-align: middle;
+  font-size: 11px; font-weight: 700; line-height: 1;
+  color: var(--muted); background: var(--surface-hover);
+  border: 1px solid var(--border); border-radius: 50%;
+  cursor: help; padding: 0;
+}
+.help-dot:hover { color: var(--vbk-red); border-color: var(--vbk-red); }
+.field-hint { font-size: 11px; color: var(--muted); margin: 0; }
+
+/* ---------------------------------------------------------------
+   Mode d'emploi (guide.html)
+   --------------------------------------------------------------- */
+.guide-appbar-title { font-size: 14px; font-weight: 500; color: var(--on-dark); }
+.guide {
+  display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 40px;
+  max-width: 1080px; margin: 0 auto;
+  padding: calc(var(--appbar-h) + 30px) 20px 70px;
+}
+.guide-toc { position: sticky; top: calc(var(--appbar-h) + 24px); align-self: start; }
+.guide-toc-title {
+  font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--muted); margin: 0 0 8px; padding-left: 10px;
+}
+.guide-toc a {
+  display: block; padding: 6px 10px; font-size: 13px; line-height: 1.35;
+  color: var(--muted); text-decoration: none; border-left: 2px solid var(--border);
+  transition: color .15s ease, border-color .15s ease;
+}
+.guide-toc a:hover { color: var(--vbk-red); border-left-color: var(--vbk-red); }
+
+.guide-content { max-width: 720px; }
+.guide-title { font-size: 26px; font-weight: 700; margin: 0 0 6px; letter-spacing: -.4px; }
+.guide-lead { font-size: 15px; color: var(--muted); margin: 0 0 34px; }
+.guide-content section {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-card);
+  box-shadow: var(--shadow); padding: 22px 24px; margin-bottom: 18px;
+}
+.guide-content h2 {
+  font-size: 19px; font-weight: 600; margin: 0 0 12px; padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+.guide-content p { font-size: 14px; line-height: 1.65; margin: 0 0 12px; }
+.guide-content ul, .guide-content ol { font-size: 14px; line-height: 1.65; padding-left: 20px; margin: 0 0 12px; }
+.guide-content li { margin-bottom: 6px; }
+.guide-content code {
+  font-size: 13px; background: var(--surface-hover); border: 1px solid var(--border);
+  border-radius: 4px; padding: 1px 5px;
+}
+.guide-note {
+  background: var(--surface-hover); border-left: 3px solid var(--vbk-red);
+  border-radius: 0 var(--radius) var(--radius) 0; padding: 10px 14px; font-size: 13px !important;
+}
+.faq-q { font-weight: 600; margin-bottom: 4px !important; }
+.guide-highlight { border-color: var(--border-strong); border-left: 4px solid var(--vbk-red); }
+
+.guide-table { width: 100%; border-collapse: collapse; font-size: 13px; margin: 0 0 14px; }
+.guide-table th {
+  text-align: left; font-weight: 600; font-size: 12px; color: var(--muted);
+  border-bottom: 1px solid var(--border); padding: 8px 10px; vertical-align: top;
+}
+.guide-table td { border-bottom: 1px solid var(--line-soft); padding: 9px 10px; vertical-align: top; line-height: 1.55; }
+.guide-table tr:last-child td { border-bottom: none; }
+.guide-colors td:first-child { white-space: nowrap; font-weight: 600; }
+.swatch {
+  display: inline-block; width: 13px; height: 13px; border-radius: 3px;
+  margin-right: 6px; vertical-align: -1px; border: 1px solid var(--border);
+}
+.sw-ok { background: var(--ok); border-color: var(--ok); }
+.sw-warn { background: var(--warn); border-color: var(--warn); }
+.sw-danger { background: var(--danger); border-color: var(--danger); }
+.sw-todo { background: var(--surface-hover); border: 1px dashed var(--border-dashed); }
+
+.guide-foot { display: flex; gap: 10px; align-items: center; margin-top: 24px; }
+.guide-foot .btn { text-decoration: none; display: inline-flex; align-items: center; }
+.guide-print-head { display: none; }
+
+@media (max-width: 768px) {
+  .guide { grid-template-columns: 1fr; gap: 18px; padding: calc(var(--appbar-h) + 16px) 12px 40px; }
+  .guide-toc { position: static; }
+  .guide-appbar-title { display: none; }
+  .guide-content section { padding: 16px; }
+}
+
+/* ---------------------------------------------------------------
+   Barre d'onglets mobile
+   --------------------------------------------------------------- */
+.tabbar { display: none; }
+
+/* ---------------------------------------------------------------
+   Responsive — tablette
+   --------------------------------------------------------------- */
+@media (max-width: 1180px) {
+  .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+  .progress-text { min-width: 0; }
+  .progress-row { flex-wrap: wrap; }
+}
+
+@media (max-width: 768px) {
+  /* Le bandeau passe sur deux rangées : logo + compte, puis le sélecteur de mois */
+  :root { --appbar-h: 100px; }
+
+  .sidebar { display: none; }
+  .main { margin-left: 0; padding: calc(var(--appbar-h) + 12px) 12px 96px; }
+
+  .appbar { padding: 8px 12px; flex-wrap: wrap; align-content: center; row-gap: 6px; }
+  .appbar-logo img { width: 96px; }
+  .appbar-center { order: 3; flex: 0 0 100%; }
+  .appbar .month-picker { width: 100%; justify-content: center; }
+  .appbar .user-role { display: none; }
+  .appbar-btn { font-size: 0; padding: 6px 9px; }
+  .appbar-btn#btn-help { font-size: 13px; }
+  .appbar-btn#btn-logout::after { content: "Quitter"; font-size: 13px; }
+
+  .bulk-bar { left: 0; bottom: 56px; padding: 10px 12px; }
+  .bulk-summary { font-size: 13px; }
+  .bulk-actions { width: 100%; }
+  .bulk-actions .btn { flex: 1 1 auto; min-height: 40px; }
+
+  /* Bouton flottant « + » */
+  .fab {
+    display: flex; align-items: center; justify-content: center;
+    position: fixed; right: 16px; bottom: 70px; z-index: 46;
+    width: 52px; height: 52px; border-radius: 26px;
+    background: var(--vbk-red); color: var(--vbk-white); border: none;
+    font-size: 28px; line-height: 1; cursor: pointer;
+    box-shadow: 0 4px 14px rgba(16,24,40,.24);
+  }
+
+  .tabbar {
+    display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
+    background: var(--surface); border-top: 1px solid var(--border);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .tabbar-item {
+    flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px;
+    font: inherit; font-size: 11px; font-weight: 500; background: none; border: none;
+    padding: 9px 4px; color: var(--muted); cursor: pointer; min-height: 52px;
+  }
+  .tabbar-item .ico { font-size: 15px; }
+  .tabbar-item.active { color: var(--text); font-weight: 600; box-shadow: inset 0 2px 0 var(--vbk-red); }
+  .tabbar-item.active .ico { color: var(--vbk-red); }
+
+  .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+  .kpi-grid-4 { grid-template-columns: repeat(2, 1fr); }
+  .kpi-value { font-size: 22px; }
+  .kpi-hero .kpi-value { font-size: 26px; }
+  .alerts { grid-template-columns: 1fr; }
+  .form-grid { grid-template-columns: 1fr; }
+  .month-label { min-width: 0; flex: 1; }
+  .search { flex: 1 1 100%; }
+  .toolbar select { flex: 1 1 46%; min-width: 0; }
+  .page-head h1 { font-size: 18px; }
+  .table-wrap { overflow-x: visible; }
+
+  /* --- Tableaux génériques : une carte par ligne, libellés à gauche --- */
+  .table { font-size: 14px; }
+  .table thead { display: none; }
+  .table, .table tbody, .table tr, .table td { display: block; width: 100%; }
+  .table tr {
+    border: 1px solid var(--border); border-radius: var(--radius-card);
+    margin: 0 0 10px; padding: 6px 12px; background: var(--surface);
+  }
+  .table tbody tr:hover { background: var(--surface); }
+  .table td {
+    display: flex; align-items: center; justify-content: space-between; gap: 14px;
+    border: none; border-bottom: 1px solid var(--line-soft); padding: 7px 0; min-height: 40px;
+  }
+  .table tr td:last-child { border-bottom: none; }
+  .table td::before {
+    content: attr(data-label);
+    font-size: 12px; font-weight: 600; color: var(--muted); flex: 0 0 auto;
+  }
+  .table td.num { text-align: right; }
+  .table .empty-row td, .table .skeleton-row td { display: block; }
+  .table .empty-row td::before, .table .skeleton-row td::before { content: ""; }
+  .row-overdue { background: var(--row-danger); border-color: var(--border-danger); }
+
+  /* --- Factures : carte dédiée (fournisseur, méta, montant, pastilles, paiement) --- */
+  .table-invoices tbody tr {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px;
+    padding: 12px; position: relative;
+  }
+  /* width:auto est indispensable : la règle générique met les td à 100 %,
+     ce qui empilerait verticalement tous les éléments de la carte. */
+  .table-invoices tbody tr td { border: none; padding: 0; min-height: 0; width: auto; }
+  .table-invoices tbody tr td::before { content: none; }
+  .table-invoices tbody tr td:first-child { box-shadow: none; }
+  .row-late  { border-left: 3px solid var(--red); }
+  .row-soon  { border-left: 3px solid var(--orange); }
+  .row-checked { border-color: var(--accent); }
+
+  .table-invoices .td-check { order: 0; width: auto; flex: 0 0 auto; }
+  .table-invoices .td-supplier { order: 1; flex: 1 1 auto; font-size: 16px; font-weight: 600; }
+  .table-invoices .td-amount { order: 2; flex: 0 0 auto; margin-left: auto; font-size: 18px; font-weight: 700; }
+  .table-invoices .td-number { order: 3; flex: 0 0 100%; font-size: 12px; color: var(--muted); font-weight: 500; }
+  .table-invoices .mob-meta { display: inline; }
+  .table-invoices .mob-meta::before { content: " · "; }
+  .table-invoices .td-date, .table-invoices .td-due { display: none; }
+
+  .table-invoices .td-smart, .table-invoices .td-win, .table-invoices .td-stock {
+    order: 4; flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; gap: 3px;
+  }
+  .table-invoices .td-smart::before, .table-invoices .td-win::before, .table-invoices .td-stock::before {
+    content: attr(data-label); display: block; font-size: 11px; font-weight: 600; color: var(--muted);
+  }
+  .table-invoices .td-actions { order: 5; flex: 1 1 auto; text-align: right; }
+  .table-invoices .td-actions .icon-btn { opacity: 1; min-height: 44px; min-width: 44px; }
+  .table-invoices .td-status { order: 6; flex: 0 0 100%; }
+  .table-invoices .td-status .btn-pay,
+  .table-invoices .td-status .paid-badge { width: 100%; justify-content: center; font-size: 14px; }
+  /* la zone tactile utile est celle des boutons, pas du conteneur */
+  .table-invoices .td-status .btn-pay,
+  .table-invoices .td-status .paid-main,
+  .table-invoices .td-status .paid-date { min-height: 44px; }
+  .table-invoices .td-status .paid-main { flex: 1; justify-content: center; }
+  .table-invoices .empty-row { display: block; padding: 0; border: none; background: none; }
+
+  /* Zone tactile confortable sur mobile */
+  .pill { min-width: 56px; min-height: 44px; font-size: 13px; }
+  .row-check { width: 20px; height: 20px; }
+  .table-foot { justify-content: space-between; position: static; }
+  .modal { padding: 0; }
+  .modal-box { border-radius: 0; min-height: 100vh; }
+}
+
+@media (pointer: coarse) {
+  .pill { min-height: 44px; }
+}
+
+/* ---------------------------------------------------------------
+   Impression / PDF
+   --------------------------------------------------------------- */
+@media print {
+  @page { size: A4 landscape; margin: 10mm; }
+  body { background: var(--vbk-white); font-size: 11px; }
+  /* Le mode d'emploi s'imprime en portrait */
+  body.guide-body { font-size: 12px; }
+  @page :first { margin: 12mm; }
+  .sidebar, .appbar, .tabbar, .toolbar, .page-actions, .no-print, .fab, .bulk-bar,
+  .modal, .toasts, .popover, .month-picker, .alerts, .segmented, .sd-toolbar,
+  .progress-card, .td-check, .th-check, .td-actions { display: none !important; }
+  .main { margin: 0; padding: 0; max-width: none; }
+  .table-foot { position: static; }
+  .print-only { display: block; margin-bottom: 10px; font-size: 13px; }
+  #print-header { display: flex; align-items: center; gap: 14px; }
+  #print-header img { width: 150px; height: auto; }
+
+  /* Mode d'emploi : une section ne doit jamais être coupée en deux */
+  .guide { display: block; padding: 0; max-width: none; }
+  .guide-content { max-width: none; }
+  .guide-print-head { display: flex; align-items: center; gap: 16px; margin-bottom: 16px; }
+  .guide-title { font-size: 20px; }
+  .guide-content section {
+    border: none; box-shadow: none; padding: 0; margin: 0 0 18px;
+    break-inside: avoid; page-break-inside: avoid;
+  }
+  .guide-content section + section { break-before: page; page-break-before: always; }
+  .guide-content h2 { font-size: 15px; }
+  .guide-table { font-size: 11px; }
+  .card { border: none; box-shadow: none; margin: 0 0 10px; }
+  .card-head { padding: 0 0 6px; border: none; }
+  .table-wrap { overflow: visible; }
+  .table { font-size: 10px; }
+  .table th { border-bottom: 1px solid var(--print-line); color: var(--vbk-black); position: static; }
+  .table td { border-bottom: 1px solid var(--print-rule); }
+  .row-late, .row-soon, .row-overdue { background: var(--print-zebra) !important; }
+  .pill, .btn-pay, .paid-badge {
+    border: 1px solid var(--print-line); background: none !important; color: var(--vbk-black) !important;
+    min-width: 0; min-height: 0; padding: 0 4px;
+  }
+  .kpi-grid { display: grid; grid-template-columns: repeat(3, 1fr); }
+  .kpi-hero, #card-late { grid-column: span 1; }
+  .kpi { border: 1px solid var(--print-rule); }
+}
