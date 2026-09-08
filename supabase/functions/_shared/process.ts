@@ -61,7 +61,7 @@ sans balises markdown.
   "montant_htva": number,
   "montant_tva": number,
   "montant_tvac": number,
-  "taux_tva": number,
+  "taux_tva": number,          // décimal entre 0 et 1 : 0.21 pour 21 %, jamais 21
   "devise": string,
   "est_avoir": boolean,
   "champs_incertains": string[],
@@ -124,6 +124,39 @@ export async function extractFromPdf(bytes: Uint8Array) {
 }
 
 // ---------------------------------------------------------------------
+// Taux de TVA : le modèle rend tantôt 0.21, tantôt 21. Sans normalisation,
+// « 6 » serait rejeté par la liste des taux légaux et retomberait
+// silencieusement sur 21 % — une facture à 6 % enregistrée à 21 %.
+// On unifie d'abord, on recoupe ensuite avec le rapport TVA / HTVA.
+// ---------------------------------------------------------------------
+export const LEGAL_RATES = [0, 0.06, 0.12, 0.21];
+
+export function normalizedRate(d: Record<string, unknown>): number | null {
+  // Attention : Number(null) vaut 0, pas NaN. Sans ce garde-fou, un taux
+  // absent serait lu comme 0 % et la TVA déductible disparaîtrait.
+  const v = d.taux_tva;
+  const raw = (v === null || v === undefined || v === '') ? NaN : Number(v);
+  const rate = Number.isFinite(raw) ? (Math.abs(raw) > 1 ? raw / 100 : raw) : NaN;
+
+  const htva = Number(d.montant_htva);
+  const tva  = Number(d.montant_tva);
+  const implied = (Number.isFinite(htva) && Number.isFinite(tva) && Math.abs(htva) > 0.01)
+    ? tva / htva : NaN;
+
+  // Un taux annoncé qui colle à un taux légal l'emporte.
+  if (Number.isFinite(rate)) {
+    const hit = LEGAL_RATES.find((r) => Math.abs(rate - r) < 0.005);
+    if (hit !== undefined) return hit;
+  }
+  // Sinon on se rabat sur le taux réellement porté par les montants.
+  if (Number.isFinite(implied)) {
+    const hit = LEGAL_RATES.find((r) => Math.abs(implied - r) < 0.005);
+    if (hit !== undefined) return hit;
+  }
+  return Number.isFinite(rate) ? rate : null;
+}
+
+// ---------------------------------------------------------------------
 // Contrôles automatiques : ils rattrapent les erreurs de lecture
 // ---------------------------------------------------------------------
 export function runChecks(d: Record<string, unknown>): string[] {
@@ -131,7 +164,7 @@ export function runChecks(d: Record<string, unknown>): string[] {
   const htva = Number(d.montant_htva);
   const tva  = Number(d.montant_tva);
   const tvac = Number(d.montant_tvac);
-  const rate = Number(d.taux_tva);
+  const rate = normalizedRate(d) ?? NaN;
 
   if ([htva, tva, tvac].every(Number.isFinite)) {
     if (Math.abs(htva + tva - tvac) > 0.02) alerts.push('montants incohérents');
@@ -230,8 +263,11 @@ export async function processQueueRow(queueId: string): Promise<void> {
       return;
     }
 
-    const rate = Number(extracted.taux_tva);
+    const rate = normalizedRate(extracted);
     const htva = Number(extracted.montant_htva);
+    // Un taux hors barème belge n'est jamais remplacé en silence : on le
+    // signale pour que Marie tranche sur le document.
+    if (rate !== null && !LEGAL_RATES.includes(rate)) alerts.push(`taux de TVA non standard (${rate})`);
     const invoice = {
       supplier_id: supplierId,
       invoice_number: number,
@@ -240,7 +276,7 @@ export async function processQueueRow(queueId: string): Promise<void> {
       due_date: /^\d{4}-\d{2}-\d{2}$/.test(String(extracted.date_echeance ?? ''))
         ? extracted.date_echeance : null,
       amount_htva: Number.isFinite(htva) ? htva : 0,
-      vat_rate: [0, 0.06, 0.12, 0.21].includes(rate) ? rate : 0.21,
+      vat_rate: rate !== null && LEGAL_RATES.includes(rate) ? rate : 0.21,
       source: 'email',
       review_status: 'a_controler',
       file_path: target.path,
