@@ -35,6 +35,19 @@ export function fmtDate(iso) {
   return `${d}/${m}/${y}`;
 }
 
+/**
+ * '2026-09-05' -> 'vendredi 5 septembre 2026'
+ * Les champs <input type="date"> s'affichent selon la langue du NAVIGATEUR,
+ * pas celle de la page : un navigateur en anglais montre 09/05/2026 pour le
+ * 5 septembre. Écrire la date en toutes lettres lève l'ambiguïté.
+ */
+export function longDate(iso) {
+  if (!iso || !/^\d{4}-\d{2}-\d{2}/.test(iso)) return '';
+  const [y, m, d] = iso.slice(0, 10).split('-').map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString('fr-BE',
+    { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+}
+
 const pad = (n) => String(n).padStart(2, '0');
 
 /** Date du jour au format ISO local (pas UTC, pour éviter les décalages de fuseau) */
@@ -88,6 +101,25 @@ export function monthLabel(m) {
 /** true si la date ISO appartient au mois 'YYYY-MM' */
 export function inMonth(iso, m) {
   return !!iso && String(iso).slice(0, 7) === m;
+}
+
+// ---------- TVA ----------
+export const LEGAL_RATES = [0.21, 0.12, 0.06, 0];
+
+/**
+ * Le taux choisi est-il cohérent avec le montant de TVA lu sur le document ?
+ * Même règle et même tolérance que le contrôle serveur (0,02 €) : c'est ce
+ * qui garantit qu'un taux rendu en pourcentage plutôt qu'en décimal, ou une
+ * lecture erronée, ne passe jamais inaperçu.
+ *   'unknown' : rien à recouper (aucun montant de TVA lu)
+ *   true      : incohérent, la validation doit être bloquée
+ *   false     : cohérent
+ */
+export function vatMismatch(htva, readTva, rate) {
+  if (!Number.isFinite(rate)) return true;
+  if (!Number.isFinite(readTva) || !Number.isFinite(htva) || Math.abs(htva) < 0.01) return 'unknown';
+  const calc = Math.round(htva * rate * 100) / 100;
+  return Math.abs(calc - readTva) > 0.02;
 }
 
 // ---------- Statuts de paiement ----------
