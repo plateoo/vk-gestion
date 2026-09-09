@@ -9,6 +9,7 @@
 // =====================================================================
 import { supabase } from './supabase.js';
 import { getSuppliers, suppliersCache } from './suppliers.js';
+import { invalidateInvoices } from './invoices.js';
 import {
   $, $$, fmtEUR, fmtDate, escapeHtml, toast, errorMessage, confirmDialog,
   todayISO, notifyDataChange, ICONS, LEGAL_RATES, vatMismatch, longDate
@@ -70,6 +71,7 @@ export async function renderReview() {
   }
 
   updateBadge();
+  renderCatchup();
 
   if (!queue.length) {
     list.innerHTML = `<div class="empty">${ICONS.empty}<p>Rien à contrôler</p></div>`;
@@ -91,6 +93,48 @@ export async function renderReview() {
 
   if (!current || !queue.some((i) => i.id === current.id)) current = queue[0];
   renderDetail();
+}
+
+/**
+ * Avancement du rattrapage. Power Automate remonte au plus 20 messages par
+ * exécution : un lot plus petit que ce plafond signifie que le dossier
+ * Outlook est vidé. C'est le seul signal fiable de fin, l'application ne
+ * voit pas la boîte mail.
+ */
+async function renderCatchup() {
+  const box = $('#catchup');
+  if (!box) return;
+  try {
+    const { data, error } = await supabase.rpc('catchup_progress', { p_limit: 20 });
+    if (error) throw error;
+    const p = typeof data === 'string' ? JSON.parse(data) : data;
+    if (!p || !p.total_messages) { box.hidden = true; return; }
+
+    const traites = Number(p.traites) + Number(p.ignores);
+    const total = Number(p.total_messages);
+    const pct = total ? Math.round((traites / total) * 100) : 0;
+    const dernier = p.dernier_lot || {};
+    box.hidden = false;
+    box.innerHTML = `
+      <div class="catchup-head">
+        <strong>${p.termine ? 'Rattrapage terminé' : 'Rattrapage en cours'}</strong>
+        <span class="muted small">${traites} message${traites > 1 ? 's' : ''} traité${traites > 1 ? 's' : ''} sur ${total}</span>
+      </div>
+      <div class="progress-track"><div class="progress-bar ${pct >= 100 ? 'full' : ''}" style="width:${pct}%"></div></div>
+      <div class="catchup-detail">
+        ${[
+          Number(p.en_quarantaine) ? `${p.en_quarantaine} en quarantaine` : '',
+          Number(p.en_attente) ? `${p.en_attente} en cours` : '',
+          Number(p.en_erreur) ? `<span class="txt-red">${p.en_erreur} en erreur</span>` : '',
+          `${p.lots} lot${Number(p.lots) > 1 ? 's' : ''} reçu${Number(p.lots) > 1 ? 's' : ''}`,
+          dernier.messages != null ? `dernier lot : ${dernier.messages} message${dernier.messages > 1 ? 's' : ''}` : ''
+        ].filter(Boolean).join(' <span class="sep">·</span> ')}
+      </div>
+      ${p.termine ? '' : '<p class="field-hint">Le prochain lot arrive au cycle suivant de Power Automate.</p>'}`;
+  } catch (err) {
+    console.warn('avancement du rattrapage indisponible', err);
+    box.hidden = true;
+  }
 }
 
 function updateBadge(n = queue.length) {
@@ -134,6 +178,17 @@ async function renderDetail() {
       </div>
 
       <form class="review-fields" id="rv-form">
+        <!-- Le numéro Smart n'est pas sur la facture : il est attribué à
+             l'encodage. C'est le geste central de Marie, donc il vient en
+             premier et reçoit le focus à l'ouverture. -->
+        <div class="field smart-field">
+          <label for="rv-smart">Référence Smart</label>
+          <input id="rv-smart" data-f="smart_ref" type="text" autocomplete="off"
+                 placeholder="numéro attribué lors de l'encodage dans Smart"
+                 value="${escapeHtml(i.smart_ref || '')}">
+          <p class="field-hint" id="rv-smart-hint">Renseigner cette référence coche « Encodé Smart » automatiquement.</p>
+        </div>
+
         <div class="field">
           <label for="rv-supplier">Fournisseur</label>
           <select id="rv-supplier" data-f="supplier_id"></select>
@@ -224,6 +279,9 @@ async function renderDetail() {
   wireDetail();
   refreshVat();
   loadDocument(i.file_path);
+  // Marie enchaîne les factures au clavier : le curseur l'attend dans le
+  // champ qu'elle remplit en premier.
+  setTimeout(() => { const f = $('#rv-smart'); if (f) { f.focus(); f.select(); } }, 60);
 }
 
 function fillSupplierSelect(selected) {
@@ -380,6 +438,7 @@ async function validateCurrent() {
 
   const rate = currentRate();
   const patch = {
+    smart_ref: $('#rv-smart').value.trim() || null,
     supplier_id: $('#rv-supplier').value,
     invoice_number: $('#rv-number').value.trim(),
     invoice_date: $('#rv-date').value,
@@ -398,13 +457,25 @@ async function validateCurrent() {
     const { error } = await supabase.from('invoices').update(patch).eq('id', current.id);
     if (error) throw error;
     await rememberSender(patch.supplier_id, current.sender_email);
+    // La facture rejoint la liste normale : son cache doit repartir de la base.
+    invalidateInvoices();
     toast(`Facture ${patch.invoice_number} validée.`);
     current = null;
     await renderReview();
     notifyDataChange();
   } catch (err) {
-    console.error(err);
-    toast(errorMessage(err, 'Validation impossible.'), 'error');
+    // Le doublon de référence est un cas prévu et traité : inutile de
+    // déverser l'erreur Postgres brute dans la console.
+    if (!/invoices_smart_ref_key/.test(err.message || '')) console.error(err);
+    if (/invoices_smart_ref_key/.test(err.message || '')) {
+      const hint = $('#rv-smart-hint');
+      hint.textContent = `La référence Smart ${patch.smart_ref} est déjà utilisée par une autre facture.`;
+      hint.className = 'field-hint danger';
+      $('#rv-smart').focus();
+      toast(`Référence Smart ${patch.smart_ref} déjà utilisée.`, 'error');
+    } else {
+      toast(errorMessage(err, 'Validation impossible.'), 'error');
+    }
     btn.disabled = false;
   }
 }
@@ -433,6 +504,7 @@ async function rejectCurrent() {
   try {
     const { error } = await supabase.from('invoices').delete().eq('id', current.id);
     if (error) throw error;
+    invalidateInvoices();
     toast('Facture rejetée.');
     current = null;
     await renderReview();

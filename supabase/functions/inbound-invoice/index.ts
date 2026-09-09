@@ -93,11 +93,25 @@ Deno.serve(async (req) => {
   const subject   = pick(payload, 'subject');
   const messageId = pick(payload, 'messageId', 'internetMessageId', 'id') || `sans-id-${crypto.randomUUID()}`;
   const received  = pick(payload, 'receivedAt', 'receivedDateTime', 'dateTimeReceived') || new Date().toISOString();
+  // Identifiant du lot Power Automate : sert à mesurer l'avancement du
+  // rattrapage. Un lot plus petit que le plafond veut dire dossier vidé.
+  const batchId   = pick(payload, 'batchId', 'batch_id', 'runId') || null;
 
   // 2. Déjà reçu ? Power Automate peut rejouer un déclencheur.
-  const { data: seen } = await sb.from('inbound_queue').select('id, status')
+  //    On compte la livraison : sans ce compteur, un renvoi ne laisse aucune
+  //    trace et l'on ne peut plus savoir si un message manquant a été envoyé.
+  const { data: seen } = await sb.from('inbound_queue').select('id, status, deliveries')
     .eq('message_id', messageId).maybeSingle();
-  if (seen) return ok({ ignored: true, reason: 'message déjà reçu', queue_id: seen.id, status: seen.status });
+  if (seen) {
+    await sb.from('inbound_queue').update({
+      deliveries: (seen.deliveries ?? 1) + 1,
+      last_delivery_at: new Date().toISOString()
+    }).eq('id', seen.id);
+    return ok({
+      ignored: true, reason: 'message déjà reçu',
+      queue_id: seen.id, status: seen.status, deliveries: (seen.deliveries ?? 1) + 1
+    });
+  }
 
   // 3. Pièces jointes : déposées avant tout contrôle d'expéditeur, pour que
   //    la quarantaine soit réellement rejouable.
@@ -127,6 +141,7 @@ Deno.serve(async (req) => {
 
   const { data: queued, error: qErr } = await sb.from('inbound_queue').insert({
     message_id: messageId, sender_email: sender, subject, received_at: received, files,
+    batch_id: batchId,
     status: allowed ? 'pending' : 'quarantine'
   }).select('id').single();
   if (qErr) return ok({ ignored: true, reason: 'mise en file impossible', detail: qErr.message });

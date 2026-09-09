@@ -367,7 +367,9 @@ label { font-size: 12px; color: var(--muted); font-weight: 500; }
 .table tbody tr:hover { background: var(--row-hover); }
 .table td.num, .table th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .cell-supplier, .td-supplier { font-weight: 500; }
-.td-number { font-variant-numeric: tabular-nums; }
+.td-number, .td-smartref { font-variant-numeric: tabular-nums; }
+.td-smartref { font-size: 12px; }
+.pill.locked { cursor: default; opacity: 1; }
 .mob-meta { display: none; }
 .txt-orange { color: var(--orange); }
 
@@ -608,6 +610,13 @@ body.modal-open { overflow: hidden; }
   font-size: 11px; font-weight: 700; line-height: 1;
   background: var(--danger); color: var(--vbk-white); border-radius: 10px;
 }
+
+.catchup { display: flex; flex-direction: column; gap: 8px; }
+.catchup-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.catchup-detail { font-size: 12px; color: var(--muted); }
+.smart-field input { font-size: 15px; font-weight: 600; letter-spacing: .01em; }
+.smart-field { border-left: 3px solid var(--vbk-red); padding-left: 10px; }
+.field-hint.danger { color: var(--danger); font-weight: 600; }
 
 .review-layout { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 14px; align-items: start; }
 .review-list {
@@ -1014,7 +1023,10 @@ kbd {
   /* Sur tablette, l'usage est la consultation, pas l'encodage : la colonne
      Stock passe à la trappe pour que le tableau tienne sans défilement.
      Elle reste accessible dans la fiche facture et sur le tableau de bord. */
-  .table-invoices .td-stock, .table-invoices thead th:nth-child(9) { display: none; }
+  /* Ciblage par classe et non par rang : ajouter une colonne ne doit pas
+     décaler silencieusement la règle. */
+  .table-invoices .td-stock, .table-invoices .th-stock,
+  .table-invoices .td-smartref, .table-invoices .th-smartref { display: none; }
   .table-invoices .help-dot { display: none; }
   .table-invoices .td-actions .icon-btn { padding: 4px 5px; }
 }

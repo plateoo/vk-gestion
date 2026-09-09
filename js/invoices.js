@@ -93,7 +93,7 @@ function applyFilters(rows) {
     if (filters.winauditor === 'non' && i.in_winauditor) return false;
     if (filters.stock === 'sans' && i.stock_in) return false;
     if (q) {
-      const hay = `${i.invoice_number} ${i.supplier_name} ${i.notes || ''} ${i.expense_type || ''}`.toLowerCase();
+      const hay = `${i.invoice_number} ${i.smart_ref || ''} ${i.supplier_name} ${i.notes || ''} ${i.expense_type || ''}`.toLowerCase();
       if (!hay.includes(q)) return false;
     }
     return true;
@@ -119,7 +119,7 @@ function applySort(rows) {
 // ---------------------------------------------------------------------
 export async function renderInvoices() {
   const tbody = $('#inv-tbody');
-  if (!cache) skeletonRows(tbody, 8, 11);
+  if (!cache) skeletonRows(tbody, 8, 12);
 
   let rows;
   try {
@@ -198,9 +198,10 @@ function rowHtml(i, manager) {
     <td class="td-date" data-label="Date">${fmtDate(i.invoice_date)}</td>
     <td class="td-supplier" data-label="Fournisseur">${escapeHtml(i.supplier_name)}</td>
     <td class="td-number" data-label="N°">${escapeHtml(i.invoice_number)}<span class="mob-meta">${fmtDate(i.invoice_date)}${i.due_date ? ` · éch. ${fmtDate(i.due_date)}` : ''}</span></td>
+    <td class="td-smartref" data-label="Réf. Smart">${i.smart_ref ? escapeHtml(i.smart_ref) : '<span class="muted">—</span>'}</td>
     <td class="td-due ${late ? 'txt-red strong' : soon ? 'txt-orange' : ''}" data-label="Échéance">${fmtDate(i.due_date) || '—'}</td>
     <td class="td-amount num strong" data-label="Total TVAC">${fmtEUR(i.amount_tvac)}</td>
-    <td class="td-smart" data-label="Smart">${pillHtml(i, 'in_smart', !!i.in_smart, 'Smart')}</td>
+    <td class="td-smart" data-label="Smart">${smartPillHtml(i)}</td>
     <td class="td-win" data-label="WinAuditor">${pillHtml(i, 'in_winauditor', !!i.in_winauditor, 'WinAuditor')}</td>
     <td class="td-stock" data-label="Stock">${stockHtml(i)}</td>
     <td class="td-status" data-label="Paiement">${paymentHtml(i, manager)}</td>
@@ -209,6 +210,21 @@ function rowHtml(i, manager) {
       <button type="button" class="icon-btn row-menu" data-menu="${i.id}" title="Autres actions" aria-haspopup="menu">${ICONS.dots}</button>
     </td>
   </tr>`;
+}
+
+/**
+ * Pastille Smart. Quand une référence Smart est saisie, elle n'est plus
+ * basculable : la référence fait foi, et la base garantit l'invariant.
+ * Un clic afficherait sinon une contradiction entre les deux champs.
+ */
+function smartPillHtml(i) {
+  if (i.smart_ref) {
+    return `<span class="pill on locked" title="Référence Smart ${escapeHtml(i.smart_ref)} — décocher n'est possible qu'en effaçant la référence">${ICONS.check}</span>`;
+  }
+  // Sans référence, la pastille reflète in_smart et reste basculable :
+  // l'invariant n'est à sens unique (référence ⇒ encodé), et les factures
+  // encodées avant l'arrivée de ce champ doivent rester correctes.
+  return pillHtml(i, 'in_smart', !!i.in_smart, 'Smart');
 }
 
 /** Pastille Smart / WinAuditor : grise pointillée quand c'est à faire, verte pleine quand c'est fait */
@@ -249,7 +265,7 @@ function paymentHtml(i, manager) {
 
 /** État vide soigné : petit dessin + phrase + action */
 function emptyState(tbody, message, withAction) {
-  tbody.innerHTML = `<tr class="empty-row"><td colspan="11">
+  tbody.innerHTML = `<tr class="empty-row"><td colspan="12">
       <div class="empty">
         ${ICONS.empty}
         <p>${escapeHtml(message)}</p>
@@ -866,6 +882,16 @@ async function openSuppliersRefresh() {
   const sups = await getSuppliers(true);
   $('#dl-suppliers').innerHTML = sups.filter((s) => !s.archived)
     .map((s) => `<option value="${escapeHtml(s.name)}"></option>`).join('');
+}
+
+/**
+ * Vide le cache des factures. À appeler quand une autre partie de
+ * l'application modifie la base — sans quoi la liste continue d'afficher
+ * l'état d'avant, sans le moindre signe.
+ */
+export function invalidateInvoices() {
+  cache = null;
+  loading = null;
 }
 
 /** Place le curseur dans la recherche (raccourci « / ») */
