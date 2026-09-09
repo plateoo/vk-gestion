@@ -69,6 +69,7 @@
       <button type="button" class="nav-item" data-tab="review"><span class="ico">◉</span> À contrôler<span id="review-badge" class="nav-badge" hidden>0</span></button>
       <button type="button" class="nav-item" data-tab="invoices"><span class="ico">▣</span> Factures</button>
       <button type="button" class="nav-item" data-tab="suppliers"><span class="ico">◫</span> Fournisseurs</button>
+      <button type="button" class="nav-item manager-only" data-tab="settings" hidden><span class="ico">⚙</span> Réglages</button>
     </nav>
     <div class="sidebar-foot">
       <p class="side-note">Encodage Smart · comptabilité WinAuditor · contrôle ici.</p>
@@ -355,6 +356,48 @@
       </div>
     </section>
 
+    <!-- ========================================================
+         4. RÉGLAGES — quarantaine, liste blanche, purge
+         ======================================================== -->
+    <section id="tab-settings" class="tab" hidden>
+      <div class="page-head">
+        <h1>Réglages</h1>
+        <p class="muted small">Réception des factures par e-mail.</p>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>Quarantaine</h2>
+          <p id="quarantine-summary" class="muted small">—</p>
+        </div>
+        <div id="quarantine-list" class="q-list"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h2>Expéditeurs autorisés</h2></div>
+        <div class="toolbar" style="padding: 10px 12px 0">
+          <input id="new-sender" type="email" placeholder="adresse@fournisseur.be" class="search">
+          <input id="new-sender-label" type="text" placeholder="nom du fournisseur (facultatif)">
+          <button type="button" id="add-sender" class="btn btn-primary">Ajouter</button>
+        </div>
+        <div id="allowed-list" class="q-list"></div>
+      </div>
+
+      <div class="card pad">
+        <div class="card-head" style="padding: 0 0 10px"><h2>Purge de la quarantaine</h2></div>
+        <p class="muted small">Supprime définitivement les messages en quarantaine les plus anciens,
+          avec leurs fichiers. Rien n'est purgé automatiquement.</p>
+        <div class="toolbar" style="margin-top: 10px">
+          <label class="sub">Plus anciens que
+            <input id="purge-days" type="number" min="1" step="1" value="90" style="width: 90px"> jours
+          </label>
+          <button type="button" id="purge-preview-btn" class="btn">Voir ce qui serait supprimé</button>
+          <button type="button" id="purge-run" class="btn btn-danger" disabled>Supprimer</button>
+        </div>
+        <p id="purge-preview" class="purge-preview" hidden></p>
+      </div>
+    </section>
+
   </main>
 
   <!-- Barre d'actions en lot (apparaît dès qu'une ligne est cochée) -->
@@ -617,6 +660,7 @@ import { initInvoices, renderInvoices, refreshInvoices, openInvoiceModal, focusS
 import { initSuppliers, renderSuppliers, resetSupplierView } from './js/suppliers.js';
 import { initDashboard, renderDashboard } from './js/dashboard.js';
 import { initReview, renderReview, refreshReviewBadge } from './js/review.js';
+import { initSettings, renderSettings } from './js/settings.js';
 import { initExport } from './js/export.js';
 import {
   $, $$, toast, errorMessage, openModal, closeModal, openPopover, closePopover,
@@ -632,6 +676,7 @@ function showTab(name) {
   $$('[data-tab]').forEach((b) => b.classList.toggle('active', b.dataset.tab === name));
   if (name === 'dashboard') renderDashboard();
   if (name === 'review') renderReview();
+  if (name === 'settings') renderSettings();
   if (name === 'invoices') renderInvoices();
   if (name === 'suppliers') renderSuppliers();
   window.scrollTo(0, 0);
@@ -646,6 +691,8 @@ async function enterApp(user) {
   $('#app').hidden = false;
   $('#user-name').textContent = displayName();
   $('#user-role').textContent = roleLabel();
+  // Les écrans de gestion n'apparaissent que pour le gérant
+  $$('.manager-only').forEach((el) => { el.hidden = !isManager(); });
   try {
     await refreshInvoices();
   } catch (err) {
@@ -776,6 +823,7 @@ initInvoices();
 initSuppliers();
 initDashboard();
 initReview();
+initSettings();
 initExport();
 
 // ---------- Configuration manquante ? ----------

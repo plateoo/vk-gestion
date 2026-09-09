@@ -611,6 +611,21 @@ body.modal-open { overflow: hidden; }
   background: var(--danger); color: var(--vbk-white); border-radius: 10px;
 }
 
+/* Réglages : quarantaine et liste blanche */
+.q-list { display: flex; flex-direction: column; }
+.q-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 14px; border-bottom: 1px solid var(--line-soft);
+}
+.q-row:last-child { border-bottom: none; }
+.q-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.q-email { font-weight: 600; font-size: 14px; word-break: break-all; }
+.q-meta { font-size: 12px; color: var(--muted); }
+.q-subject { font-size: 12px; color: var(--muted); font-style: italic;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.purge-preview { margin: 10px 0 0; font-size: 13px; color: var(--muted); }
+.purge-preview.danger { color: var(--danger); font-weight: 600; }
+
 .catchup { display: flex; flex-direction: column; gap: 8px; }
 .catchup-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
 .catchup-detail { font-size: 12px; color: var(--muted); }
@@ -865,6 +880,9 @@ kbd {
 }
 
 @media (max-width: 900px) {
+  .q-row { flex-wrap: wrap; }
+  .q-row .btn { width: 100%; }
+
   /* Le bandeau passe sur deux rangées : logo + compte, puis le sélecteur de mois */
   :root { --appbar-h: 100px; }
 
