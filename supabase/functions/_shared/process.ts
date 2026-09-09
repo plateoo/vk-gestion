@@ -231,99 +231,52 @@ export async function processQueueRow(queueId: string): Promise<void> {
 
   try {
     const files = (row.files ?? []) as { path: string; name: string; content_type: string }[];
-    const xmlFile = files.find((f) => /\.xml$/i.test(f.name) || /xml/i.test(f.content_type));
-    const pdfFile = files.find((f) => /\.pdf$/i.test(f.name) || /pdf/i.test(f.content_type));
-    const target = xmlFile ?? pdfFile;
-    if (!target) throw new Error('aucune pièce jointe exploitable');
+    const exploitables = files.filter((f) =>
+      /\.(pdf|xml)$/i.test(f.name) || /pdf|xml/i.test(f.content_type));
+    if (!exploitables.length) throw new Error('aucune pièce jointe exploitable');
 
-    const { data: blob, error: dlErr } = await sb.storage.from('factures').download(target.path);
-    if (dlErr || !blob) throw new Error('fichier introuvable dans le stockage');
-    const bytes = new Uint8Array(await blob.arrayBuffer());
+    // L'expéditeur est-il un transitaire ? Son adresse ne dit alors rien du
+    // fournisseur : un ancien franchisé retransmet les factures de dizaines
+    // de sociétés, s'en servir pour rapprocher serait faux par construction.
+    const { data: expediteur } = await sb.from('allowed_senders')
+      .select('is_forwarder').eq('email', row.sender_email).maybeSingle();
+    const transitaire = !!expediteur?.is_forwarder;
 
-    let extracted: Record<string, unknown>;
-    let notes = '';
-    try {
-      extracted = xmlFile ? parseUbl(new TextDecoder().decode(bytes)) : await extractFromPdf(bytes);
-    } catch (e) {
-      extracted = { _source: 'échec', commentaire: e instanceof Error ? e.message : String(e) };
-      notes = 'échec extraction';
+    // UNE FACTURE PAR PIÈCE JOINTE. Un même mail peut en porter plusieurs,
+    // de fournisseurs différents : n'en traiter qu'une les perdrait toutes
+    // sauf la première, sans le moindre signal.
+    const creees: string[] = [];
+    const doublons: string[] = [];
+    const soucis: string[] = [];
+
+    for (const cible of exploitables) {
+      try {
+        const id = await traiterFichier(sb, row, cible, transitaire);
+        if (id) creees.push(id);
+        else doublons.push(cible.name);   // déjà en base, écarté sciemment
+      } catch (e) {
+        soucis.push(`${cible.name} : ${e instanceof Error ? e.message : String(e)}`);
+      }
     }
 
-    const alerts = notes ? [] : runChecks(extracted);
-    const uncertain = Array.isArray(extracted.champs_incertains) ? extracted.champs_incertains as string[] : [];
-
-    const { data: match } = await sb.rpc('match_or_create_supplier', {
-      p_name:    (extracted.fournisseur_nom as string) ?? '',
-      p_vat:     (extracted.fournisseur_tva as string) ?? null,
-      p_email:   row.sender_email,
-      p_address: (extracted.fournisseur_adresse as string) ?? null,
-      p_iban:    (extracted.fournisseur_iban as string) ?? null
-    });
-    const m = (match ?? {}) as Record<string, unknown>;
-    // Un IBAN qui diffère de celui de la fiche n'est JAMAIS appliqué
-    // automatiquement : on le signale pour blocage à l'écran de contrôle.
-    if (m.iban_divergent) alerts.push('IBAN différent de celui de la fiche fournisseur');
-    let supplierId = (match as { id?: string } | null)?.id ?? null;
-    if (!supplierId) {
-      supplierId = await placeholderSupplier(sb);
-      notes = notes || 'fournisseur non identifié';
+    // Aucun fichier retenu et aucun doublon : c'est un échec, pas un silence.
+    if (!creees.length && !doublons.length) {
+      throw new Error(soucis.join(' | ') || 'aucune facture créée');
     }
 
-    const number = String(extracted.numero_facture ?? '').trim()
-      || `SANS-NUMERO-${new Date().toISOString().slice(0, 19).replace(/[-:T]/g, '')}`;
-
-    const { data: dup } = await sb.from('invoices').select('id')
-      .eq('supplier_id', supplierId).eq('invoice_number', number).maybeSingle();
-    if (dup) {
-      await sb.from('inbound_queue').update({
-        status: 'ignored',
-        error: `doublon probable : ${number} existe déjà pour ce fournisseur`,
-        processed_at: new Date().toISOString()
-      }).eq('id', queueId);
-      return;
-    }
-
-    const rate = normalizedRate(extracted);
-    const htva = Number(extracted.montant_htva);
-    // Un taux hors barème belge n'est jamais remplacé en silence : on le
-    // signale pour que Marie tranche sur le document.
-    if (rate !== null && !LEGAL_RATES.includes(rate)) alerts.push(`taux de TVA non standard (${rate})`);
-    const invoice = {
-      supplier_id: supplierId,
-      invoice_number: number,
-      invoice_date: /^\d{4}-\d{2}-\d{2}$/.test(String(extracted.date_facture ?? ''))
-        ? extracted.date_facture : new Date().toISOString().slice(0, 10),
-      due_date: /^\d{4}-\d{2}-\d{2}$/.test(String(extracted.date_echeance ?? ''))
-        ? extracted.date_echeance : null,
-      amount_htva: Number.isFinite(htva) ? htva : 0,
-      vat_rate: rate !== null && LEGAL_RATES.includes(rate) ? rate : 0.21,
-      source: 'email',
-      review_status: 'a_controler',
-      file_path: target.path,
-      sender_email: row.sender_email,
-      message_id: row.message_id,
-      extraction_notes: JSON.stringify({
-        notes: notes || null,
-        source: extracted._source,
-        alerts,
-        rapprochement: {
-          par: m.matched_by ?? null,
-          fiche_creee: m.created ?? false,
-          iban_lu: m.iban_lu ?? null,
-          iban_fiche: m.iban_fiche ?? null,
-          iban_divergent: m.iban_divergent ?? false
-        },
-        champs_incertains: uncertain,
-        commentaire: extracted.commentaire ?? null,
-        brut: extracted
-      })
-    };
-
-    const { data: created, error: insErr } = await sb.from('invoices').insert(invoice).select('id').single();
-    if (insErr) throw new Error(insErr.message);
+    // Le compte rendu dit toujours ce qu'il est advenu de CHAQUE pièce jointe.
+    const rendu = [
+      `${creees.length}/${exploitables.length} facture${creees.length > 1 ? 's' : ''} créée${creees.length > 1 ? 's' : ''}`,
+      doublons.length ? `doublons écartés : ${doublons.join(', ')}` : '',
+      soucis.length ? `échecs : ${soucis.join(' | ')}` : ''
+    ].filter(Boolean).join(' — ');
 
     await sb.from('inbound_queue').update({
-      status: 'done', invoice_id: created.id, error: null, processed_at: new Date().toISOString()
+      status: 'done',
+      invoice_id: creees[0] ?? null,
+      invoice_ids: creees,
+      error: (doublons.length || soucis.length) ? rendu : null,
+      processed_at: new Date().toISOString()
     }).eq('id', queueId);
   } catch (e) {
     await sb.from('inbound_queue').update({
@@ -332,4 +285,96 @@ export async function processQueueRow(queueId: string): Promise<void> {
       processed_at: new Date().toISOString()
     }).eq('id', queueId);
   }
+}
+
+/**
+ * Traite une pièce jointe et renvoie l'identifiant de la facture créée,
+ * ou null si c'est un doublon déjà connu.
+ */
+async function traiterFichier(
+  sb: SupabaseClient,
+  row: Record<string, unknown>,
+  cible: { path: string; name: string; content_type: string },
+  transitaire: boolean
+): Promise<string | null> {
+  const estXml = /\.xml$/i.test(cible.name) || /xml/i.test(cible.content_type);
+
+  const { data: blob, error: dlErr } = await sb.storage.from('factures').download(cible.path);
+  if (dlErr || !blob) throw new Error('fichier introuvable dans le stockage');
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+
+  let extracted: Record<string, unknown>;
+  let notes = '';
+  try {
+    extracted = estXml ? parseUbl(new TextDecoder().decode(bytes)) : await extractFromPdf(bytes);
+  } catch (e) {
+    extracted = { _source: 'échec', commentaire: e instanceof Error ? e.message : String(e) };
+    notes = 'échec extraction';
+  }
+
+  const alerts = notes ? [] : runChecks(extracted);
+  const uncertain = Array.isArray(extracted.champs_incertains) ? extracted.champs_incertains as string[] : [];
+
+  const { data: match } = await sb.rpc('match_or_create_supplier', {
+    p_name:         (extracted.fournisseur_nom as string) ?? '',
+    p_vat:          (extracted.fournisseur_tva as string) ?? null,
+    p_email:        row.sender_email,
+    p_address:      (extracted.fournisseur_adresse as string) ?? null,
+    p_iban:         (extracted.fournisseur_iban as string) ?? null,
+    p_is_forwarder: transitaire
+  });
+  const m = (match ?? {}) as Record<string, unknown>;
+  if (m.iban_divergent) alerts.push('IBAN différent de celui de la fiche fournisseur');
+
+  let supplierId = (m.id as string) ?? null;
+  if (!supplierId) {
+    supplierId = await placeholderSupplier(sb);
+    notes = notes || 'fournisseur non identifié';
+  }
+
+  const number = String(extracted.numero_facture ?? '').trim()
+    || `SANS-NUMERO-${crypto.randomUUID().slice(0, 8)}`;
+
+  const { data: dup } = await sb.from('invoices').select('id')
+    .eq('supplier_id', supplierId).eq('invoice_number', number).maybeSingle();
+  if (dup) return null;   // doublon : on ne crée rien, on passe au fichier suivant
+
+  const rate = normalizedRate(extracted);
+  const htva = Number(extracted.montant_htva);
+  if (rate !== null && !LEGAL_RATES.includes(rate)) alerts.push(`taux de TVA non standard (${rate})`);
+
+  const { data: created, error: insErr } = await sb.from('invoices').insert({
+    supplier_id: supplierId,
+    invoice_number: number,
+    invoice_date: /^\d{4}-\d{2}-\d{2}$/.test(String(extracted.date_facture ?? ''))
+      ? extracted.date_facture : new Date().toISOString().slice(0, 10),
+    due_date: /^\d{4}-\d{2}-\d{2}$/.test(String(extracted.date_echeance ?? ''))
+      ? extracted.date_echeance : null,
+    amount_htva: Number.isFinite(htva) ? htva : 0,
+    vat_rate: rate !== null && LEGAL_RATES.includes(rate) ? rate : 0.21,
+    source: 'email',
+    review_status: 'a_controler',
+    file_path: cible.path,
+    sender_email: row.sender_email,
+    message_id: row.message_id,
+    extraction_notes: JSON.stringify({
+      notes: notes || null,
+      source: extracted._source,
+      fichier: cible.name,
+      alerts,
+      champs_incertains: uncertain,
+      commentaire: extracted.commentaire ?? null,
+      rapprochement: {
+        par: m.matched_by ?? null,
+        fiche_creee: m.created ?? false,
+        transitaire,
+        iban_lu: m.iban_lu ?? null,
+        iban_fiche: m.iban_fiche ?? null,
+        iban_divergent: m.iban_divergent ?? false
+      },
+      brut: extracted
+    })
+  }).select('id').single();
+  if (insErr) throw new Error(insErr.message);
+  return created.id;
 }

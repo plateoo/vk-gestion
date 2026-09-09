@@ -66,9 +66,14 @@ export async function renderSettings() {
           <span class="sep">·</span> dernier le ${escapeHtml(longDate(String(s.derniere_reception).slice(0, 10)) || '—')}</span>
         ${s.dernier_sujet ? `<span class="q-subject">« ${escapeHtml(s.dernier_sujet)} »</span>` : ''}
       </div>
-      <button type="button" class="btn btn-primary btn-sm" data-allow="${escapeHtml(s.sender_email)}">
-        Autoriser et rejouer
-      </button>
+      <div class="q-actions">
+        <label class="check" title="Cocher si cette adresse retransmet les factures d'AUTRES fournisseurs : ancien franchisé, comptable, boîte interne. Son adresse ne servira alors jamais à identifier un fournisseur.">
+          <input type="checkbox" data-forwarder="${escapeHtml(s.sender_email)}"> transitaire
+        </label>
+        <button type="button" class="btn btn-primary btn-sm" data-allow="${escapeHtml(s.sender_email)}">
+          Autoriser et rejouer
+        </button>
+      </div>
     </div>`).join('')
     : `<div class="empty">${ICONS.empty}<p>Rien en quarantaine</p></div>`;
 
@@ -76,7 +81,8 @@ export async function renderSettings() {
     <div class="q-row">
       <div class="q-main">
         <span class="q-email">${escapeHtml(a.email)}</span>
-        ${a.label ? `<span class="q-meta">${escapeHtml(a.label)}</span>` : ''}
+        <span class="q-meta">${a.label ? escapeHtml(a.label) : ''}${a.is_forwarder
+          ? `${a.label ? ' <span class="sep">·</span> ' : ''}<span class="tag">transitaire</span>` : ''}</span>
       </div>
       <button type="button" class="icon-btn danger" data-revoke="${a.id}" title="Retirer de la liste blanche">${ICONS.trash}</button>
     </div>`).join('')
@@ -89,8 +95,14 @@ export async function renderSettings() {
 async function allowAndReplay(email, btn) {
   const entry = senders.find((s) => s.sender_email === email);
   const n = entry ? Number(entry.messages) : 0;
+  const estTransitaire = !!$(`[data-forwarder="${CSS.escape(email)}"]`)?.checked;
+  const fichiers = entry ? Number(entry.fichiers) : 0;
   const ok = await confirmDialog(
-    `Autoriser ${email} et rejouer ${n} message${n > 1 ? 's' : ''} ? Les factures seront créées et arriveront dans « À contrôler ».`,
+    `Autoriser ${email} et rejouer ${n} message${n > 1 ? 's' : ''} ? `
+    + `Chaque pièce jointe donne une facture, soit ${fichiers} extraction${fichiers > 1 ? 's' : ''} attendue${fichiers > 1 ? 's' : ''}.`
+    + (estTransitaire
+        ? ' Marqué transitaire : son adresse ne servira pas à identifier les fournisseurs.'
+        : ''),
     'Autoriser et rejouer');
   if (!ok) return;
 
@@ -98,7 +110,9 @@ async function allowAndReplay(email, btn) {
   btn.textContent = 'Autorisation…';
   try {
     // 1. La base ajoute l'expéditeur et sort ses messages de quarantaine
-    const { data, error } = await supabase.rpc('allow_sender_and_replay', { p_email: email, p_label: null });
+    const transitaire = !!$(`[data-forwarder="${CSS.escape(email)}"]`)?.checked;
+    const { data, error } = await supabase.rpc('allow_sender_and_replay',
+      { p_email: email, p_label: null, p_is_forwarder: transitaire });
     if (error) throw error;
     const payload = typeof data === 'string' ? JSON.parse(data) : data;
     const ids = payload?.queue_ids || [];

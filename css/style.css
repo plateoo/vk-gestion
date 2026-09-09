@@ -681,6 +681,8 @@ body.modal-open { overflow: hidden; }
 .q-meta { font-size: 12px; color: var(--muted); }
 .q-subject { font-size: 12px; color: var(--muted); font-style: italic;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.q-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.q-actions .check { font-size: 12px; color: var(--muted); white-space: nowrap; }
 .purge-preview { margin: 10px 0 0; font-size: 13px; color: var(--muted); }
 .purge-preview.danger { color: var(--danger); font-weight: 600; }
 

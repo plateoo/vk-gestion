@@ -571,6 +571,11 @@ async function applyIbanChoice(supplierId) {
 async function rememberSender(supplierId, email) {
   if (!supplierId || !email) return;
   try {
+    // Un transitaire retransmet les factures d'autrui : mémoriser son
+    // adresse sur une fiche rattacherait à tort toutes les suivantes.
+    const { data: exp } = await supabase.from('allowed_senders')
+      .select('is_forwarder').eq('email', email).maybeSingle();
+    if (exp?.is_forwarder) return;
     const { data } = await supabase.from('suppliers').select('known_emails').eq('id', supplierId).single();
     const list = data?.known_emails || [];
     if (list.includes(email)) return;
