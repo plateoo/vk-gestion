@@ -93,7 +93,7 @@ function applyFilters(rows) {
     if (filters.winauditor === 'non' && i.in_winauditor) return false;
     if (filters.stock === 'sans' && i.stock_in) return false;
     if (q) {
-      const hay = `${i.invoice_number} ${i.smart_ref || ''} ${i.supplier_name} ${i.notes || ''} ${i.expense_type || ''}`.toLowerCase();
+      const hay = `${i.invoice_number} ${i.smart_ref || ''} ${(i.external_refs || []).join(' ')} ${i.supplier_name} ${i.notes || ''} ${i.expense_type || ''}`.toLowerCase();
       if (!hay.includes(q)) return false;
     }
     return true;
@@ -119,7 +119,7 @@ function applySort(rows) {
 // ---------------------------------------------------------------------
 export async function renderInvoices() {
   const tbody = $('#inv-tbody');
-  if (!cache) skeletonRows(tbody, 8, 12);
+  if (!cache) skeletonRows(tbody, 8, 13);
 
   let rows;
   try {
@@ -199,6 +199,9 @@ function rowHtml(i, manager) {
     <td class="td-supplier" data-label="Fournisseur">${escapeHtml(i.supplier_name)}</td>
     <td class="td-number" data-label="N°">${escapeHtml(i.invoice_number)}<span class="mob-meta">${fmtDate(i.invoice_date)}${i.due_date ? ` · éch. ${fmtDate(i.due_date)}` : ''}</span></td>
     <td class="td-smartref" data-label="Réf. Smart">${i.smart_ref ? escapeHtml(i.smart_ref) : '<span class="muted">—</span>'}</td>
+    <td class="td-refs" data-label="Références">${(i.external_refs || []).length
+      ? i.external_refs.map((r) => `<span class="ref-chip">${escapeHtml(r)}</span>`).join('')
+      : '<span class="muted">—</span>'}</td>
     <td class="td-due ${late ? 'txt-red strong' : soon ? 'txt-orange' : ''}" data-label="Échéance">${fmtDate(i.due_date) || '—'}</td>
     <td class="td-amount num strong" data-label="Total TVAC">${fmtEUR(i.amount_tvac)}</td>
     <td class="td-smart" data-label="Smart">${smartPillHtml(i)}</td>
@@ -265,7 +268,7 @@ function paymentHtml(i, manager) {
 
 /** État vide soigné : petit dessin + phrase + action */
 function emptyState(tbody, message, withAction) {
-  tbody.innerHTML = `<tr class="empty-row"><td colspan="12">
+  tbody.innerHTML = `<tr class="empty-row"><td colspan="13">
       <div class="empty">
         ${ICONS.empty}
         <p>${escapeHtml(message)}</p>

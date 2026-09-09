@@ -26,9 +26,20 @@ export function parseUbl(xml: string) {
     /<(?:[a-zA-Z0-9]+:)?AccountingSupplierParty[\s\S]*?<\/(?:[a-zA-Z0-9]+:)?AccountingSupplierParty>/i
   )?.[0] ?? '';
   const percent = num(tagValue(xml, 'Percent'));
+  const adresse = [
+    tagValue(supplierBlock, 'StreetName'),
+    tagValue(supplierBlock, 'BuildingNumber'),
+    tagValue(supplierBlock, 'PostalZone'),
+    tagValue(supplierBlock, 'CityName')
+  ].filter(Boolean).join(' ');
+  const payeeBlock = xml.match(
+    /<(?:[a-zA-Z0-9]+:)?PayeeFinancialAccount[\s\S]*?<\/(?:[a-zA-Z0-9]+:)?PayeeFinancialAccount>/i
+  )?.[0] ?? '';
   return {
     fournisseur_nom: tagValue(supplierBlock, 'RegistrationName') || tagValue(supplierBlock, 'Name'),
     fournisseur_tva: tagValue(supplierBlock, 'CompanyID'),
+    fournisseur_adresse: adresse || null,
+    fournisseur_iban: tagValue(payeeBlock, 'ID'),
     numero_facture: tagValue(xml, 'ID'),
     date_facture: tagValue(xml, 'IssueDate'),
     date_echeance: tagValue(xml, 'DueDate'),
@@ -55,6 +66,8 @@ sans balises markdown.
 {
   "fournisseur_nom": string,
   "fournisseur_tva": string|null,
+  "fournisseur_adresse": string|null,   // adresse de facturation complète, sur une ligne
+  "fournisseur_iban": string|null,      // IBAN de paiement figurant sur la facture
   "numero_facture": string,
   "date_facture": "AAAA-MM-JJ",
   "date_echeance": "AAAA-MM-JJ"|null,
@@ -76,7 +89,8 @@ Règles strictes :
 - Attention aux formats de date européens : 03/09/2026 est le 3 septembre.
 - Le fournisseur est l'émetteur de la facture, pas le destinataire.
   Le destinataire est Vandenborre Kitchen : ne le confonds jamais avec
-  l'émetteur.
+  l'émetteur. L'adresse et l'IBAN demandés sont ceux de l'ÉMETTEUR.
+- N'invente jamais un IBAN : s'il n'apparaît pas, mets null.
 - Une note de crédit a des montants négatifs : mets est_avoir à true et
   les montants en négatif.
 - Si plusieurs taux de TVA coexistent, indique le taux principal et
@@ -239,10 +253,16 @@ export async function processQueueRow(queueId: string): Promise<void> {
     const uncertain = Array.isArray(extracted.champs_incertains) ? extracted.champs_incertains as string[] : [];
 
     const { data: match } = await sb.rpc('match_or_create_supplier', {
-      p_name:  (extracted.fournisseur_nom as string) ?? '',
-      p_vat:   (extracted.fournisseur_tva as string) ?? null,
-      p_email: row.sender_email
+      p_name:    (extracted.fournisseur_nom as string) ?? '',
+      p_vat:     (extracted.fournisseur_tva as string) ?? null,
+      p_email:   row.sender_email,
+      p_address: (extracted.fournisseur_adresse as string) ?? null,
+      p_iban:    (extracted.fournisseur_iban as string) ?? null
     });
+    const m = (match ?? {}) as Record<string, unknown>;
+    // Un IBAN qui diffère de celui de la fiche n'est JAMAIS appliqué
+    // automatiquement : on le signale pour blocage à l'écran de contrôle.
+    if (m.iban_divergent) alerts.push('IBAN différent de celui de la fiche fournisseur');
     let supplierId = (match as { id?: string } | null)?.id ?? null;
     if (!supplierId) {
       supplierId = await placeholderSupplier(sb);
@@ -286,6 +306,13 @@ export async function processQueueRow(queueId: string): Promise<void> {
         notes: notes || null,
         source: extracted._source,
         alerts,
+        rapprochement: {
+          par: m.matched_by ?? null,
+          fiche_creee: m.created ?? false,
+          iban_lu: m.iban_lu ?? null,
+          iban_fiche: m.iban_fiche ?? null,
+          iban_divergent: m.iban_divergent ?? false
+        },
         champs_incertains: uncertain,
         commentaire: extracted.commentaire ?? null,
         brut: extracted

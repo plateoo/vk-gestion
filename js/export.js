@@ -11,7 +11,7 @@ import {
 const HEADERS = [
   'Date encodage', 'Fournisseur', 'N° facture', 'Date facture', 'Échéance',
   'Montant HTVA', 'TVA %', 'Montant TVA', 'Total TVAC',
-  'Encodé Smart', 'Réf. Smart', 'Envoyé WinAuditor', 'Entrée en stock', 'Sortie / livraison',
+  'Encodé Smart', 'Réf. Smart', 'Références', 'Envoyé WinAuditor', 'Entrée en stock', 'Sortie / livraison',
   'Statut paiement', 'Date paiement', 'Mode paiement', 'Type de dépense', 'Remarques'
 ];
 
@@ -44,6 +44,7 @@ function lineFor(i) {
     csvNum(tvac),
     oui(i.in_smart),
     i.smart_ref || '',
+    (i.external_refs || []).join(' / '),
     oui(i.in_winauditor),
     fmtDate(i.stock_in),
     fmtDate(i.stock_out),

@@ -140,6 +140,8 @@ export async function renderSupplierDetail(id) {
   $('#sd-notes').textContent = s.notes || '';
   $('#sd-notes').hidden = !s.notes;
 
+  renderValidationPanel(s);
+
   $('#sd-period-label').textContent = detailAllPeriods ? 'Toutes périodes' : monthLabel(month);
   $('#sd-count').textContent = st.count;
   $('#sd-total').textContent = fmtEUR(st.total);
@@ -149,7 +151,7 @@ export async function renderSupplierDetail(id) {
 
   const tbody = $('#sd-tbody');
   if (!shown.length) {
-    emptyRow(tbody, 8, detailAllPeriods ? 'Aucune facture pour ce fournisseur.' : `Aucune facture en ${monthLabel(month)}.`);
+    emptyRow(tbody, 9, detailAllPeriods ? 'Aucune facture pour ce fournisseur.' : `Aucune facture en ${monthLabel(month)}.`);
     return;
   }
 
@@ -160,6 +162,9 @@ export async function renderSupplierDetail(id) {
       <tr class="${isOverdue(i) ? 'row-overdue' : ''}">
         <td data-label="Date facture">${fmtDate(i.invoice_date)}</td>
         <td data-label="N° facture">${escapeHtml(i.invoice_number)}</td>
+        <td data-label="Références">${(i.external_refs || []).length
+          ? i.external_refs.map((r) => `<span class="ref-chip">${escapeHtml(r)}</span>`).join('')
+          : '<span class="muted">—</span>'}</td>
         <td data-label="Encodée le">${fmtDate(i.encoded_at)}</td>
         <td data-label="Échéance">${fmtDate(i.due_date)}</td>
         <td data-label="Total TVAC" class="num">${fmtEUR(i.amount_tvac)}</td>
@@ -174,6 +179,84 @@ export async function renderSupplierDetail(id) {
     downloadInvoicesCSV(shown, `VK_fournisseur_${slugify(s.name)}_${suffix}.csv`);
   };
   $('#sd-edit').onclick = () => openSupplierModal(s, () => renderSupplierDetail(id));
+}
+
+// ---------------------------------------------------------------------
+// Validation d'une fiche pré-remplie par l'extraction
+//
+// Chaque champ pré-rempli est affiché à côté de ce qui a été LU sur le
+// document. Rien n'est modifié tant que le gérant n'a pas validé.
+// ---------------------------------------------------------------------
+function renderValidationPanel(s) {
+  const box = $('#sd-validate');
+  if (!s.needs_review) { box.hidden = true; box.innerHTML = ''; return; }
+
+  const lu = s.extracted || {};
+  const champ = (id, label, valeur, luValeur, type = 'text') => `
+    <div class="vf-row">
+      <label class="vf-label" for="${id}">${label}</label>
+      <input id="${id}" type="${type}" value="${escapeHtml(valeur ?? '')}">
+      <span class="vf-read">${luValeur
+        ? `lu&nbsp;: <code>${escapeHtml(luValeur)}</code>`
+        : '<span class="muted">non lu sur le document</span>'}</span>
+    </div>`;
+
+  box.hidden = false;
+  box.innerHTML = `
+    <div class="vf-head">
+      <strong>Fiche créée automatiquement — à valider</strong>
+      <span class="muted small">Pré-remplie depuis la facture. Corrige ce qui doit l'être, complète le reste, puis valide.</span>
+    </div>
+
+    <div class="vf-grid">
+      ${champ('vf-name', 'Nom', s.name, lu.nom)}
+      ${champ('vf-vat', 'N° TVA', s.vat_number, lu.tva)}
+      ${champ('vf-address', 'Adresse de facturation', s.address, lu.adresse)}
+      ${champ('vf-iban', 'IBAN', s.iban, lu.iban)}
+    </div>
+
+    <p class="vf-manual-title">À compléter à la main</p>
+    <div class="vf-grid">
+      ${champ('vf-contact', 'Contact', s.contact_name, null)}
+      ${champ('vf-email', 'E-mail de contact', s.email, lu.email, 'email')}
+      ${champ('vf-phone', 'Téléphone', s.phone, null, 'tel')}
+      ${champ('vf-terms', 'Conditions de paiement (jours)', s.payment_terms ?? 30, null, 'number')}
+    </div>
+
+    <div class="vf-actions">
+      <span class="muted small">Les corrections sont journalisées.</span>
+      <button type="button" class="btn btn-primary" id="vf-save">Valider la fiche</button>
+    </div>`;
+
+  $('#vf-save').onclick = () => validateSupplier(s.id);
+}
+
+async function validateSupplier(id) {
+  const btn = $('#vf-save');
+  btn.disabled = true;
+  try {
+    const changes = {
+      name: $('#vf-name').value.trim(),
+      vat_number: $('#vf-vat').value.trim(),
+      address: $('#vf-address').value.trim(),
+      iban: $('#vf-iban').value.trim(),
+      contact_name: $('#vf-contact').value.trim(),
+      email: $('#vf-email').value.trim(),
+      phone: $('#vf-phone').value.trim(),
+      payment_terms: String(Number($('#vf-terms').value) || 30)
+    };
+    if (!changes.name) { toast('Le nom du fournisseur est obligatoire.', 'error'); btn.disabled = false; return; }
+    const { error } = await supabase.rpc('validate_supplier', { p_id: id, p_changes: changes });
+    if (error) throw error;
+    await getSuppliers(true);
+    toast('Fiche validée.');
+    notifyDataChange();
+    renderSupplierDetail(id);
+  } catch (err) {
+    console.error(err);
+    toast(errorMessage(err, 'Validation impossible.'), 'error');
+    btn.disabled = false;
+  }
 }
 
 // ---------------------------------------------------------------------

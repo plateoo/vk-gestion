@@ -57,6 +57,7 @@
         <span id="user-name" class="user-name">—</span>
         <span id="user-role" class="user-role">—</span>
       </div>
+      <button type="button" id="btn-search" class="appbar-btn round" title="Rechercher (/)" aria-label="Rechercher">⌕</button>
       <button type="button" id="btn-help" class="appbar-btn round" title="Aide" aria-label="Aide" aria-haspopup="menu">?</button>
       <button type="button" id="btn-logout" class="appbar-btn">Se déconnecter</button>
     </div>
@@ -244,6 +245,7 @@
                 <th data-sort="supplier">Fournisseur</th>
                 <th data-sort="invoice_number">N°</th>
                 <th data-sort="smart_ref">Réf. Smart</th>
+                <th class="th-refs">Références</th>
                 <th data-sort="due_date">Échéance</th>
                 <th data-sort="amount_tvac" class="num">Total TVAC</th>
                 <th>Smart <button type="button" class="help-dot" data-help-text="Facture encodée dans Smart, le logiciel du magasin.">?</button></th>
@@ -313,6 +315,8 @@
           </div>
         </div>
 
+        <div id="sd-validate" class="card pad validate-fiche" hidden></div>
+
         <div class="card pad">
           <div id="sd-contact" class="contact-line"></div>
           <div id="sd-notes" class="muted notes-line" hidden></div>
@@ -341,6 +345,7 @@
                 <tr>
                   <th>Date facture</th>
                   <th>N° facture</th>
+                  <th>Références</th>
                   <th>Encodée le</th>
                   <th>Échéance</th>
                   <th class="num">Total TVAC</th>
@@ -625,6 +630,21 @@
 </div>
 
 <!-- ============================================================
+     RECHERCHE GLOBALE
+     ============================================================ -->
+<div id="modal-search" class="modal modal-top" hidden>
+  <div class="modal-backdrop" data-close="modal-search"></div>
+  <div class="modal-box search-box" role="dialog" aria-modal="true" aria-label="Recherche globale">
+    <div class="search-bar">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input id="search-input" type="search" autocomplete="off" placeholder="Facture, fournisseur, TVA, montant, référence…">
+      <button type="button" class="icon-btn" data-close="modal-search" aria-label="Fermer">✕</button>
+    </div>
+    <div id="search-results" class="search-results"></div>
+  </div>
+</div>
+
+<!-- ============================================================
      MODALE RACCOURCIS CLAVIER
      ============================================================ -->
 <div id="modal-shortcuts" class="modal modal-top" hidden>
@@ -637,7 +657,7 @@
     <div class="modal-body">
       <ul class="shortcuts">
         <li><kbd>N</kbd> <span>Nouvelle facture</span></li>
-        <li><kbd>/</kbd> <span>Rechercher</span></li>
+        <li><kbd>/</kbd> <span>Recherche globale, depuis n'importe quel écran</span></li>
         <li><kbd>←</kbd> <kbd>→</kbd> <span>Mois précédent / suivant</span></li>
         <li><kbd>Échap</kbd> <span>Fermer la fenêtre</span></li>
         <li><kbd>?</kbd> <span>Afficher cette aide</span></li>
@@ -661,6 +681,7 @@ import { initSuppliers, renderSuppliers, resetSupplierView } from './js/supplier
 import { initDashboard, renderDashboard } from './js/dashboard.js';
 import { initReview, renderReview, refreshReviewBadge } from './js/review.js';
 import { initSettings, renderSettings } from './js/settings.js';
+import { initSearch, openSearch } from './js/search.js';
 import { initExport } from './js/export.js';
 import {
   $, $$, toast, errorMessage, openModal, closeModal, openPopover, closePopover,
@@ -804,7 +825,7 @@ document.addEventListener('keydown', (e) => {
   if (typing || modalOpen) return;
 
   if (e.key === 'n' || e.key === 'N') { e.preventDefault(); showTab('invoices'); openInvoiceModal(); }
-  else if (e.key === '/') { e.preventDefault(); showTab('invoices'); focusSearch(); }
+  else if (e.key === '/') { e.preventDefault(); openSearch(); }
   else if (e.key === '?') { e.preventDefault(); openModal('modal-shortcuts'); }
   else if (e.key === 'ArrowLeft') { setMonth(shiftMonth(getMonth(), -1)); }
   else if (e.key === 'ArrowRight') { setMonth(shiftMonth(getMonth(), 1)); }
@@ -824,6 +845,7 @@ initSuppliers();
 initDashboard();
 initReview();
 initSettings();
+initSearch(showTab);
 initExport();
 
 // ---------- Configuration manquante ? ----------

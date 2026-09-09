@@ -366,9 +366,22 @@ label { font-size: 12px; color: var(--muted); font-weight: 500; }
 .table td { padding: 7px 10px; border-bottom: 1px solid var(--line-soft); vertical-align: middle; }
 .table tbody tr:hover { background: var(--row-hover); }
 .table td.num, .table th.num { text-align: right; font-variant-numeric: tabular-nums; }
+/* Le tableau des factures porte 13 colonnes : on resserre l'espacement
+   horizontal pour qu'il tienne sans défilement sur un écran de 1440. */
+.table-invoices th, .table-invoices td { padding-left: 8px; padding-right: 8px; }
+
 .cell-supplier, .td-supplier { font-weight: 500; }
 .td-number, .td-smartref { font-variant-numeric: tabular-nums; }
 .td-smartref { font-size: 12px; }
+.ref-chip {
+  display: inline-block; font-size: 11px; padding: 1px 6px; margin: 1px 3px 1px 0;
+  background: var(--surface-hover); border: 1px solid var(--border); border-radius: 10px;
+}
+.iban-alert .iban-body { display: flex; flex-direction: column; gap: 6px; width: 100%; }
+.iban-compare { display: flex; gap: 18px; flex-wrap: wrap; font-size: 13px; }
+.iban-compare code { background: var(--surface); padding: 1px 6px; border-radius: 4px; }
+.iban-warn { margin: 0; font-size: 12px; line-height: 1.5; }
+.iban-actions { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 2px; }
 .pill.locked { cursor: default; opacity: 1; }
 .mob-meta { display: none; }
 .txt-orange { color: var(--orange); }
@@ -611,6 +624,41 @@ body.modal-open { overflow: hidden; }
   background: var(--danger); color: var(--vbk-white); border-radius: 10px;
 }
 
+/* Validation d'une fiche fournisseur pré-remplie */
+.validate-fiche { border-left: 3px solid var(--warn); display: flex; flex-direction: column; gap: 12px; }
+.vf-head { display: flex; flex-direction: column; gap: 2px; }
+.vf-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 16px; }
+.vf-row { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.vf-label { font-size: 12px; color: var(--muted); font-weight: 500; }
+.vf-read { font-size: 11px; color: var(--muted); }
+.vf-read code { background: var(--surface-hover); padding: 1px 5px; border-radius: 4px; }
+.vf-manual-title { margin: 4px 0 0; font-size: 12px; font-weight: 600; color: var(--muted); }
+.vf-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+
+/* Recherche globale */
+.search-box { max-width: 620px; padding: 0; overflow: hidden; }
+.search-bar { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--border); }
+.search-icon { font-size: 18px; color: var(--muted); }
+.search-bar input { flex: 1; border: none; font-size: 16px; padding: 6px 0; }
+.search-bar input:focus { outline: none; }
+.search-results { max-height: 60vh; overflow-y: auto; }
+.search-hint { padding: 18px 16px; color: var(--muted); font-size: 13px; }
+.search-hint p { margin: 0 0 6px; }
+.search-group { padding: 8px 0; border-bottom: 1px solid var(--line-soft); }
+.search-group:last-child { border-bottom: none; }
+.search-group h3 {
+  font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;
+  color: var(--muted); padding: 4px 14px 6px; margin: 0;
+}
+.search-hit {
+  display: flex; flex-direction: column; gap: 2px; width: 100%;
+  text-align: left; font: inherit; background: none; border: none;
+  padding: 8px 14px; cursor: pointer; transition: background .15s ease;
+}
+.search-hit:hover, .search-hit:focus-visible { background: var(--surface-hover); }
+.hit-main { font-weight: 600; font-size: 14px; }
+.hit-meta { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+
 /* Réglages : quarantaine et liste blanche */
 .q-list { display: flex; flex-direction: column; }
 .q-row {
@@ -724,6 +772,7 @@ body.modal-open { overflow: hidden; }
   .review-layout { grid-template-columns: 1fr; }
   .review-list { max-height: 240px; }
   .review-fields .grid2 { grid-template-columns: 1fr; }
+  .vf-grid { grid-template-columns: 1fr; }
   .review-viewer { height: 320px; }
   .nav-badge { margin-left: 6px; }
 }
@@ -1044,7 +1093,8 @@ kbd {
   /* Ciblage par classe et non par rang : ajouter une colonne ne doit pas
      décaler silencieusement la règle. */
   .table-invoices .td-stock, .table-invoices .th-stock,
-  .table-invoices .td-smartref, .table-invoices .th-smartref { display: none; }
+  .table-invoices .td-smartref, .table-invoices .th-smartref,
+  .table-invoices .td-refs, .table-invoices .th-refs { display: none; }
   .table-invoices .help-dot { display: none; }
   .table-invoices .td-actions .icon-btn { padding: 4px 5px; }
 }

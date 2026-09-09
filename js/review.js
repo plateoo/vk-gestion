@@ -14,7 +14,7 @@ import {
   $, $$, fmtEUR, fmtDate, escapeHtml, toast, errorMessage, confirmDialog,
   todayISO, notifyDataChange, ICONS, LEGAL_RATES, vatMismatch, longDate
 } from './ui.js';
-import { isManager } from './auth.js';
+import { isManager, displayName } from './auth.js';
 
 let queue = [];          // factures en attente de contrôle
 let current = null;      // facture ouverte
@@ -47,10 +47,11 @@ function parseNotes(raw) {
       alerts: Array.isArray(n.alerts) ? n.alerts : [],
       uncertain: Array.isArray(n.champs_incertains) ? n.champs_incertains : [],
       comment: n.commentaire || null,
+      rapprochement: n.rapprochement || {},
       brut: n.brut || {}
     };
   } catch {
-    return { notes: null, failed: false, source: null, alerts: [], uncertain: [], comment: null, brut: {} };
+    return { notes: null, failed: false, source: null, alerts: [], uncertain: [], comment: null, rapprochement: {}, brut: {} };
   }
 }
 
@@ -165,6 +166,7 @@ async function renderDetail() {
   box.innerHTML = `
     ${m.comment ? `<div class="review-banner">${ICONS.dash}<span>${escapeHtml(m.comment)}</span></div>` : ''}
     ${m.failed ? `<div class="review-banner danger">${ICONS.dash}<span>L'extraction automatique a échoué. Les champs sont à saisir à la main.</span></div>` : ''}
+    ${ibanAlertHtml(m)}
 
     <div class="review-split">
       <div class="review-doc">
@@ -187,6 +189,14 @@ async function renderDetail() {
                  placeholder="numéro attribué lors de l'encodage dans Smart"
                  value="${escapeHtml(i.smart_ref || '')}">
           <p class="field-hint" id="rv-smart-hint">Renseigner cette référence coche « Encodé Smart » automatiquement.</p>
+        </div>
+
+        <div class="field">
+          <label for="rv-refs">Références</label>
+          <input id="rv-refs" data-f="external_refs" type="text" autocomplete="off"
+                 placeholder="bon de commande, chantier, client…"
+                 value="${escapeHtml((i.external_refs || []).join(', '))}">
+          <p class="field-hint">Plusieurs références possibles, séparées par des virgules.</p>
         </div>
 
         <div class="field">
@@ -336,6 +346,43 @@ function currentRate() {
   return Number(sel.value);
 }
 
+/** « BC-123, chantier Dupont » -> ['BC-123', 'chantier Dupont'] */
+export function splitRefs(value) {
+  return String(value || '')
+    .split(/[,;\n]/)
+    .map((r) => r.trim())
+    .filter(Boolean);
+}
+
+/**
+ * IBAN divergent : jamais appliqué automatiquement. On bloque la validation
+ * tant que le gérant n'a pas tranché entre l'ancien et le nouveau, et le
+ * choix est journalisé.
+ */
+function ibanAlertHtml(m) {
+  const r = m.rapprochement || {};
+  if (!r.iban_divergent) return '';
+  return `
+    <div class="review-banner danger iban-alert" id="rv-iban-alert">
+      <div class="iban-body">
+        <strong>L'IBAN de cette facture diffère de celui de la fiche fournisseur.</strong>
+        <div class="iban-compare">
+          <span>Fiche : <code>${escapeHtml(r.iban_fiche || '—')}</code></span>
+          <span>Facture : <code>${escapeHtml(r.iban_lu || '—')}</code></span>
+        </div>
+        <p class="iban-warn">Un changement d'IBAN non sollicité est le signe d'une fraude par
+          détournement de facture. Vérifie par téléphone auprès du fournisseur, sur un numéro
+          que tu connais déjà, avant de choisir.</p>
+        <div class="iban-actions">
+          <label class="check"><input type="radio" name="iban-choice" value="garder" checked>
+            Conserver l'IBAN de la fiche</label>
+          <label class="check"><input type="radio" name="iban-choice" value="remplacer">
+            Remplacer par celui de la facture</label>
+        </div>
+      </div>
+    </div>`;
+}
+
 /** Réécrit les dates en toutes lettres, indépendamment de la langue du navigateur */
 function spellDates() {
   const pairs = [['#rv-date', '#rv-date-text'], ['#rv-due', '#rv-due-text']];
@@ -390,6 +437,9 @@ function blockingReason() {
   if (mismatch === true) return 'Le taux de TVA ne correspond pas au montant lu sur le document.';
   const pending = (current?.meta?.uncertain || []).filter((f) => !confirmed.has(f));
   if (pending.length) return `Confirme les champs incertains : ${pending.join(', ')}.`;
+  if (current?.meta?.rapprochement?.iban_divergent && !$('input[name="iban-choice"]:checked')) {
+    return 'Tranche sur l\'IBAN : conserver celui de la fiche ou le remplacer.';
+  }
   return null;
 }
 
@@ -439,6 +489,7 @@ async function validateCurrent() {
   const rate = currentRate();
   const patch = {
     smart_ref: $('#rv-smart').value.trim() || null,
+    external_refs: splitRefs($('#rv-refs').value),
     supplier_id: $('#rv-supplier').value,
     invoice_number: $('#rv-number').value.trim(),
     invoice_date: $('#rv-date').value,
@@ -456,6 +507,7 @@ async function validateCurrent() {
   try {
     const { error } = await supabase.from('invoices').update(patch).eq('id', current.id);
     if (error) throw error;
+    await applyIbanChoice(patch.supplier_id);
     await rememberSender(patch.supplier_id, current.sender_email);
     // La facture rejoint la liste normale : son cache doit repartir de la base.
     invalidateInvoices();
@@ -477,6 +529,38 @@ async function validateCurrent() {
       toast(errorMessage(err, 'Validation impossible.'), 'error');
     }
     btn.disabled = false;
+  }
+}
+
+/**
+ * Applique le choix du gérant sur un IBAN divergent, et le journalise dans
+ * les deux cas — conserver est une décision autant que remplacer.
+ */
+async function applyIbanChoice(supplierId) {
+  const r = current?.meta?.rapprochement || {};
+  if (!r.iban_divergent) return;
+  const choix = $('input[name="iban-choice"]:checked')?.value || 'garder';
+  try {
+    if (choix === 'remplacer') {
+      const { error } = await supabase.from('suppliers').update({ iban: r.iban_lu }).eq('id', supplierId);
+      if (error) throw error;
+    }
+    await supabase.from('change_log').insert({
+      entity: 'supplier',
+      entity_id: supplierId,
+      entity_label: current.supplier_name,
+      field: 'iban',
+      old_value: r.iban_fiche || null,
+      new_value: choix === 'remplacer' ? (r.iban_lu || null) : (r.iban_fiche || null),
+      reason: choix === 'remplacer'
+        ? `IBAN remplacé après contrôle, facture ${current.invoice_number}`
+        : `IBAN de la fiche conservé malgré divergence, facture ${current.invoice_number}`,
+      author_name: displayName()
+    });
+    toast(choix === 'remplacer' ? 'IBAN de la fiche remplacé et journalisé.' : 'IBAN de la fiche conservé, décision journalisée.');
+  } catch (err) {
+    console.error(err);
+    toast(errorMessage(err, 'Enregistrement du choix d\'IBAN impossible.'), 'error');
   }
 }
 
