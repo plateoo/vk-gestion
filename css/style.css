@@ -635,6 +635,16 @@ body.modal-open { overflow: hidden; }
 .vf-manual-title { margin: 4px 0 0; font-size: 12px; font-weight: 600; color: var(--muted); }
 .vf-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 
+/* Administration */
+.role-select { font-size: 12px; min-height: 30px; max-width: 130px; }
+.admin-link {
+  margin-top: 12px; padding: 12px; border-radius: var(--radius);
+  background: var(--warn-soft); border: 1px solid var(--border-warn);
+  display: flex; flex-direction: column; gap: 6px;
+}
+.admin-link input { font-family: inherit; font-size: 12px; }
+.admin-link p { margin: 0; }
+
 /* Recherche globale */
 .search-box { max-width: 620px; padding: 0; overflow: hidden; }
 .search-bar { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--border); }

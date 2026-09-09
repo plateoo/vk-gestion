@@ -72,6 +72,7 @@
       <button type="button" class="nav-item" data-tab="suppliers"><span class="ico">◫</span> Fournisseurs</button>
       <button type="button" class="nav-item manager-only" data-tab="payments" hidden><span class="ico">€</span> Paiements</button>
       <button type="button" class="nav-item manager-only" data-tab="settings" hidden><span class="ico">⚙</span> Réglages</button>
+      <button type="button" class="nav-item manager-only" data-tab="admin" hidden><span class="ico">◈</span> Administration</button>
     </nav>
     <div class="sidebar-foot">
       <p class="side-note">Encodage Smart · comptabilité WinAuditor · contrôle ici.</p>
@@ -418,6 +419,17 @@
       </div>
     </section>
 
+    <!-- ========================================================
+         5. ADMINISTRATION — réservé au gérant
+         ======================================================== -->
+    <section id="tab-admin" class="tab" hidden>
+      <div class="page-head">
+        <h1>Administration</h1>
+        <p class="muted small">Comptes, état du système, journal des changements.</p>
+      </div>
+      <div id="admin-body"></div>
+    </section>
+
   </main>
 
   <!-- Barre d'actions en lot (apparaît dès qu'une ligne est cochée) -->
@@ -699,6 +711,7 @@ import { initReview, renderReview, refreshReviewBadge } from './js/review.js';
 import { initSettings, renderSettings } from './js/settings.js';
 import { initSearch, openSearch } from './js/search.js';
 import { initPayments, renderPayments } from './js/payments.js';
+import { initAdmin, renderAdmin } from './js/admin.js';
 import { initExport } from './js/export.js';
 import {
   $, $$, toast, errorMessage, openModal, closeModal, openPopover, closePopover,
@@ -715,6 +728,7 @@ function showTab(name) {
   if (name === 'dashboard') renderDashboard();
   if (name === 'review') renderReview();
   if (name === 'payments') renderPayments();
+  if (name === 'admin') renderAdmin();
   if (name === 'settings') renderSettings();
   if (name === 'invoices') renderInvoices();
   if (name === 'suppliers') renderSuppliers();
@@ -865,6 +879,7 @@ initReview();
 initSettings();
 initSearch(showTab);
 initPayments(showTab);
+initAdmin();
 initExport();
 
 // ---------- Configuration manquante ? ----------

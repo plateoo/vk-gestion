@@ -429,3 +429,8 @@ verify_jwt = true
 
 [functions.merge-pdf]
 verify_jwt = true
+
+[functions.admin-users]
+# Appelée par l'interface avec le jeton de l'utilisateur ; la fonction
+# revérifie is_manager() côté base avant toute opération.
+verify_jwt = true
