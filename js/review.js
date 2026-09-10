@@ -417,7 +417,9 @@ function escompteBanniere(i) {
         au lieu de <strong>${fmtEUR(i.amount_tvac)}</strong>
         — soit ${fmtEUR(Number(i.amount_tvac) - Number(i.amount_discounted))} gagnés</span>
       <span class="spacer"></span>
-      <span>${encore ? `jusqu'au ${fmtDate(limite)}` : `délai dépassé le ${fmtDate(limite)}`}</span>
+      <span>${encore
+        ? `à payer avant le ${fmtDate(limite)}`
+        : `délai dépassé le ${fmtDate(limite)} — l'escompte n'est en principe plus dû`}</span>
     </div>`;
 }
 

@@ -415,19 +415,24 @@ async function setPaymentDate(id, date) {
  */
 function demanderMontant(anchor, inv) {
   const gagne = Number(inv.amount_tvac) - Number(inv.amount_discounted);
+  const dansLesDelais = escompteOuvert(inv);
+  // Le montant proposé par défaut suit le délai, mais rien n'est imposé.
   const p = openPopover(anchor, `
     <div class="pay-choice">
       <p class="pop-msg">Quel montant as-tu payé ?</p>
       <label class="pay-option">
-        <input type="radio" name="montant-paye" value="escompte" checked>
+        <input type="radio" name="montant-paye" value="escompte" ${dansLesDelais ? 'checked' : ''}>
         <span>Escompté <strong>${fmtEUR(inv.amount_discounted)}</strong>
           <span class="muted">(−${fmtEUR(gagne)})</span></span>
       </label>
       <label class="pay-option">
-        <input type="radio" name="montant-paye" value="complet">
+        <input type="radio" name="montant-paye" value="complet" ${dansLesDelais ? '' : 'checked'}>
         <span>Complet <strong>${fmtEUR(inv.amount_tvac)}</strong></span>
       </label>
-      <p class="field-hint">Délai jusqu'au ${fmtDate(inv.discount_deadline)}. La facture est soldée dans les deux cas.</p>
+      <p class="field-hint ${dansLesDelais ? '' : 'warn'}">${dansLesDelais
+        ? `Escompte ${Number(inv.discount_rate)} % valable jusqu'au ${fmtDate(inv.discount_deadline)}.`
+        : `Délai dépassé le ${fmtDate(inv.discount_deadline)} : l'escompte n'est en principe plus dû. Coche « escompté » seulement si tu l'as réellement déduit.`}
+        La facture est soldée dans les deux cas.</p>
       <div class="pop-actions">
         <button type="button" class="btn btn-sm btn-ghost" data-pop-no>Annuler</button>
         <button type="button" class="btn btn-sm btn-primary" data-pop-ok>Marquer payé</button>
@@ -872,8 +877,11 @@ export function initInvoices() {
     if (pay) {
       e.stopPropagation();
       const inv = findInvoice(pay.dataset.pay);
-      // Escompte encore ouvert : c'est au gérant de choisir le montant.
-      if (inv && escompteOuvert(inv)) return demanderMontant(pay, inv);
+      // Dès qu'un escompte existe, le montant se choisit — même hors délai.
+      // Un fournisseur l'accorde parfois en retard, et il arrive d'oublier
+      // de le déduire dans les temps : c'est le montant RÉELLEMENT payé qui
+      // doit être enregistré, sinon les totaux sont faux.
+      if (inv && inv.discount_rate && inv.amount_discounted) return demanderMontant(pay, inv);
       pay.disabled = true;
       return applyStatus(pay.dataset.pay, 'paye');
     }
