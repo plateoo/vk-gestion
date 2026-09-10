@@ -40,7 +40,7 @@ export async function renderPayments() {
   try {
     const { data, error } = await supabase
       .from('invoices')
-      .select('id, invoice_number, smart_ref, external_refs, invoice_date, payment_date, payment_method, amount_htva, amount_tvac, vat_rate, encoded_at, due_date, in_smart, in_winauditor, stock_in, stock_out, payment_status, expense_type, notes, supplier:suppliers(id, name)')
+      .select('id, invoice_number, smart_ref, external_refs, invoice_date, payment_date, payment_method, amount_htva, amount_tvac, amount_paid, discount_rate, vat_rate, encoded_at, due_date, in_smart, in_winauditor, stock_in, stock_out, payment_status, expense_type, notes, supplier:suppliers(id, name)')
       .eq('payment_status', 'paye')
       .gte('payment_date', from)
       .lte('payment_date', to)
@@ -55,6 +55,10 @@ export async function renderPayments() {
 
   const total = rows.reduce((s, r) => s + (Number(r.amount_tvac) || 0), 0);
   const totalHtva = rows.reduce((s, r) => s + (Number(r.amount_htva) || 0), 0);
+  // Décaissé réel : le montant payé quand il est connu, le TVAC sinon
+  const decaisse = rows.reduce((s, r) => s + Number(r.amount_paid ?? r.amount_tvac ?? 0), 0);
+  const escompte = total - decaisse;
+  const nbEscompte = rows.filter((r) => r.amount_paid != null && Number(r.amount_paid) < Number(r.amount_tvac)).length;
 
   if (!rows.length) {
     body.innerHTML = `<div class="card"><div class="empty">${ICONS.empty}
@@ -78,21 +82,24 @@ export async function renderPayments() {
   body.innerHTML = `
     <div class="kpi-grid kpi-grid-4">
       <div class="card kpi kpi-hero">
-        <div class="kpi-label">Total payé sur le mois</div>
-        <div class="kpi-value">${fmtEUR(total)}</div>
-        <div class="kpi-sub">sur la date de paiement, pas la date de facture</div>
+        <div class="kpi-label">Réellement décaissé</div>
+        <div class="kpi-value">${fmtEUR(decaisse)}</div>
+        <div class="kpi-sub">${escompte > 0.005
+          ? `sur ${fmtEUR(total)} facturés` : 'sur la date de paiement, pas la date de facture'}</div>
+      </div>
+      <div class="card kpi ${escompte > 0.005 ? '' : ''}">
+        <div class="kpi-label">Escompte gagné</div>
+        <div class="kpi-value" ${escompte > 0.005 ? 'style="color:var(--ok)"' : ''}>${fmtEUR(escompte)}</div>
+        <div class="kpi-sub">${nbEscompte} facture${nbEscompte > 1 ? 's' : ''} escomptée${nbEscompte > 1 ? 's' : ''}</div>
       </div>
       <div class="card kpi">
         <div class="kpi-label">Factures payées</div>
         <div class="kpi-value">${rows.length}</div>
+        <div class="kpi-sub">${fournisseurs.length} fournisseur${fournisseurs.length > 1 ? 's' : ''}</div>
       </div>
       <div class="card kpi">
         <div class="kpi-label">Total HTVA</div>
         <div class="kpi-value">${fmtEUR(totalHtva)}</div>
-      </div>
-      <div class="card kpi">
-        <div class="kpi-label">Fournisseurs</div>
-        <div class="kpi-value">${fournisseurs.length}</div>
       </div>
     </div>
 
@@ -124,7 +131,7 @@ export async function renderPayments() {
         <table class="table" id="pay-invoices">
           <thead><tr>
             <th>Date de paiement</th><th>Fournisseur</th><th>N° facture</th>
-            <th>Réf. Smart</th><th>Mode</th><th class="num">Total TVAC</th>
+            <th>Réf. Smart</th><th>Mode</th><th class="num">Facturé</th><th class="num">Décaissé</th>
           </tr></thead>
           <tbody>
             ${rows.map((r) => `
@@ -134,14 +141,19 @@ export async function renderPayments() {
                 <td data-label="N° facture">${escapeHtml(r.invoice_number)}</td>
                 <td data-label="Réf. Smart">${r.smart_ref ? escapeHtml(r.smart_ref) : '<span class="muted">—</span>'}</td>
                 <td data-label="Mode">${r.payment_method ? escapeHtml(r.payment_method) : '<span class="muted">—</span>'}</td>
-                <td data-label="Total TVAC" class="num strong">${fmtEUR(r.amount_tvac)}</td>
+                <td data-label="Facturé" class="num">${fmtEUR(r.amount_tvac)}</td>
+                <td data-label="Décaissé" class="num strong">${fmtEUR(r.amount_paid ?? r.amount_tvac)}${
+                  r.amount_paid != null && Number(r.amount_paid) < Number(r.amount_tvac)
+                    ? `<span class="pill-discount">−${fmtEUR(Number(r.amount_tvac) - Number(r.amount_paid))}</span>` : ''}</td>
               </tr>`).join('')}
           </tbody>
         </table>
       </div>
       <div class="table-foot">
         <span>${rows.length} facture${rows.length > 1 ? 's' : ''}</span>
-        <span>Total payé : <strong class="big">${fmtEUR(total)}</strong></span>
+        <span>Facturé : <strong>${fmtEUR(total)}</strong></span>
+        <span>Décaissé : <strong class="big">${fmtEUR(decaisse)}</strong></span>
+        ${escompte > 0.005 ? `<span>Escompte gagné : <strong style="color:var(--ok)">${fmtEUR(escompte)}</strong></span>` : ''}
       </div>
     </div>`;
 }

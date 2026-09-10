@@ -182,6 +182,12 @@ export async function renderInvoices() {
   }
 }
 
+/** Le délai d'escompte court-il encore sur cette facture ? */
+function escompteOuvert(i) {
+  return !!i.discount_rate && !!i.discount_deadline
+      && i.payment_status !== 'paye' && i.discount_deadline >= todayISO();
+}
+
 function rowHtml(i, manager) {
   const late = isOverdue(i);
   const soon = isDueSoon(i);
@@ -203,7 +209,9 @@ function rowHtml(i, manager) {
       ? i.external_refs.map((r) => `<span class="ref-chip">${escapeHtml(r)}</span>`).join('')
       : '<span class="muted">—</span>'}</td>
     <td class="td-due ${late ? 'txt-red strong' : soon ? 'txt-orange' : ''}" data-label="Échéance">${fmtDate(i.due_date) || '—'}</td>
-    <td class="td-amount num strong" data-label="Total TVAC">${fmtEUR(i.amount_tvac)}</td>
+    <td class="td-amount num strong" data-label="Total TVAC">${fmtEUR(i.amount_tvac)}${escompteOuvert(i)
+      ? `<span class="pill-discount" title="Escompte ${Number(i.discount_rate)} % : ${fmtEUR(i.amount_discounted)} si payé avant le ${fmtDate(i.discount_deadline)}">−${Number(i.discount_rate)} %</span>`
+      : ''}</td>
     <td class="td-smart" data-label="Smart">${smartPillHtml(i)}</td>
     <td class="td-win" data-label="WinAuditor">${pillHtml(i, 'in_winauditor', !!i.in_winauditor, 'WinAuditor')}</td>
     <td class="td-stock" data-label="Stock">${stockHtml(i)}</td>
@@ -343,8 +351,14 @@ async function applyStatus(id, status, opts = {}) {
 
   const prev = { payment_status: inv.payment_status, payment_date: inv.payment_date };
   const patch = { payment_status: status };
-  if (status === 'paye') patch.payment_date = opts.date || inv.payment_date || todayISO();
-  else if (status !== 'acompte') patch.payment_date = null;
+  if (status === 'paye') {
+    patch.payment_date = opts.date || inv.payment_date || todayISO();
+    // Montant réellement décaissé : le TVAC par défaut, l'escompté si choisi
+    patch.amount_paid = opts.amount_paid ?? Number(inv.amount_tvac);
+  } else if (status !== 'acompte') {
+    patch.payment_date = null;
+    patch.amount_paid = null;
+  }
 
   Object.assign(inv, patch);                   // optimistic
   if (status === 'paye') flashId = id;
@@ -392,6 +406,41 @@ async function setPaymentDate(id, date) {
     renderInvoices();
     toast(errorMessage(err, 'Modification de la date impossible.'), 'error');
   }
+}
+
+/**
+ * Deux montants possibles quand l'escompte court encore. Aucun n'est
+ * imposé : le gérant tranche, et le montant réellement décaissé est
+ * enregistré à part du montant facturé.
+ */
+function demanderMontant(anchor, inv) {
+  const gagne = Number(inv.amount_tvac) - Number(inv.amount_discounted);
+  const p = openPopover(anchor, `
+    <div class="pay-choice">
+      <p class="pop-msg">Quel montant as-tu payé ?</p>
+      <label class="pay-option">
+        <input type="radio" name="montant-paye" value="escompte" checked>
+        <span>Escompté <strong>${fmtEUR(inv.amount_discounted)}</strong>
+          <span class="muted">(−${fmtEUR(gagne)})</span></span>
+      </label>
+      <label class="pay-option">
+        <input type="radio" name="montant-paye" value="complet">
+        <span>Complet <strong>${fmtEUR(inv.amount_tvac)}</strong></span>
+      </label>
+      <p class="field-hint">Délai jusqu'au ${fmtDate(inv.discount_deadline)}. La facture est soldée dans les deux cas.</p>
+      <div class="pop-actions">
+        <button type="button" class="btn btn-sm btn-ghost" data-pop-no>Annuler</button>
+        <button type="button" class="btn btn-sm btn-primary" data-pop-ok>Marquer payé</button>
+      </div>
+    </div>`);
+  p.querySelector('[data-pop-no]').onclick = () => closePopover();
+  p.querySelector('[data-pop-ok]').onclick = () => {
+    const choix = p.querySelector('input[name="montant-paye"]:checked')?.value;
+    closePopover();
+    applyStatus(inv.id, 'paye', {
+      amount_paid: choix === 'escompte' ? Number(inv.amount_discounted) : Number(inv.amount_tvac)
+    });
+  };
 }
 
 /** Petit popover de confirmation pour annuler un paiement */
@@ -820,7 +869,14 @@ export function initInvoices() {
     if (pill) { e.stopPropagation(); return togglePill(pill.dataset.id, pill.dataset.toggle); }
 
     const pay = e.target.closest('[data-pay]');
-    if (pay) { e.stopPropagation(); pay.disabled = true; return applyStatus(pay.dataset.pay, 'paye'); }
+    if (pay) {
+      e.stopPropagation();
+      const inv = findInvoice(pay.dataset.pay);
+      // Escompte encore ouvert : c'est au gérant de choisir le montant.
+      if (inv && escompteOuvert(inv)) return demanderMontant(pay, inv);
+      pay.disabled = true;
+      return applyStatus(pay.dataset.pay, 'paye');
+    }
 
     const unpay = e.target.closest('[data-unpay]');
     if (unpay) { e.stopPropagation(); return askUnpay(unpay, unpay.dataset.unpay); }

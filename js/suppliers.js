@@ -141,6 +141,7 @@ export async function renderSupplierDetail(id) {
   $('#sd-notes').hidden = !s.notes;
 
   renderValidationPanel(s);
+  renderMemoryPanel(s);
 
   $('#sd-period-label').textContent = detailAllPeriods ? 'Toutes périodes' : monthLabel(month);
   $('#sd-count').textContent = st.count;
@@ -179,6 +180,84 @@ export async function renderSupplierDetail(id) {
     downloadInvoicesCSV(shown, `VK_fournisseur_${slugify(s.name)}_${suffix}.csv`);
   };
   $('#sd-edit').onclick = () => openSupplierModal(s, () => renderSupplierDetail(id));
+}
+
+// ---------------------------------------------------------------------
+// Valeurs mémorisées
+//
+// Uniquement des champs de nature stable. Elles servent à pré-remplir les
+// prochaines factures, jamais à remplacer une valeur lue sur un document.
+// ---------------------------------------------------------------------
+const MEMOIRE = [
+  { champ: 'payment_terms',        label: 'Délai de paiement (jours)', type: 'number' },
+  { champ: 'default_vat_rate',     label: 'Taux de TVA habituel',      type: 'select',
+    options: [['', '—'], ['0.21', '21 %'], ['0.12', '12 %'], ['0.06', '6 %'], ['0.00', '0 %']] },
+  { champ: 'default_expense_type', label: 'Type de dépense habituel',  type: 'text' },
+  { champ: 'discount_rate',        label: 'Escompte (%)',              type: 'number', step: '0.01' },
+  { champ: 'discount_days',        label: 'Délai d\'escompte (jours)', type: 'number' }
+];
+
+function renderMemoryPanel(s) {
+  const box = $('#sd-memory');
+  if (!box) return;
+  const renseignes = MEMOIRE.filter((m) => s[m.champ] !== null && s[m.champ] !== undefined && s[m.champ] !== '');
+
+  box.innerHTML = `
+    <div class="card-head" style="padding:0 0 10px">
+      <h2>Valeurs mémorisées</h2>
+      <p class="muted small">Servent à pré-remplir les prochaines factures. Une valeur lue sur un
+        document n'est jamais remplacée : les deux sont alors montrées et c'est toi qui tranches.</p>
+    </div>
+    <div class="memo-grid">
+      ${MEMOIRE.map((m) => {
+        const v = s[m.champ] ?? '';
+        const id = `mem-${m.champ}`;
+        const champ = m.type === 'select'
+          ? `<select id="${id}" data-mem="${m.champ}">${m.options.map(([val, lib]) =>
+              `<option value="${val}" ${String(v) === val || (val === '' && v === '') ? 'selected' : ''}>${lib}</option>`).join('')}</select>`
+          : `<input id="${id}" data-mem="${m.champ}" type="${m.type}" ${m.step ? `step="${m.step}"` : ''} value="${escapeHtml(String(v))}">`;
+        return `<div class="memo-row">
+            <label class="vf-label" for="${id}">${m.label}</label>
+            ${champ}
+            ${v !== '' ? `<button type="button" class="link-btn" data-mem-clear="${m.champ}">retirer</button>` : ''}
+          </div>`;
+      }).join('')}
+    </div>
+    <div class="vf-actions">
+      <span class="muted small">${renseignes.length} valeur${renseignes.length > 1 ? 's' : ''} mémorisée${renseignes.length > 1 ? 's' : ''} · chaque modification est journalisée</span>
+      <button type="button" class="btn btn-primary" id="mem-save">Enregistrer</button>
+    </div>`;
+
+  $('#mem-save').onclick = () => enregistrerMemoire(s.id);
+  $$('#sd-memory [data-mem-clear]').forEach((b) => b.addEventListener('click', () => {
+    const el = $(`#mem-${b.dataset.memClear}`);
+    if (el) el.value = '';
+  }));
+}
+
+async function enregistrerMemoire(id) {
+  const btn = $('#mem-save');
+  btn.disabled = true;
+  try {
+    let n = 0;
+    for (const m of MEMOIRE) {
+      const el = $(`#mem-${m.champ}`);
+      if (!el) continue;
+      const { error } = await supabase.rpc('remember_supplier_value', {
+        p_supplier: id, p_field: m.champ, p_value: el.value, p_source: 'fiche fournisseur'
+      });
+      if (error) throw error;
+      n += 1;
+    }
+    await getSuppliers(true);
+    toast('Valeurs mémorisées enregistrées.');
+    notifyDataChange();
+    renderSupplierDetail(id);
+  } catch (err) {
+    console.error(err);
+    toast(errorMessage(err, 'Enregistrement impossible.'), 'error');
+    btn.disabled = false;
+  }
 }
 
 // ---------------------------------------------------------------------

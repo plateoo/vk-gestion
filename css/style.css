@@ -624,6 +624,37 @@ body.modal-open { overflow: hidden; }
   background: var(--danger); color: var(--vbk-white); border-radius: 10px;
 }
 
+/* Mémoire fournisseur : champs de nature stable */
+.memo-block { border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 12px; margin: 0;
+  display: flex; flex-direction: column; gap: 10px; }
+.memo-block legend { font-size: 12px; font-weight: 600; color: var(--muted); padding: 0 4px; }
+.memo-row { display: flex; flex-direction: column; gap: 3px; }
+.memo-row.is-diff input { border-color: var(--warn); background: var(--warn-soft); }
+.memo-read { font-size: 11px; color: var(--muted); }
+.memo-read code { background: var(--surface-hover); padding: 1px 5px; border-radius: 4px; }
+.memo-check { font-size: 12px; color: var(--vbk-red); font-weight: 500; }
+.memo-hint { margin: 4px 0 0; font-size: 11px; color: var(--muted); }
+
+.memo-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px 16px; }
+@media (max-width: 900px) { .memo-grid { grid-template-columns: 1fr; } }
+
+/* Escompte */
+.discount-banner {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  background: var(--ok-soft); border: 1px solid var(--border-ok); color: var(--ok);
+  border-radius: var(--radius); padding: 9px 12px; font-size: 13px; margin-bottom: 12px;
+}
+.discount-banner strong { font-variant-numeric: tabular-nums; }
+.pill-discount {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 10px;
+  background: var(--ok-soft); color: var(--ok); border: 1px solid var(--border-ok);
+}
+.pay-choice { display: flex; flex-direction: column; gap: 8px; }
+.pay-choice .pop-msg { margin-bottom: 2px; }
+.pay-option { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.pay-option strong { font-variant-numeric: tabular-nums; }
+
 /* Validation d'une fiche fournisseur pré-remplie */
 .validate-fiche { border-left: 3px solid var(--warn); display: flex; flex-direction: column; gap: 12px; }
 .vf-head { display: flex; flex-direction: column; gap: 2px; }

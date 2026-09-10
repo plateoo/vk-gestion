@@ -158,6 +158,9 @@ async function renderDetail() {
   const m = i.meta;
   confirmed = new Set();
 
+  // Fiche du fournisseur rattaché : c'est elle qui porte la mémoire
+  const sup = suppliersCache().find((x) => x.id === i.supplier_id) || null;
+
   const rateOptions = LEGAL_RATES
     .map((r) => `<option value="${r}" ${Number(i.vat_rate) === r ? 'selected' : ''}>${(r * 100).toFixed(0)} %</option>`)
     .join('');
@@ -167,6 +170,7 @@ async function renderDetail() {
     ${m.comment ? `<div class="review-banner">${ICONS.dash}<span>${escapeHtml(m.comment)}</span></div>` : ''}
     ${m.failed ? `<div class="review-banner danger">${ICONS.dash}<span>L'extraction automatique a échoué. Les champs sont à saisir à la main.</span></div>` : ''}
     ${ibanAlertHtml(m)}
+    ${escompteBanniere(i)}
 
     <div class="review-split">
       <div class="review-doc">
@@ -222,12 +226,25 @@ async function renderDetail() {
             <label for="rv-due">Échéance</label>
             <input id="rv-due" data-f="due_date" type="date" value="${i.due_date || ''}">
             <p class="field-hint" id="rv-due-text"></p>
+            <label class="check memo-check" id="rv-memo-terms-wrap" hidden>
+              <input type="checkbox" id="rv-memo-terms"> retenir ce délai pour ce fournisseur
+            </label>
           </div>
           <div class="field">
             <label for="rv-htva">Montant HTVA (€)</label>
             <input id="rv-htva" data-f="amount_htva" type="number" step="0.01" value="${Number(i.amount_htva)}">
           </div>
         </div>
+
+        <!-- Champs de nature stable : ils peuvent être retenus sur la fiche.
+             Jamais les montants, le numéro, les dates ni les références :
+             ce sont des valeurs propres à chaque document. -->
+        <fieldset class="memo-block">
+          <legend>Fournisseur <span class="muted small">valeurs retenables</span></legend>
+          ${memoField('rv-sup-name', 'Nom', sup?.name, m.brut?.fournisseur_nom, 'name')}
+          ${memoField('rv-sup-vat', 'N° TVA', sup?.vat_number, m.brut?.fournisseur_tva, 'vat_number')}
+          ${memoField('rv-sup-address', 'Adresse de facturation', sup?.address, m.brut?.fournisseur_adresse, 'address')}
+        </fieldset>
 
         <!-- Le taux de TVA : champ à part entière, jamais déduit en silence -->
         <fieldset class="vat-block" id="rv-vat-block">
@@ -246,13 +263,41 @@ async function renderDetail() {
             </div>
           </div>
           <p class="vat-read">Lu sur le document : TVA <strong id="rv-tva-read">—</strong></p>
+          ${sup?.default_vat_rate != null ? `<p class="memo-hint">Retenu pour ce fournisseur : ${(Number(sup.default_vat_rate) * 100).toFixed(0)} %</p>` : ''}
+          <label class="check memo-check" id="rv-memo-rate-wrap" hidden>
+            <input type="checkbox" id="rv-memo-rate"> retenir ce taux pour ce fournisseur
+          </label>
           <p class="vat-verdict" id="rv-vat-verdict"></p>
+        </fieldset>
+
+        <fieldset class="memo-block">
+          <legend>Escompte pour paiement anticipé <span class="muted small">retenable</span></legend>
+          <div class="grid2">
+            <div class="field">
+              <label for="rv-disc-rate">Taux (%)</label>
+              <input id="rv-disc-rate" type="number" step="0.01" min="0" max="100"
+                     value="${i.discount_rate ?? (sup?.discount_rate ?? '')}">
+            </div>
+            <div class="field">
+              <label for="rv-disc-days">Délai (jours)</label>
+              <input id="rv-disc-days" type="number" step="1" min="1"
+                     value="${i.discount_days ?? (sup?.discount_days ?? '')}">
+            </div>
+          </div>
+          ${sup?.discount_rate ? `<p class="memo-hint">Retenu pour ce fournisseur : ${Number(sup.discount_rate)} % à ${sup.discount_days ?? '—'} jours</p>` : ''}
+          <label class="check memo-check" id="rv-memo-disc-wrap" hidden>
+            <input type="checkbox" id="rv-memo-disc"> retenir cet escompte pour ce fournisseur
+          </label>
         </fieldset>
 
         <div class="grid2">
           <div class="field">
             <label for="rv-type">Type de dépense</label>
             <input id="rv-type" data-f="expense_type" type="text" value="${escapeHtml(i.expense_type || '')}">
+            ${sup?.default_expense_type ? `<p class="memo-hint">Retenu : ${escapeHtml(sup.default_expense_type)}</p>` : ''}
+            <label class="check memo-check" id="rv-memo-type-wrap" hidden>
+              <input type="checkbox" id="rv-memo-type"> retenir pour ce fournisseur
+            </label>
           </div>
           <div class="field">
             <label for="rv-stock">Entrée en stock</label>
@@ -286,6 +331,16 @@ async function renderDetail() {
     </div>`;
 
   fillSupplierSelect(i.supplier_id);
+  // Pré-remplissage depuis la mémoire du fournisseur, UNIQUEMENT si le
+  // document n'a rien donné. Une valeur lue n'est jamais écrasée.
+  if (sup) {
+    if (!i.expense_type && sup.default_expense_type) $('#rv-type').value = sup.default_expense_type;
+    if (!i.due_date && i.invoice_date && sup.payment_terms) {
+      const d = new Date(i.invoice_date);
+      d.setDate(d.getDate() + Number(sup.payment_terms));
+      $('#rv-due').value = d.toISOString().slice(0, 10);
+    }
+  }
   wireDetail();
   refreshVat();
   loadDocument(i.file_path);
@@ -344,6 +399,49 @@ function currentRate() {
     return Number.isFinite(pct) ? pct / 100 : NaN;
   }
   return Number(sel.value);
+}
+
+/**
+ * Bannière d'escompte. Le montant escompté vient de la base : la TVA n'est
+ * jamais recalculée, seul le HTVA est diminué — règle belge.
+ */
+function escompteBanniere(i) {
+  if (!i.discount_rate || !i.amount_discounted) return '';
+  const limite = i.discount_deadline;
+  const encore = limite && limite >= todayISO();
+  return `
+    <div class="discount-banner" ${encore ? '' : 'style="background:var(--surface-hover);border-color:var(--border);color:var(--muted)"'}>
+      ${ICONS.check}
+      <span>Escompte ${Number(i.discount_rate)} % :
+        payer <strong>${fmtEUR(i.amount_discounted)}</strong>
+        au lieu de <strong>${fmtEUR(i.amount_tvac)}</strong>
+        — soit ${fmtEUR(Number(i.amount_tvac) - Number(i.amount_discounted))} gagnés</span>
+      <span class="spacer"></span>
+      <span>${encore ? `jusqu'au ${fmtDate(limite)}` : `délai dépassé le ${fmtDate(limite)}`}</span>
+    </div>`;
+}
+
+/**
+ * Champ de nature stable : sa valeur actuelle sur la fiche, et ce qui a été
+ * lu sur le document. Si les deux diffèrent, les deux sont montrés et c'est
+ * l'utilisateur qui tranche — la valeur mémorisée ne remplace jamais celle
+ * lue, et l'inverse non plus.
+ */
+function memoField(id, label, valeurFiche, valeurLue, champ) {
+  const fiche = valeurFiche ?? '';
+  const lue = valeurLue ?? '';
+  const divergent = lue && fiche && String(lue).trim() !== String(fiche).trim();
+  return `
+    <div class="memo-row ${divergent ? 'is-diff' : ''}">
+      <label class="vf-label" for="${id}">${label}</label>
+      <input id="${id}" type="text" data-memo-field="${champ}"
+             data-initial="${escapeHtml(fiche)}" value="${escapeHtml(fiche)}">
+      ${lue ? `<span class="memo-read">lu&nbsp;: <code>${escapeHtml(lue)}</code>${
+        divergent ? ` <button type="button" class="link-btn" data-use-read="${id}">utiliser</button>` : ''}</span>` : ''}
+      <label class="check memo-check" hidden>
+        <input type="checkbox" data-memo-for="${id}"> retenir pour ce fournisseur
+      </label>
+    </div>`;
 }
 
 /** « BC-123, chantier Dupont » -> ['BC-123', 'chantier Dupont'] */
@@ -457,6 +555,7 @@ function refreshValidateState() {
 // ---------------------------------------------------------------------
 function wireDetail() {
   $('#rv-form').addEventListener('input', refreshVat);
+  wireMemory();
   $('#rv-rate').addEventListener('change', () => {
     $('#rv-rate-custom').hidden = $('#rv-rate').value !== 'autre';
     refreshVat();
@@ -474,6 +573,44 @@ function wireDetail() {
   $('#rv-retry').addEventListener('click', retryExtraction);
 }
 
+/**
+ * La case « retenir » n'apparaît qu'une fois le champ réellement modifié :
+ * proposer de mémoriser une valeur qu'on n'a pas touchée n'a pas de sens.
+ */
+function wireMemory() {
+  $$('#rv-form [data-memo-field]').forEach((input) => {
+    const wrap = input.closest('.memo-row')?.querySelector('.memo-check');
+    input.addEventListener('input', () => {
+      if (!wrap) return;
+      wrap.hidden = input.value.trim() === (input.dataset.initial || '').trim();
+      if (wrap.hidden) wrap.querySelector('input').checked = false;
+    });
+  });
+
+  $$('#rv-form [data-use-read]').forEach((b) => b.addEventListener('click', () => {
+    const input = $(`#${b.dataset.useRead}`);
+    const code = b.closest('.memo-read')?.querySelector('code');
+    if (input && code) { input.value = code.textContent; input.dispatchEvent(new Event('input', { bubbles: true })); }
+  }));
+
+  // Taux, délai et type de dépense : même règle, la case suit la modification
+  const suivre = (champ, caseWrap, valeurInitiale) => {
+    const el = $(champ), wrap = $(caseWrap);
+    if (!el || !wrap) return;
+    const maj = () => {
+      wrap.hidden = String(el.value) === String(valeurInitiale);
+      if (wrap.hidden) wrap.querySelector('input').checked = false;
+    };
+    el.addEventListener('input', maj);
+    el.addEventListener('change', maj);
+  };
+  suivre('#rv-rate', '#rv-memo-rate-wrap', String(current?.vat_rate ?? ''));
+  suivre('#rv-type', '#rv-memo-type-wrap', current?.expense_type ?? '');
+  suivre('#rv-due', '#rv-memo-terms-wrap', current?.due_date ?? '');
+  suivre('#rv-disc-rate', '#rv-memo-disc-wrap', String(current?.discount_rate ?? ''));
+  suivre('#rv-disc-days', '#rv-memo-disc-wrap', String(current?.discount_days ?? ''));
+}
+
 /** Ouvre le document dans une fenêtre et lance l'impression */
 function printCurrent() {
   if (!signedUrl) { toast('Aucun document à imprimer.', 'error'); return; }
@@ -489,6 +626,8 @@ async function validateCurrent() {
   const rate = currentRate();
   const patch = {
     smart_ref: $('#rv-smart').value.trim() || null,
+    discount_rate: Number($('#rv-disc-rate')?.value) || null,
+    discount_days: Number($('#rv-disc-days')?.value) || null,
     external_refs: splitRefs($('#rv-refs').value),
     supplier_id: $('#rv-supplier').value,
     invoice_number: $('#rv-number').value.trim(),
@@ -508,6 +647,7 @@ async function validateCurrent() {
     const { error } = await supabase.from('invoices').update(patch).eq('id', current.id);
     if (error) throw error;
     await applyIbanChoice(patch.supplier_id);
+    await appliquerMemorisations(patch.supplier_id, patch);
     await rememberSender(patch.supplier_id, current.sender_email);
     // La facture rejoint la liste normale : son cache doit repartir de la base.
     invalidateInvoices();
@@ -529,6 +669,56 @@ async function validateCurrent() {
       toast(errorMessage(err, 'Validation impossible.'), 'error');
     }
     btn.disabled = false;
+  }
+}
+
+/**
+ * Enregistre les corrections que l'utilisateur a choisi de retenir sur la
+ * fiche fournisseur. Chaque mémorisation est journalisée par la base.
+ */
+async function appliquerMemorisations(supplierId, patch) {
+  if (!supplierId) return;
+  const aRetenir = [];
+
+  // Champs de la fiche : nom, TVA, adresse
+  $$('#rv-form [data-memo-field]').forEach((input) => {
+    const coche = input.closest('.memo-row')?.querySelector('[data-memo-for]');
+    if (coche?.checked && input.value.trim()) {
+      aRetenir.push({ field: input.dataset.memoField, value: input.value.trim() });
+    }
+  });
+
+  if ($('#rv-memo-rate')?.checked) {
+    aRetenir.push({ field: 'default_vat_rate', value: String(patch.vat_rate) });
+  }
+  if ($('#rv-memo-disc')?.checked && patch.discount_rate) {
+    aRetenir.push({ field: 'discount_rate', value: String(patch.discount_rate) });
+    if (patch.discount_days) aRetenir.push({ field: 'discount_days', value: String(patch.discount_days) });
+  }
+  if ($('#rv-memo-type')?.checked && patch.expense_type) {
+    aRetenir.push({ field: 'default_expense_type', value: patch.expense_type });
+  }
+  if ($('#rv-memo-terms')?.checked && patch.due_date && patch.invoice_date) {
+    // Le délai retenu est l'écart réel entre facture et échéance
+    const jours = Math.round(
+      (new Date(patch.due_date) - new Date(patch.invoice_date)) / 86400000);
+    if (jours > 0) aRetenir.push({ field: 'payment_terms', value: String(jours) });
+  }
+
+  if (!aRetenir.length) return;
+  try {
+    for (const m of aRetenir) {
+      const { error } = await supabase.rpc('remember_supplier_value', {
+        p_supplier: supplierId, p_field: m.field, p_value: m.value,
+        p_source: `retenu depuis la facture ${patch.invoice_number}`
+      });
+      if (error) throw error;
+    }
+    await getSuppliers(true);
+    toast(`${aRetenir.length} valeur${aRetenir.length > 1 ? 's' : ''} retenue${aRetenir.length > 1 ? 's' : ''} pour ce fournisseur.`);
+  } catch (err) {
+    console.error(err);
+    toast(errorMessage(err, 'Mémorisation impossible.'), 'error');
   }
 }
 
