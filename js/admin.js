@@ -67,6 +67,10 @@ export async function renderAdmin() {
   }
 
   const erreurs = etat?.erreurs_extraction || [];
+  // Messages arrivés sans aucune facture à lire. Ce ne sont PAS des
+  // pannes : leurs seules pièces jointes étaient des logos de signature.
+  // Les mêler aux erreurs envoyait chercher un problème inexistant.
+  const sansFacture = etat?.messages_sans_facture || [];
 
   body.innerHTML = `
     <!-- État du système -->
@@ -79,7 +83,8 @@ export async function renderAdmin() {
         <div class="kpi-sub">${etat.derniere_reception ? String(etat.derniere_reception).slice(11, 16) : ''}</div></div>
       <div class="card kpi ${Number(etat.en_erreur) ? 'is-alert' : ''}"><div class="kpi-label">Extractions en erreur</div>
         <div class="kpi-value">${etat.en_erreur}</div>
-        <div class="kpi-sub">${etat.en_attente} en cours</div></div>
+        <div class="kpi-sub">${etat.en_attente} en cours${Number(etat.sans_facture)
+          ? ` <span class="sep">·</span> ${etat.sans_facture} sans facture` : ''}</div></div>
       <div class="card kpi"><div class="kpi-label">Stockage</div>
         <div class="kpi-value">${octets(etat.stockage_octets)}</div>
         <div class="kpi-sub">${etat.stockage_fichiers} fichier${Number(etat.stockage_fichiers) > 1 ? 's' : ''}</div></div>
@@ -144,6 +149,27 @@ export async function renderAdmin() {
     </div>
 
     <!-- Erreurs d'extraction -->
+    ${sansFacture.length ? `
+      <div class="card">
+        <div class="card-head">
+          <h2>Messages reçus sans facture</h2>
+          <p class="muted small">Rien n'a échoué : ces messages n'apportaient aucun document à lire.
+            La facture était dans le corps du message, ou n'a pas suivi le transfert.
+            Retrouve-les dans Outlook à partir de leur objet.</p>
+        </div>
+        <div class="q-list">
+          ${sansFacture.map((m) => `
+            <div class="q-row">
+              <div class="q-main">
+                <span class="q-email">${escapeHtml(m.subject || '(sans objet)')}</span>
+                <span class="q-meta">${escapeHtml(m.sender_email || '—')}
+                  <span class="sep">·</span> ${m.quand ? escapeHtml(String(m.quand).slice(0, 16).replace('T', ' à ')) : ''}</span>
+                <span class="q-subject">Pièces jointes : ${escapeHtml(m.pieces || 'aucune')}</span>
+              </div>
+            </div>`).join('')}
+        </div>
+      </div>` : ''}
+
     ${erreurs.length ? `
       <div class="card">
         <div class="card-head"><h2>Dernières erreurs d'extraction</h2></div>

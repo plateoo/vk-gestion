@@ -134,6 +134,62 @@ function toBase64(bytes: Uint8Array): string {
   return btoa(bin);
 }
 
+/**
+ * Type réel d'une image, lu dans ses premiers octets.
+ *
+ * On ne se fie pas au content_type annoncé : dans la file, un fichier
+ * nommé « image.png » arrivait déclaré « image/gif » et contenait bien du
+ * GIF. Un type erroné fait rejeter l'image par l'API.
+ */
+function sniffImage(bytes: Uint8Array): string | null {
+  const b = bytes;
+  if (b.length < 12) return null;
+  if (b[0] === 0xFF && b[1] === 0xD8 && b[2] === 0xFF) return 'image/jpeg';
+  if (b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4E && b[3] === 0x47) return 'image/png';
+  if (b[0] === 0x47 && b[1] === 0x49 && b[2] === 0x46) return 'image/gif';
+  if (b[0] === 0x52 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x46
+      && b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50) return 'image/webp';
+  return null;
+}
+
+/**
+ * Lecture d'une facture photographiée ou scannée. Même consigne que pour
+ * un PDF : c'est le classement en tête de réponse qui trie ensuite les
+ * logos de signature des vraies factures.
+ */
+export async function extractFromImage(bytes: Uint8Array) {
+  if (!ANTHROPIC_KEY) throw new Error('ANTHROPIC_API_KEY absente');
+  const type = sniffImage(bytes);
+  if (!type) throw new Error('format d\'image non reconnu');
+
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'x-api-key': ANTHROPIC_KEY,
+      'anthropic-version': '2023-06-01'
+    },
+    body: JSON.stringify({
+      model: 'claude-sonnet-5',
+      max_tokens: 3000,
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'image', source: { type: 'base64', media_type: type, data: toBase64(bytes) } },
+          { type: 'text', text: EXTRACTION_PROMPT }
+        ]
+      }]
+    })
+  });
+  if (!res.ok) throw new Error(`API Anthropic ${res.status} : ${(await res.text()).slice(0, 300)}`);
+  const body = await res.json();
+  const text = (body?.content ?? [])
+    .filter((c: { type: string }) => c.type === 'text')
+    .map((c: { text: string }) => c.text).join('').trim();
+  const json = text.replace(/^```(?:json)?/i, '').replace(/```$/, '').trim();
+  return { ...JSON.parse(json), _source: 'image' };
+}
+
 export async function extractFromPdf(bytes: Uint8Array) {
   if (!ANTHROPIC_KEY) throw new Error('ANTHROPIC_API_KEY absente');
   const res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -260,9 +316,27 @@ export async function processQueueRow(queueId: string): Promise<void> {
 
   try {
     const files = (row.files ?? []) as { path: string; name: string; content_type: string }[];
-    const exploitables = files.filter((f) =>
+    const documents = files.filter((f) =>
       /\.(pdf|xml)$/i.test(f.name) || /pdf|xml/i.test(f.content_type));
-    if (!exploitables.length) throw new Error('aucune pièce jointe exploitable');
+
+    // Certaines factures arrivent photographiées ou scannées. On ne lit
+    // les images QUE si le message n'apporte aucun PDF : quand il y en a
+    // un, les images qui l'accompagnent sont le logo de la signature, et
+    // les faire lire coûterait un appel pour rien.
+    const images = documents.length ? [] : files.filter((f) =>
+      /\.(png|jpe?g|gif|webp)$/i.test(f.name) || /^image\//i.test(f.content_type));
+
+    const exploitables = [...documents, ...images];
+    if (!exploitables.length) {
+      // Pas une panne : il n'y avait rien à lire. L'état le dit, pour ne
+      // pas envoyer chercher un problème qui n'existe pas.
+      await sb.from('inbound_queue').update({
+        status: 'sans_facture',
+        error: 'aucune pièce jointe exploitable',
+        processed_at: new Date().toISOString()
+      }).eq('id', queueId);
+      return;
+    }
 
     // L'expéditeur est-il un transitaire ? Son adresse ne dit alors rien du
     // fournisseur : un ancien franchisé retransmet les factures de dizaines
@@ -327,6 +401,7 @@ async function traiterFichier(
   transitaire: boolean
 ): Promise<string | null> {
   const estXml = /\.xml$/i.test(cible.name) || /xml/i.test(cible.content_type);
+  const estPdf = /\.pdf$/i.test(cible.name) || /pdf/i.test(cible.content_type);
 
   const { data: blob, error: dlErr } = await sb.storage.from('factures').download(cible.path);
   if (dlErr || !blob) throw new Error('fichier introuvable dans le stockage');
@@ -335,7 +410,9 @@ async function traiterFichier(
   let extracted: Record<string, unknown>;
   let notes = '';
   try {
-    extracted = estXml ? parseUbl(new TextDecoder().decode(bytes)) : await extractFromPdf(bytes);
+    extracted = estXml ? parseUbl(new TextDecoder().decode(bytes))
+              : estPdf ? await extractFromPdf(bytes)
+              : await extractFromImage(bytes);
   } catch (e) {
     extracted = { _source: 'échec', commentaire: e instanceof Error ? e.message : String(e) };
     notes = 'échec extraction';

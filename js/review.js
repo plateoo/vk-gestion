@@ -153,15 +153,20 @@ async function renderCatchup() {
   const box = $('#catchup');
   if (!box) return;
   try {
-    const { data, error } = await supabase.rpc('catchup_progress', { p_limit: 20 });
+    const [{ data, error }, { data: fileData }] = await Promise.all([
+      supabase.rpc('catchup_progress', { p_limit: 20 }),
+      supabase.rpc('queue_backlog', { p_limit: 10 })
+    ]);
     if (error) throw error;
     const p = typeof data === 'string' ? JSON.parse(data) : data;
+    const file = (typeof fileData === 'string' ? JSON.parse(fileData) : fileData) || {};
     if (!p || !p.total_messages) { box.hidden = true; return; }
 
     const traites = Number(p.traites) + Number(p.ignores);
     const total = Number(p.total_messages);
     const pct = total ? Math.round((traites / total) * 100) : 0;
     const dernier = p.dernier_lot || {};
+    const attente = Number(file.en_attente) || 0;
     box.hidden = false;
     box.innerHTML = `
       <div class="catchup-head">
@@ -172,16 +177,93 @@ async function renderCatchup() {
       <div class="catchup-detail">
         ${[
           Number(p.en_quarantaine) ? `${p.en_quarantaine} en quarantaine` : '',
-          Number(p.en_attente) ? `${p.en_attente} en cours` : '',
-          Number(p.en_erreur) ? `<span class="txt-red">${p.en_erreur} en erreur</span>` : '',
+          attente ? `${attente} en attente de lecture` : '',
+          Number(file.en_erreur) ? `<span class="txt-red">${file.en_erreur} en erreur</span>` : '',
+          Number(file.sans_facture) ? `${file.sans_facture} sans facture` : '',
           `${p.lots} lot${Number(p.lots) > 1 ? 's' : ''} reçu${Number(p.lots) > 1 ? 's' : ''}`,
           dernier.messages != null ? `dernier lot : ${dernier.messages} message${dernier.messages > 1 ? 's' : ''}` : ''
         ].filter(Boolean).join(' <span class="sep">·</span> ')}
       </div>
-      ${p.termine ? '' : '<p class="field-hint">Le prochain lot arrive au cycle suivant de Power Automate.</p>'}`;
+      ${attente && isManager() ? `
+        <div class="catchup-actions">
+          <button type="button" class="btn btn-primary btn-sm" id="cu-drain">
+            Lire les ${attente} message${attente > 1 ? 's' : ''} en attente</button>
+          <button type="button" class="btn btn-sm" id="cu-stop" hidden>Arrêter</button>
+          <span class="muted small" id="cu-progress"></span>
+        </div>
+        <p class="field-hint">Ces messages sont déjà arrivés : ils attendent d'être lus.
+          Power Automate ne les redonnera pas, c'est ici que cela se déclenche.
+          Comptez une dizaine de secondes par message.</p>`
+        : (p.termine ? '' : '<p class="field-hint">Le prochain lot arrive au cycle suivant de Power Automate.</p>')}`;
+
+    $('#cu-drain')?.addEventListener('click', viderLaFile);
   } catch (err) {
     console.warn('avancement du rattrapage indisponible', err);
     box.hidden = true;
+  }
+}
+
+/**
+ * Vide la file des messages déjà reçus mais jamais lus.
+ *
+ * Par paquets, en attendant que chacun soit sorti de la file avant de
+ * demander le suivant : la fonction d'extraction travaille en arrière-plan,
+ * lui envoyer tout d'un coup ne ferait que saturer sans rien accélérer.
+ * Arrêtable à tout moment — ce qui est déjà lu reste lu.
+ */
+let arretDemande = false;
+
+async function viderLaFile() {
+  const bouton = $('#cu-drain');
+  const stop = $('#cu-stop');
+  const avancement = $('#cu-progress');
+  arretDemande = false;
+  if (bouton) bouton.disabled = true;
+  if (stop) { stop.hidden = false; stop.onclick = () => { arretDemande = true; stop.disabled = true; }; }
+
+  const lire = async () => {
+    const { data } = await supabase.rpc('queue_backlog', { p_limit: 10 });
+    return (typeof data === 'string' ? JSON.parse(data) : data) || {};
+  };
+
+  try {
+    let etat = await lire();
+    const depart = Number(etat.en_attente) || 0;
+    let tours = 0;
+
+    while (!arretDemande && Number(etat.en_attente) > 0 && tours < 60) {
+      const ids = etat.prochains || [];
+      if (!ids.length) break;
+
+      const { error } = await supabase.functions.invoke('replay-inbound', { body: { ids } });
+      if (error) throw error;
+
+      // On attend que le paquet quitte la file avant d'en demander un autre.
+      const avant = Number(etat.en_attente);
+      for (let i = 0; i < 30 && !arretDemande; i++) {
+        await new Promise((r) => setTimeout(r, 5000));
+        etat = await lire();
+        const fait = depart - Number(etat.en_attente);
+        if (avancement) avancement.textContent = `${fait} / ${depart} lu${fait > 1 ? 's' : ''}…`;
+        if (Number(etat.en_attente) < avant) break;
+      }
+      tours++;
+    }
+
+    const reste = Number(etat.en_attente) || 0;
+    toast(arretDemande
+      ? `Arrêté. ${reste} message${reste > 1 ? 's' : ''} encore en attente.`
+      : reste
+        ? `${depart - reste} message(s) lus, ${reste} encore en attente — relance quand tu veux.`
+        : 'Toute la file a été lue.');
+    invalidateInvoices();
+    notifyDataChange();
+    renderReview();
+  } catch (err) {
+    console.error(err);
+    toast(errorMessage(err, 'Lecture de la file impossible.'), 'error');
+    if (bouton) bouton.disabled = false;
+    if (stop) stop.hidden = true;
   }
 }
 
