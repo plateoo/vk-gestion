@@ -4,13 +4,18 @@
 import { getInvoices, setInvoiceFilters } from './invoices.js';
 import {
   $, fmtEUR, escapeHtml, toast, errorMessage, getMonth, setMonth, shiftMonth,
-  currentMonthKey, monthLabel, inMonth, isOverdue, ICONS
+  currentMonthKey, monthLabel, inMonth, isOverdue, ICONS,
+  getPeriod, periodLabel, inPeriod, previousRange, inRange
 } from './ui.js';
 
 export async function renderDashboard() {
   const month = getMonth();
-  $('#dash-month-label').textContent = monthLabel(month);
-  $('#print-month').textContent = monthLabel(month);
+  const periode = getPeriod();
+  // Les chiffres suivent la période choisie sur l'écran Factures : mois,
+  // trimestre, année ou dates libres. Un KPI correspond toujours à ce qui
+  // est listé en dessous.
+  $('#dash-month-label').textContent = periodLabel(periode);
+  $('#print-month').textContent = periodLabel(periode);
 
   const tbody = $('#top-tbody');
   let invoices;
@@ -23,9 +28,13 @@ export async function renderDashboard() {
     return;
   }
 
-  const rows = invoices.filter((i) => inMonth(i.invoice_date, month));
-  const prevKey = shiftMonth(month, -1);
-  const prevRows = invoices.filter((i) => inMonth(i.invoice_date, prevKey));
+  // Les pièces qui ne sont pas des factures ne comptent dans aucun total.
+  const facturesSeules = invoices.filter((i) => i.review_status !== 'document');
+  const rows = facturesSeules.filter((i) => inPeriod(i.invoice_date, periode));
+  const precedente = previousRange(periode);
+  const prevRows = precedente
+    ? facturesSeules.filter((i) => inRange(i.invoice_date, precedente))
+    : [];
 
   // ---------- 6 KPI ----------
   const htva = rows.reduce((s, i) => s + (Number(i.amount_htva) || 0), 0);
@@ -35,10 +44,15 @@ export async function renderDashboard() {
     .reduce((s, i) => s + (Number(i.amount_tvac) || 0), 0);
   const late = rows.filter(isOverdue);
 
-  // Mois précédent, pour les variations
+  // Période précédente de même nature, pour les variations
   const pHtva = prevRows.reduce((s, i) => s + (Number(i.amount_htva) || 0), 0);
   const pTvac = prevRows.reduce((s, i) => s + (Number(i.amount_tvac) || 0), 0);
-  const vs = `vs ${shortMonth(prevKey)}`;
+  // Sans période précédente — « toutes périodes » — il n'y a rien à comparer.
+  const vs = !precedente ? ''
+    : periode.kind === 'month' ? `vs ${shortMonth(precedente.from.slice(0, 7))}`
+    : periode.kind === 'quarter' ? 'vs trimestre précédent'
+    : periode.kind === 'year' ? `vs ${Number(periode.year) - 1}`
+    : 'vs période précédente';
 
   $('#kpi-count').textContent = rows.length;
   $('#kpi-htva').textContent = fmtEUR(htva);
@@ -86,7 +100,7 @@ export async function renderDashboard() {
     tbody.innerHTML = `<tr class="empty-row"><td colspan="4">
       <div class="empty">
         ${ICONS.empty}
-        <p>Aucune facture en ${escapeHtml(monthLabel(month).toLowerCase())}</p>
+        <p>Aucune facture sur la période : ${escapeHtml(periodLabel(periode).toLowerCase())}</p>
         <button type="button" class="btn btn-primary" id="dash-empty-new">Encoder la première</button>
       </div></td></tr>`;
     const b = $('#dash-empty-new');
@@ -112,6 +126,9 @@ function shortMonth(key) {
 function setVariation(sel, cur, prev, vsLabel) {
   const el = $(sel);
   if (!el) return;
+  // « Toutes périodes » : aucune période précédente, donc aucune variation
+  // à afficher — mieux vaut rien qu'un tiret sans référence.
+  if (!vsLabel) { el.textContent = ''; el.className = 'kpi-sub'; return; }
   if (!prev) {
     el.textContent = cur ? `— ${vsLabel}` : '';
     el.className = 'kpi-sub';
@@ -155,6 +172,7 @@ export function initDashboard() {
   $('#card-late').addEventListener('click', () => gotoInvoices({}));
 
   window.addEventListener('vk:month', () => renderDashboard());
+  window.addEventListener('vk:period', () => renderDashboard());
 }
 
 function gotoInvoices(patch) {

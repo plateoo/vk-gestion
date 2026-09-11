@@ -1143,6 +1143,29 @@ kbd {
 }
 
 /* ---------------------------------------------------------------
+   Période affichée : mois · trimestre · année · dates au choix
+   --------------------------------------------------------------- */
+.range-fields { display: inline-flex; align-items: center; gap: 6px; }
+.range-fields input[type="date"] {
+  padding: 7px 8px; border: 1px solid var(--border); border-radius: 8px;
+  background: var(--surface); color: var(--text); font: inherit; font-size: 13px;
+}
+.range-fields input[type="date"]:focus {
+  outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--row-select);
+}
+.range-fields[hidden], select[hidden] { display: none; }
+
+/* Libellé réservé aux lecteurs d'écran : présent, jamais visible */
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+/* Séparateur dans le menu d'export : les deux formats du dessus sont
+   ceux qu'on donne au comptable, ceux du dessous restent du dépannage. */
+.dd-sep { height: 1px; margin: 5px 0; background: var(--border); }
+
+/* ---------------------------------------------------------------
    Vues du tableau : factures · à contrôler · documents
    --------------------------------------------------------------- */
 .view-chips { display: flex; gap: 6px; margin: 0 0 10px; flex-wrap: wrap; }

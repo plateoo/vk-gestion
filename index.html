@@ -204,7 +204,10 @@
           <div class="dropdown">
             <button type="button" id="btn-export" class="btn">Exporter ▾</button>
             <div id="export-menu" class="dd-menu" hidden>
-              <button type="button" id="export-month">CSV du mois affiché</button>
+              <button type="button" id="export-xlsx">Excel (.xlsx) — période affichée</button>
+              <button type="button" id="export-accountant">Dossier pour le comptable (ZIP)</button>
+              <div class="dd-sep" role="separator"></div>
+              <button type="button" id="export-month">CSV de la période affichée</button>
               <button type="button" id="export-selection">CSV de la sélection courante</button>
               <button type="button" id="export-all">CSV complet (toutes périodes)</button>
             </div>
@@ -226,10 +229,25 @@
 
       <div class="toolbar no-print">
         <input id="f-search" type="search" class="search" placeholder="Rechercher (n° facture, fournisseur, remarque)…" aria-label="Recherche">
+        <!-- Une seule période commande le tableau, les totaux, le tableau de
+             bord et les exports : le chiffre affiché correspond toujours à
+             ce qui est listé en dessous. -->
         <select id="f-period" aria-label="Période">
-          <option value="month">Mois sélectionné</option>
+          <option value="month">Mois</option>
+          <option value="quarter">Trimestre</option>
+          <option value="year">Année</option>
+          <option value="range">Dates au choix</option>
           <option value="all">Toutes périodes</option>
         </select>
+        <select id="f-quarter" aria-label="Trimestre" hidden></select>
+        <select id="f-year" aria-label="Année" hidden></select>
+        <span id="f-range" class="range-fields" hidden>
+          <label class="sr-only" for="f-from">Du</label>
+          <input id="f-from" type="date" aria-label="Date de début">
+          <span class="muted small">au</span>
+          <label class="sr-only" for="f-to">Au</label>
+          <input id="f-to" type="date" aria-label="Date de fin">
+        </span>
         <select id="f-supplier" aria-label="Fournisseur"><option value="">Tous les fournisseurs</option></select>
         <select id="f-status" aria-label="Statut">
           <option value="">Tous les statuts</option>

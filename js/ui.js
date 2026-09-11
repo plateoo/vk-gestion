@@ -65,23 +65,146 @@ export function addDays(iso, n) {
   return `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}`;
 }
 
-// ---------- Mois sélectionné (partagé Tableau de bord <-> Factures) ----------
+// ---------- Période affichée (partagée par tous les écrans) ----------
+// Un seul réglage commande le tableau, les totaux, le tableau de bord et
+// les exports : un chiffre affiché correspond toujours à ce qui est listé
+// en dessous. Mois, trimestre, année ou dates libres.
 const MONTH_STORAGE_KEY = 'vk_selected_month';
+const PERIOD_STORAGE_KEY = 'vk_period';
 
 export function currentMonthKey() {
   const d = new Date();
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}`;
 }
 
-export function getMonth() {
-  const m = localStorage.getItem(MONTH_STORAGE_KEY);
-  return /^\d{4}-\d{2}$/.test(m || '') ? m : currentMonthKey();
+/** '2026-09' -> '2026-Q3' */
+export function quarterOf(month) {
+  const [y, mo] = month.split('-').map(Number);
+  return `${y}-Q${Math.floor((mo - 1) / 3) + 1}`;
 }
 
-/** Mémorise le mois et prévient toute l'app (événement 'vk:month') */
-export function setMonth(m) {
-  localStorage.setItem(MONTH_STORAGE_KEY, m);
-  window.dispatchEvent(new CustomEvent('vk:month', { detail: m }));
+const PERIOD_DEFAUT = { kind: 'month', month: null, quarter: null, year: null, from: '', to: '' };
+
+export function getPeriod() {
+  let p = {};
+  try { p = JSON.parse(localStorage.getItem(PERIOD_STORAGE_KEY) || '{}'); } catch { p = {}; }
+  const mois = /^\d{4}-\d{2}$/.test(p.month || '')
+    ? p.month
+    : (/^\d{4}-\d{2}$/.test(localStorage.getItem(MONTH_STORAGE_KEY) || '')
+        ? localStorage.getItem(MONTH_STORAGE_KEY) : currentMonthKey());
+  const out = { ...PERIOD_DEFAUT, ...p, month: mois };
+  if (!['month', 'quarter', 'year', 'range', 'all'].includes(out.kind)) out.kind = 'month';
+  if (!/^\d{4}-Q[1-4]$/.test(out.quarter || '')) out.quarter = quarterOf(mois);
+  if (!/^\d{4}$/.test(String(out.year || ''))) out.year = mois.slice(0, 4);
+  return out;
+}
+
+/**
+ * Modifie la période et prévient toute l'app. 'vk:month' est conservé :
+ * les écrans qui ne raisonnent qu'en mois continuent de fonctionner.
+ */
+export function setPeriod(patch) {
+  const p = { ...getPeriod(), ...patch };
+  localStorage.setItem(PERIOD_STORAGE_KEY, JSON.stringify(p));
+  localStorage.setItem(MONTH_STORAGE_KEY, p.month);
+  window.dispatchEvent(new CustomEvent('vk:period', { detail: p }));
+  window.dispatchEvent(new CustomEvent('vk:month', { detail: p.month }));
+  return p;
+}
+
+export function getMonth() { return getPeriod().month; }
+
+/** Choisir un mois ramène la période au mois : c'est le geste du sélecteur du bandeau. */
+export function setMonth(m) { setPeriod({ kind: 'month', month: m, quarter: quarterOf(m), year: m.slice(0, 4) }); }
+
+/** Bornes de la période, incluses. null pour « toutes périodes ». */
+export function periodRange(p = getPeriod()) {
+  const dernierJour = (y, mo) => `${y}-${pad(mo)}-${pad(new Date(y, mo, 0).getDate())}`;
+  if (p.kind === 'all') return null;
+  if (p.kind === 'month') {
+    const [y, mo] = p.month.split('-').map(Number);
+    return { from: `${p.month}-01`, to: dernierJour(y, mo) };
+  }
+  if (p.kind === 'quarter') {
+    const [y, q] = p.quarter.split('-Q').map(Number);
+    const debut = (q - 1) * 3 + 1;
+    return { from: `${y}-${pad(debut)}-01`, to: dernierJour(y, debut + 2) };
+  }
+  if (p.kind === 'year') return { from: `${p.year}-01-01`, to: `${p.year}-12-31` };
+  // Dates libres : une borne manquante n'enferme rien de ce côté.
+  return { from: p.from || '0000-01-01', to: p.to || '9999-12-31' };
+}
+
+/** true si la date ISO tombe dans la période affichée */
+export function inPeriod(iso, p = getPeriod()) {
+  if (!iso) return false;
+  const r = periodRange(p);
+  if (!r) return true;
+  const d = String(iso).slice(0, 10);
+  return d >= r.from && d <= r.to;
+}
+
+/** Libellé lisible, utilisé dans les en-têtes, les exports et les noms de fichier */
+export function periodLabel(p = getPeriod()) {
+  if (p.kind === 'all') return 'Toutes périodes';
+  if (p.kind === 'month') return monthLabel(p.month);
+  if (p.kind === 'quarter') {
+    const [y, q] = p.quarter.split('-Q');
+    return `${q}${q === '1' ? 'ᵉʳ' : 'ᵉ'} trimestre ${y}`;
+  }
+  if (p.kind === 'year') return `Année ${p.year}`;
+  const r = periodRange(p);
+  if (!p.from && !p.to) return 'Période libre';
+  if (!p.to) return `À partir du ${fmtDate(r.from)}`;
+  if (!p.from) return `Jusqu'au ${fmtDate(r.to)}`;
+  return `Du ${fmtDate(r.from)} au ${fmtDate(r.to)}`;
+}
+
+/**
+ * Période précédente de même nature, pour les variations du tableau de
+ * bord : le mois d'avant, le trimestre d'avant, l'année d'avant. Pour des
+ * dates libres, la tranche de même durée qui précède. null quand la
+ * comparaison n'a pas de sens (toutes périodes).
+ */
+export function previousRange(p = getPeriod()) {
+  if (p.kind === 'all') return null;
+  if (p.kind === 'month') {
+    const m = shiftMonth(p.month, -1);
+    return periodRange({ ...PERIOD_DEFAUT, kind: 'month', month: m });
+  }
+  if (p.kind === 'quarter') {
+    const [y, q] = p.quarter.split('-Q').map(Number);
+    const prec = q === 1 ? `${y - 1}-Q4` : `${y}-Q${q - 1}`;
+    return periodRange({ ...PERIOD_DEFAUT, kind: 'quarter', quarter: prec });
+  }
+  if (p.kind === 'year') {
+    return periodRange({ ...PERIOD_DEFAUT, kind: 'year', year: String(Number(p.year) - 1) });
+  }
+  const r = periodRange(p);
+  const jour = 86400000;
+  const debut = Date.parse(r.from);
+  const fin = Date.parse(r.to);
+  if (!Number.isFinite(debut) || !Number.isFinite(fin)) return null;
+  const duree = fin - debut + jour;
+  const iso = (ms) => new Date(ms).toISOString().slice(0, 10);
+  return { from: iso(debut - duree), to: iso(debut - jour) };
+}
+
+/** true si la date ISO tombe dans une tranche {from, to} */
+export function inRange(iso, r) {
+  if (!r || !iso) return !r;
+  const d = String(iso).slice(0, 10);
+  return d >= r.from && d <= r.to;
+}
+
+/** Même chose, sans accent ni espace : pour les noms de fichier */
+export function periodSlug(p = getPeriod()) {
+  if (p.kind === 'all') return 'toutes-periodes';
+  if (p.kind === 'month') return p.month;
+  if (p.kind === 'quarter') return p.quarter;
+  if (p.kind === 'year') return String(p.year);
+  const r = periodRange(p);
+  return `${r.from}_${r.to}`;
 }
 
 /** '2026-09' + 1 -> '2026-10' */

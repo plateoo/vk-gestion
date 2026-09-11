@@ -7,7 +7,8 @@ import { downloadInvoicesCSV } from './export.js';
 import {
   $, $$, fmtEUR, fmtDate, escapeHtml, toast, errorMessage, openModal, closeModal,
   confirmDialog, skeletonRows, getMonth, setMonth, monthLabel, shiftMonth,
-  currentMonthKey, inMonth, statusLabel, statusClass, isOverdue, isDueSoon, isComplete,
+  currentMonthKey, inMonth, inPeriod, getPeriod, setPeriod, periodLabel,
+  statusLabel, statusClass, isOverdue, isDueSoon, isComplete,
   todayISO, addDays, notifyDataChange, ICONS, openPopover, closePopover
 } from './ui.js';
 import { currentUser, isManager } from './auth.js';
@@ -90,7 +91,9 @@ function applyFilters(rows) {
     if (filters.view === 'documents') { if (!estDocument) return false; }
     else if (estDocument) return false;
     if (filters.view === 'a_controler' && i.review_status !== 'a_controler') return false;
-    if (filters.period === 'month' && !inMonth(i.invoice_date, month)) return false;
+    // « month » veut dire : restreindre à la période affichée, quelle qu'elle
+    // soit — mois, trimestre, année ou dates libres.
+    if (filters.period !== 'all' && !inPeriod(i.invoice_date)) return false;
     if (filters.supplier && i.supplier_id !== filters.supplier) return false;
     // « En retard » est calculé (échéance dépassée + non payée), il n'est plus saisi à la main
     if (filters.status === 'overdue' && !isOverdue(i)) return false;
@@ -141,6 +144,9 @@ export async function renderInvoices() {
   }
 
   fillSupplierFilter();
+  // Les listes de trimestres et d'années se bâtissent sur les factures
+  // chargées : il faut donc les remplir une fois le cache en place.
+  syncPeriodInputs();
 
   // Compteurs des vues : sur toutes les périodes, sinon le chiffre changerait
   // en même temps que le mois affiché et ne voudrait plus rien dire.
@@ -166,8 +172,8 @@ export async function renderInvoices() {
       ? 'Aucune pièce classée « document ». Les conditions générales et bons de commande reçus par e-mail apparaîtront ici.'
       : filters.view === 'a_controler'
         ? 'Rien à contrôler : toutes les factures reçues ont été vérifiées.'
-        : filters.period === 'month'
-          ? `Aucune facture en ${monthLabel(getMonth()).toLowerCase()}`
+        : filters.period !== 'all'
+          ? `Aucune facture sur la période : ${periodLabel().toLowerCase()}`
           : 'Aucune facture ne correspond aux filtres';
     emptyState(tbody, vide, filters.view === 'factures');
     updateSortIndicators();
@@ -340,11 +346,10 @@ async function saveSmartRef(id, valeur, champ) {
 async function requalifier(id) {
   const inv = findInvoice(id);
   if (!inv) return;
-  const ok = await confirmDialog({
-    title: 'Remettre cette pièce dans les factures ?',
-    body: 'Elle repassera dans « À contrôler » pour être encodée normalement.',
-    confirm: 'Oui, c\'est une facture'
-  });
+  const ok = await confirmDialog(
+    `Remettre « ${inv.doc_summary ? inv.invoice_number.replace(/^DOC-/, '') : inv.invoice_number} » `
+    + 'dans les factures ? Elle repassera dans « À contrôler » pour être encodée normalement.',
+    'Oui, c\'est une facture');
   if (!ok) return;
   try {
     const { error } = await supabase.rpc('set_document_kind', { p_invoice: id, p_kind: 'facture' });
@@ -969,9 +974,44 @@ async function saveInvoice(e) {
 // ---------------------------------------------------------------------
 // Filtres : synchronisation des champs du formulaire
 // ---------------------------------------------------------------------
+/**
+ * Remplit le sélecteur de période et n'affiche que le réglage utile :
+ * la liste des trimestres, celle des années, ou les deux dates libres.
+ * Les listes sont bâties sur les factures réellement en base — proposer
+ * une année sans aucune facture n'apporte rien.
+ */
+function syncPeriodInputs() {
+  const p = getPeriod();
+  filters.period = p.kind === 'all' ? 'all' : 'month';
+  $('#f-period').value = p.kind;
+
+  const annees = [...new Set((cache || []).map((i) => String(i.invoice_date || '').slice(0, 4)).filter(Boolean))];
+  if (!annees.includes(p.month.slice(0, 4))) annees.push(p.month.slice(0, 4));
+  annees.sort().reverse();
+
+  const selTrim = $('#f-quarter');
+  selTrim.innerHTML = annees.flatMap((y) => [4, 3, 2, 1].map((q) =>
+    `<option value="${y}-Q${q}">${periodLabel({ kind: 'quarter', quarter: `${y}-Q${q}` })}</option>`)).join('');
+  if (!selTrim.querySelector(`[value="${p.quarter}"]`)) {
+    selTrim.insertAdjacentHTML('afterbegin', `<option value="${p.quarter}">${periodLabel({ ...p, kind: 'quarter' })}</option>`);
+  }
+  selTrim.value = p.quarter;
+
+  const selAn = $('#f-year');
+  selAn.innerHTML = annees.map((y) => `<option value="${y}">${y}</option>`).join('');
+  selAn.value = p.year;
+
+  $('#f-from').value = p.from || '';
+  $('#f-to').value = p.to || '';
+
+  selTrim.hidden = p.kind !== 'quarter';
+  selAn.hidden = p.kind !== 'year';
+  $('#f-range').hidden = p.kind !== 'range';
+}
+
 function syncFilterInputs() {
   $('#f-search').value = filters.q;
-  $('#f-period').value = filters.period;
+  syncPeriodInputs();
   $('#f-supplier').value = filters.supplier;
   $('#f-status').value = filters.status;
   $('#f-smart').value = filters.smart;
@@ -1001,7 +1041,12 @@ export function initInvoices(onOpenDocument = null) {
 
   // Barre d'outils
   $('#f-search').addEventListener('input', (e) => { filters.q = e.target.value; renderInvoices(); });
-  $('#f-period').addEventListener('change', (e) => { filters.period = e.target.value; syncFilterInputs(); renderInvoices(); });
+  // Période : un seul réglage pour le tableau, les totaux et les exports.
+  $('#f-period').addEventListener('change', (e) => { setPeriod({ kind: e.target.value }); syncFilterInputs(); renderInvoices(); });
+  $('#f-quarter').addEventListener('change', (e) => { setPeriod({ kind: 'quarter', quarter: e.target.value }); renderInvoices(); });
+  $('#f-year').addEventListener('change', (e) => { setPeriod({ kind: 'year', year: e.target.value }); renderInvoices(); });
+  $('#f-from').addEventListener('change', (e) => { setPeriod({ kind: 'range', from: e.target.value }); renderInvoices(); });
+  $('#f-to').addEventListener('change', (e) => { setPeriod({ kind: 'range', to: e.target.value }); renderInvoices(); });
   $('#f-supplier').addEventListener('change', (e) => { filters.supplier = e.target.value; renderInvoices(); });
   $('#f-status').addEventListener('change', (e) => { filters.status = e.target.value; renderInvoices(); });
   $('#f-smart').addEventListener('change', (e) => { filters.smart = e.target.value; renderInvoices(); });
