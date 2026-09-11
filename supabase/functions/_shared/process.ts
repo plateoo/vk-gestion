@@ -375,15 +375,36 @@ async function traiterFichier(
     ? (String(extracted.numero_facture ?? '').trim() || `SANS-NUMERO-${crypto.randomUUID().slice(0, 8)}`)
     : `DOC-${cible.name}`.slice(0, 120);
 
-  const { data: dup } = await sb.from('invoices').select('id')
-    .eq('supplier_id', supplierId).eq('invoice_number', number).maybeSingle();
-  if (dup) return null;   // doublon : on ne crée rien, on passe au fichier suivant
+  // Relance sur une pièce déjà enregistrée. L'index unique (message_id,
+  // file_path) interdit d'en créer une seconde : sans ce chemin, une
+  // extraction ratée resterait ratée pour toujours, le bouton « relancer »
+  // se heurtant à la contrainte. On ne réécrit QUE si personne n'a encore
+  // travaillé dessus — extraction en échec et pièce toujours à contrôler.
+  let aReecrire: string | null = null;
+  if (row.message_id) {
+    const { data: deja } = await sb.from('invoices')
+      .select('id, review_status, extraction_notes, smart_ref')
+      .eq('message_id', row.message_id).eq('file_path', cible.path).maybeSingle();
+    if (deja) {
+      let echec = false;
+      try { echec = JSON.parse(String(deja.extraction_notes ?? '{}')).notes === 'échec extraction'; } catch { /* notes illisibles */ }
+      const intacte = deja.review_status === 'a_controler' && !deja.smart_ref;
+      if (!echec || !intacte) return null;   // déjà traitée : on n'y touche pas
+      aReecrire = deja.id;
+    }
+  }
+
+  if (!aReecrire) {
+    const { data: dup } = await sb.from('invoices').select('id')
+      .eq('supplier_id', supplierId).eq('invoice_number', number).maybeSingle();
+    if (dup) return null;   // doublon : on ne crée rien, on passe au fichier suivant
+  }
 
   const rate = normalizedRate(extracted);
   const htva = Number(extracted.montant_htva);
   if (rate !== null && !LEGAL_RATES.includes(rate)) alerts.push(`taux de TVA non standard (${rate})`);
 
-  const { data: created, error: insErr } = await sb.from('invoices').insert({
+  const valeurs = {
     supplier_id: supplierId,
     invoice_number: number,
     invoice_date: /^\d{4}-\d{2}-\d{2}$/.test(String(extracted.date_facture ?? ''))
@@ -416,7 +437,15 @@ async function traiterFichier(
       },
       brut: extracted
     })
-  }).select('id').single();
+  };
+
+  if (aReecrire) {
+    const { error: majErr } = await sb.from('invoices').update(valeurs).eq('id', aReecrire);
+    if (majErr) throw new Error(majErr.message);
+    return aReecrire;
+  }
+
+  const { data: created, error: insErr } = await sb.from('invoices').insert(valeurs).select('id').single();
   if (insErr) throw new Error(insErr.message);
   return created.id;
 }
