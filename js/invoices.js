@@ -4,6 +4,7 @@
 import { supabase } from './supabase.js';
 import { getSuppliers, suppliersCache, supplierById, supplierByName, openSupplierModalWithName } from './suppliers.js';
 import { downloadInvoicesCSV } from './export.js';
+import { findDuplicates, duplicateCount, NIVEAU_LABELS } from './duplicates.js';
 import {
   $, $$, fmtEUR, fmtDate, escapeHtml, toast, errorMessage, openModal, closeModal,
   confirmDialog, skeletonRows, getMonth, setMonth, monthLabel, shiftMonth,
@@ -35,7 +36,7 @@ const filters = {
   // Vue du tableau. Par défaut on ne montre que les factures : les pièces
   // classées « document » — conditions générales, bons de commande — ont
   // leur propre vue et ne doivent jamais polluer la liste à encoder.
-  view: 'factures'     // 'factures' | 'a_controler' | 'documents'
+  view: 'factures'     // 'factures' | 'a_controler' | 'documents' | 'doublons'
 };
 
 // Tri actif
@@ -152,10 +153,42 @@ export async function renderInvoices() {
   // en même temps que le mois affiché et ne voudrait plus rien dire.
   const nbReview = rows.filter((i) => i.review_status === 'a_controler').length;
   const nbDocs = rows.filter((i) => i.review_status === 'document').length;
+  const groupes = findDuplicates(rows);
+  const nbDup = duplicateCount(groupes);
   const cReview = $('#chip-count-review');
   const cDocs = $('#chip-count-docs');
+  const cDup = $('#chip-count-dup');
   if (cReview) { cReview.textContent = nbReview; cReview.hidden = nbReview === 0; }
   if (cDocs) { cDocs.textContent = nbDocs; cDocs.hidden = nbDocs === 0; }
+  if (cDup) { cDup.textContent = nbDup; cDup.hidden = nbDup === 0; }
+
+  // La vue des doublons ne se filtre pas comme les autres : elle montre des
+  // groupes, et un groupe n'a de sens que complet. Le restreindre au mois
+  // affiché couperait la facture jumelle arrivée le mois d'avant — et c'est
+  // précisément celle qu'on cherche.
+  if (filters.view === 'doublons') {
+    lastRows = groupes.flatMap((g) => g.invoices);
+    $('#inv-foot-count').textContent = nbDup
+      ? `${groupes.length} groupe${groupes.length > 1 ? 's' : ''} · ${nbDup} facture${nbDup > 1 ? 's' : ''}`
+      : 'Aucun doublon';
+    $('#inv-foot-htva').textContent = '';
+    $('#inv-foot-total').textContent = '';
+    if (!groupes.length) {
+      emptyState(tbody, 'Aucun doublon détecté : aucune facture ne se retrouve deux fois dans la liste.', false);
+      updateSortIndicators();
+      updateBulkBar();
+      return;
+    }
+    tbody.innerHTML = groupes.map((g) => `
+      <tr class="dup-head"><td colspan="13">
+        <span class="dup-level dup-${g.niveau}">${escapeHtml(NIVEAU_LABELS[g.niveau])}</span>
+        <span class="dup-reason">${escapeHtml(g.motif)}</span>
+      </td></tr>
+      ${g.invoices.map((i) => rowHtml(i, isManager())).join('')}`).join('');
+    updateSortIndicators();
+    updateBulkBar();
+    return;
+  }
 
   const filtered = applySort(applyFilters(rows));
   lastRows = filtered;
@@ -286,6 +319,8 @@ function rowHtml(i, manager) {
     <td class="td-status" data-label="Paiement">${paymentHtml(i, manager)}</td>
     <td class="td-actions no-print">
       <button type="button" class="icon-btn row-action" data-edit="${i.id}" title="Modifier">${ICONS.pencil}</button>
+      ${manager ? `<button type="button" class="icon-btn row-action danger" data-delete="${i.id}"
+        title="Supprimer cette facture">${ICONS.trash}</button>` : ''}
       <button type="button" class="icon-btn row-menu" data-menu="${i.id}" title="Autres actions" aria-haspopup="menu">${ICONS.dots}</button>
     </td>
   </tr>`;
@@ -667,7 +702,16 @@ export function duplicateInvoice(id) {
 
 async function deleteInvoice(id) {
   const inv = findInvoice(id);
-  const ok = await confirmDialog(`Supprimer définitivement la facture ${inv?.invoice_number || ''} ?`, 'Supprimer');
+  if (!inv) return;
+  // Rien n'est réversible ici : on nomme la facture au complet, faute de quoi
+  // deux lignes qui se ressemblent — c'est tout le sujet des doublons — sont
+  // impossibles à distinguer au moment de trancher.
+  const ok = await confirmDialog(
+    `Supprimer définitivement cette facture ?\n`
+    + `${inv.supplier_name || '?'} · ${inv.invoice_number} · ${fmtDate(inv.invoice_date)} · ${fmtEUR(inv.amount_tvac)}`
+    + `${inv.smart_ref ? ` · réf. Smart ${inv.smart_ref}` : ''}\n`
+    + 'Le document d\'origine reste dans le stockage. Cette action ne peut pas être annulée.',
+    'Supprimer');
   if (!ok) return;
   try {
     const { error } = await supabase.from('invoices').delete().eq('id', id);
@@ -1096,6 +1140,9 @@ export function initInvoices(onOpenDocument = null) {
 
     const edit = e.target.closest('[data-edit]');
     if (edit) return openInvoiceModal(findInvoice(edit.dataset.edit));
+
+    const del = e.target.closest('[data-delete]');
+    if (del) { e.stopPropagation(); return deleteInvoice(del.dataset.delete); }
 
     const requalify = e.target.closest('[data-requalify]');
     if (requalify) { e.stopPropagation(); return requalifier(requalify.dataset.requalify); }
