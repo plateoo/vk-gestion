@@ -15,6 +15,7 @@ import {
   fmtDate, longDate, ICONS
 } from './ui.js';
 import { isManager } from './auth.js';
+import { loadMaintenance, backupCardHtml, securityCardHtml, wireMaintenance } from './maintenance.js';
 
 let users = [];
 
@@ -51,7 +52,10 @@ export async function renderAdmin() {
     const [u, s, l] = await Promise.all([
       appeler('list'),
       supabase.rpc('system_status'),
-      supabase.from('change_log').select('*').order('created_at', { ascending: false }).limit(40)
+      supabase.from('change_log').select('*').order('created_at', { ascending: false }).limit(40),
+      // Sauvegardes et contrôle de sécurité : chargés en même temps que le
+      // reste, pour que l'écran ne s'affiche jamais sans eux.
+      loadMaintenance()
     ]);
     users = u.users || [];
     etat = typeof s.data === 'string' ? JSON.parse(s.data) : s.data;
@@ -80,6 +84,9 @@ export async function renderAdmin() {
         <div class="kpi-value">${octets(etat.stockage_octets)}</div>
         <div class="kpi-sub">${etat.stockage_fichiers} fichier${Number(etat.stockage_fichiers) > 1 ? 's' : ''}</div></div>
     </div>
+
+    ${backupCardHtml()}
+    ${securityCardHtml()}
 
     <!-- Comptes -->
     <div class="card">
@@ -177,6 +184,11 @@ export async function renderAdmin() {
         </div>`
       : `<div class="empty" id="admin-journal-vide"><p>Aucun changement journalisé pour l'instant.</p></div>`}
     </div>`;
+
+  // Les boutons des cartes Sauvegardes et Contrôle de sécurité sont recréés
+  // à chaque rendu : on les recâble ici, en leur donnant de quoi se
+  // rafraîchir eux-mêmes.
+  wireMaintenance(renderAdmin);
 }
 
 // ---------------------------------------------------------------------

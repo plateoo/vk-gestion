@@ -1148,6 +1148,57 @@ kbd {
 #confirm-message { white-space: pre-line; }
 
 /* ---------------------------------------------------------------
+   Bandeau de nouvelle version
+   --------------------------------------------------------------- */
+.update-banner {
+  position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%);
+  z-index: 60; display: flex; align-items: center; gap: 10px;
+  max-width: min(92vw, 620px); padding: 10px 14px;
+  border: 1px solid var(--on-dark-line); border-radius: 12px;
+  background: var(--toast-bg); color: var(--on-dark);
+  font-size: 13.5px; box-shadow: 0 10px 30px var(--overlay);
+}
+.update-banner[hidden] { display: none; }
+.update-banner .btn-ghost { color: var(--on-dark-soft); }
+
+/* ---------------------------------------------------------------
+   Sauvegardes
+   --------------------------------------------------------------- */
+.bk-state {
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 10px 12px; margin-bottom: 8px;
+  border: 1px solid var(--border); border-left-width: 4px; border-radius: 8px;
+  background: var(--surface-alt);
+}
+.bk-state strong { font-size: 13px; }
+.bk-state span { font-size: 12.5px; color: var(--text-muted); }
+.bk-state.is-ok  { border-left-color: var(--ok); }
+.bk-state.is-bad { border-left-color: var(--danger); background: var(--danger-soft); }
+.bk-state.is-bad span { color: var(--danger); }
+
+/* ---------------------------------------------------------------
+   Contrôle de sécurité
+   --------------------------------------------------------------- */
+.sec-list { list-style: none; margin: 0; padding: 4px 12px 14px; }
+.sec-list li {
+  display: flex; gap: 10px; align-items: flex-start;
+  padding: 9px 0; border-bottom: 1px solid var(--line-soft);
+}
+.sec-list li:last-child { border-bottom: 0; }
+.sec-mark {
+  flex: 0 0 22px; height: 22px; border-radius: 50%;
+  display: grid; place-items: center;
+  font-size: 12px; font-weight: 700; line-height: 1;
+}
+.sec-ok   .sec-mark { background: var(--ok-soft);     color: var(--ok); }
+.sec-warn .sec-mark { background: var(--warn-soft);   color: var(--warn); }
+.sec-bad  .sec-mark { background: var(--danger-soft); color: var(--danger); }
+.sec-text { display: flex; flex-direction: column; gap: 2px; }
+.sec-text strong { font-size: 13px; }
+.sec-text span { font-size: 12.5px; color: var(--text-muted); line-height: 1.45; }
+.sec-bad .sec-text span { color: var(--danger); }
+
+/* ---------------------------------------------------------------
    Doublons
    --------------------------------------------------------------- */
 .dup-head td {

@@ -736,6 +736,15 @@
   </div>
 </div>
 
+<!-- Une nouvelle version est en ligne. On ne recharge jamais d'autorité :
+     Marie peut être au milieu d'une saisie. -->
+<div id="update-banner" class="update-banner" role="status" hidden>
+  <span>Une nouvelle version de l'application est disponible
+    (<span id="update-version">—</span>).</span>
+  <button type="button" class="btn btn-sm btn-primary" id="update-reload">Recharger</button>
+  <button type="button" class="btn btn-sm btn-ghost" id="update-dismiss">Plus tard</button>
+</div>
+
 <div id="toasts" class="toasts" aria-live="polite"></div>
 
 <!-- ============================================================
@@ -749,6 +758,7 @@ import { initInvoices, renderInvoices, refreshInvoices, openInvoiceModal, focusS
 import { initSuppliers, renderSuppliers, resetSupplierView } from './js/suppliers.js';
 import { initDashboard, renderDashboard } from './js/dashboard.js';
 import { initReview, renderReview, refreshReviewBadge, openDocument, resetDocumentView } from './js/review.js';
+import { initUpdateCheck } from './js/maintenance.js';
 import { initSettings, renderSettings } from './js/settings.js';
 import { initSearch, openSearch } from './js/search.js';
 import { initPayments, renderPayments } from './js/payments.js';
@@ -920,6 +930,9 @@ window.addEventListener('vk:month', () => { if (activeTab === 'suppliers') rende
 // Un clic sur une ligne ouvre la pièce en pleine page : document d'origine
 // à gauche, champs pré-remplis à droite.
 initInvoices((id) => openDocument(id, showTab));
+// Le site est statique : sans ce contrôle, un navigateur garderait
+// indéfiniment l'ancienne version en cache sans le dire.
+initUpdateCheck();
 initSuppliers();
 initDashboard();
 initReview();
