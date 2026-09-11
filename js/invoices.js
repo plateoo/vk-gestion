@@ -49,9 +49,21 @@ export async function getInvoices(force = false) {
   if (cache && !force) return cache;
   if (loading && !force) return loading;
   loading = (async () => {
+    // On énumère les colonnes au lieu de prendre « * » : extraction_notes
+    // pesait 43 % du chargement — 140 Ko sur 325 — alors que cet écran ne
+    // s'en sert pas. Seul « À contrôler » en a besoin, et il a sa propre
+    // requête. Sur une année de factures, cela fait plus d'un mégaoctet
+    // épargné à chaque ouverture.
     const { data, error } = await supabase
       .from('invoices')
-      .select('*, supplier:suppliers(id, name, payment_terms)')
+      .select(`id, supplier_id, invoice_number, invoice_date, due_date, encoded_at,
+               amount_htva, vat_rate, amount_tvac, amount_paid,
+               discount_rate, discount_days, discount_deadline, amount_discounted,
+               in_smart, in_winauditor, smart_ref, external_refs,
+               stock_in, stock_out, payment_status, payment_date, payment_method,
+               expense_type, notes, review_status, doc_type, doc_summary,
+               source, file_path, sender_email, message_id, created_at,
+               supplier:suppliers(id, name, payment_terms)`)
       .order('invoice_date', { ascending: false });
     if (error) throw error;
     cache = (data || []).map(normalize);
@@ -267,7 +279,10 @@ const DOC_LABELS = {
  * plus un bouton pour la ramener dans les factures si le tri s'est trompé.
  */
 function docRowHtml(i) {
-  const nom = (i.extraction_notes_parsed?.fichier) || i.invoice_number.replace(/^DOC-/, '');
+  // Le numéro d'une pièce non facturable EST son nom de fichier, préfixé
+  // « DOC- » à la création. On le relit donc de là, sans avoir besoin des
+  // notes d'extraction — que cet écran ne charge volontairement plus.
+  const nom = i.invoice_number.replace(/^DOC-/, '');
   return `
   <tr data-id="${i.id}" class="row-document" data-open="${i.id}">
     <td class="td-check no-print"></td>
