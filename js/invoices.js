@@ -30,7 +30,11 @@ const filters = {
   status: '',
   smart: '',           // '' | 'oui' | 'non'
   winauditor: '',
-  stock: ''            // '' | 'sans'
+  stock: '',           // '' | 'sans'
+  // Vue du tableau. Par défaut on ne montre que les factures : les pièces
+  // classées « document » — conditions générales, bons de commande — ont
+  // leur propre vue et ne doivent jamais polluer la liste à encoder.
+  view: 'factures'     // 'factures' | 'a_controler' | 'documents'
 };
 
 // Tri actif
@@ -71,7 +75,7 @@ export function setInvoiceFilters(patch) {
 }
 
 export function resetFilters() {
-  Object.assign(filters, { q: '', period: 'month', supplier: '', status: '', smart: '', winauditor: '', stock: '' });
+  Object.assign(filters, { q: '', period: 'month', supplier: '', status: '', smart: '', winauditor: '', stock: '', view: 'factures' });
   syncFilterInputs();
 }
 
@@ -82,6 +86,10 @@ function applyFilters(rows) {
   const month = getMonth();
   const q = filters.q.trim().toLowerCase();
   return rows.filter((i) => {
+    const estDocument = i.review_status === 'document';
+    if (filters.view === 'documents') { if (!estDocument) return false; }
+    else if (estDocument) return false;
+    if (filters.view === 'a_controler' && i.review_status !== 'a_controler') return false;
     if (filters.period === 'month' && !inMonth(i.invoice_date, month)) return false;
     if (filters.supplier && i.supplier_id !== filters.supplier) return false;
     // « En retard » est calculé (échéance dépassée + non payée), il n'est plus saisi à la main
@@ -134,6 +142,15 @@ export async function renderInvoices() {
 
   fillSupplierFilter();
 
+  // Compteurs des vues : sur toutes les périodes, sinon le chiffre changerait
+  // en même temps que le mois affiché et ne voudrait plus rien dire.
+  const nbReview = rows.filter((i) => i.review_status === 'a_controler').length;
+  const nbDocs = rows.filter((i) => i.review_status === 'document').length;
+  const cReview = $('#chip-count-review');
+  const cDocs = $('#chip-count-docs');
+  if (cReview) { cReview.textContent = nbReview; cReview.hidden = nbReview === 0; }
+  if (cDocs) { cDocs.textContent = nbDocs; cDocs.hidden = nbDocs === 0; }
+
   const filtered = applySort(applyFilters(rows));
   lastRows = filtered;
 
@@ -145,9 +162,14 @@ export async function renderInvoices() {
   $('#inv-foot-total').textContent = fmtEUR(totalTvac);
 
   if (!filtered.length) {
-    emptyState(tbody, filters.period === 'month'
-      ? `Aucune facture en ${monthLabel(getMonth()).toLowerCase()}`
-      : 'Aucune facture ne correspond aux filtres', true);
+    const vide = filters.view === 'documents'
+      ? 'Aucune pièce classée « document ». Les conditions générales et bons de commande reçus par e-mail apparaîtront ici.'
+      : filters.view === 'a_controler'
+        ? 'Rien à contrôler : toutes les factures reçues ont été vérifiées.'
+        : filters.period === 'month'
+          ? `Aucune facture en ${monthLabel(getMonth()).toLowerCase()}`
+          : 'Aucune facture ne correspond aux filtres';
+    emptyState(tbody, vide, filters.view === 'factures');
     updateSortIndicators();
     updateBulkBar();
     return;
@@ -188,7 +210,44 @@ function escompteOuvert(i) {
       && i.payment_status !== 'paye' && i.discount_deadline >= todayISO();
 }
 
+/** Libellés des natures de document lues par l'extraction */
+const DOC_LABELS = {
+  facture: 'Facture',
+  note_credit: 'Note de crédit',
+  conditions_generales: 'Conditions générales',
+  bon_commande: 'Bon de commande',
+  proforma: 'Proforma',
+  listing: 'Listing',
+  rappel: 'Rappel',
+  autre: 'Autre'
+};
+
+/**
+ * Ligne d'une pièce qui n'est pas une facture. Rien à encoder : on montre
+ * ce que c'est et la synthèse qui permet de le reconnaître sans l'ouvrir,
+ * plus un bouton pour la ramener dans les factures si le tri s'est trompé.
+ */
+function docRowHtml(i) {
+  const nom = (i.extraction_notes_parsed?.fichier) || i.invoice_number.replace(/^DOC-/, '');
+  return `
+  <tr data-id="${i.id}" class="row-document" data-open="${i.id}">
+    <td class="td-check no-print"></td>
+    <td class="td-date" data-label="Reçu le">${fmtDate(i.invoice_date)}</td>
+    <td class="td-supplier" data-label="Fournisseur">${escapeHtml(i.supplier_name)}</td>
+    <td class="td-doc" colspan="9" data-label="Document">
+      <span class="doc-kind">${escapeHtml(DOC_LABELS[i.doc_type] || 'Autre')}</span>
+      <span class="doc-file">${escapeHtml(nom)}</span>
+      ${i.doc_summary ? `<span class="doc-summary">${escapeHtml(i.doc_summary)}</span>` : ''}
+    </td>
+    <td class="td-actions no-print">
+      <button type="button" class="btn btn-sm" data-requalify="${i.id}"
+        title="Cette pièce est en réalité une facture : la remettre dans la liste à contrôler">C'est une facture</button>
+    </td>
+  </tr>`;
+}
+
 function rowHtml(i, manager) {
+  if (i.review_status === 'document') return docRowHtml(i);
   const late = isOverdue(i);
   const soon = isDueSoon(i);
   const done = isComplete(i);
@@ -204,7 +263,10 @@ function rowHtml(i, manager) {
     <td class="td-date" data-label="Date">${fmtDate(i.invoice_date)}</td>
     <td class="td-supplier" data-label="Fournisseur">${escapeHtml(i.supplier_name)}</td>
     <td class="td-number" data-label="N°">${escapeHtml(i.invoice_number)}<span class="mob-meta">${fmtDate(i.invoice_date)}${i.due_date ? ` · éch. ${fmtDate(i.due_date)}` : ''}</span></td>
-    <td class="td-smartref" data-label="Réf. Smart">${i.smart_ref ? escapeHtml(i.smart_ref) : '<span class="muted">—</span>'}</td>
+    <td class="td-smartref" data-label="Réf. Smart">
+      <input type="text" class="smartref-input" data-smartref="${i.id}"
+        value="${escapeHtml(i.smart_ref || '')}" placeholder="—" autocomplete="off" spellcheck="false"
+        aria-label="Référence Smart de la facture ${escapeHtml(i.invoice_number)}"></td>
     <td class="td-refs" data-label="Références">${(i.external_refs || []).length
       ? i.external_refs.map((r) => `<span class="ref-chip">${escapeHtml(r)}</span>`).join('')
       : '<span class="muted">—</span>'}</td>
@@ -221,6 +283,82 @@ function rowHtml(i, manager) {
       <button type="button" class="icon-btn row-menu" data-menu="${i.id}" title="Autres actions" aria-haspopup="menu">${ICONS.dots}</button>
     </td>
   </tr>`;
+}
+
+/**
+ * Enregistre la référence Smart saisie dans le tableau. Renseigner la
+ * référence coche « Encodé Smart » : la référence fait foi, on ne peut pas
+ * avoir un numéro Smart sans être encodé dans Smart. L'effacer décoche.
+ */
+async function saveSmartRef(id, valeur, champ) {
+  const inv = findInvoice(id);
+  if (!inv) return;
+  const ref = valeur.trim();
+  if (ref === (inv.smart_ref || '')) return;      // rien n'a changé
+  const key = `${id}:smart_ref`;
+  if (busy.has(key)) return;
+  busy.add(key);
+
+  const avant = { smart_ref: inv.smart_ref, in_smart: inv.in_smart };
+  inv.smart_ref = ref || null;
+  inv.in_smart = ref ? true : inv.in_smart;
+  champ.classList.add('saving');
+
+  try {
+    const { error } = await supabase.from('invoices')
+      .update({ smart_ref: inv.smart_ref, in_smart: inv.in_smart }).eq('id', id);
+    if (error) throw error;
+    champ.classList.remove('saving');
+    champ.classList.add('saved');
+    setTimeout(() => champ.classList.remove('saved'), 1200);
+
+    // La pastille Smart doit suivre immédiatement. On ne re-rend pas tout le
+    // tableau : la ligne suivante est souvent déjà en cours de saisie, et un
+    // re-rendu lui ferait perdre le focus au milieu d'un numéro.
+    const cellule = champ.closest('tr')?.querySelector('.td-smart');
+    if (cellule) cellule.innerHTML = smartPillHtml(inv);
+    toast(ref ? `Référence Smart ${ref} — ${inv.invoice_number}`
+              : `Référence Smart effacée — ${inv.invoice_number}`);
+    notifyDataChange();
+  } catch (err) {
+    console.error(err);
+    Object.assign(inv, avant);                    // rollback
+    champ.classList.remove('saving');
+    renderInvoices();
+    // Le message de la base sur une référence déjà utilisée est illisible :
+    // on dit laquelle, et sur quelle facture elle est déjà posée.
+    const dejaPrise = /duplicate key|unique/i.test(err?.message || '');
+    toast(dejaPrise
+      ? `La référence Smart ${ref} est déjà utilisée sur une autre facture.`
+      : errorMessage(err, 'Enregistrement de la référence impossible.'), 'error');
+  } finally {
+    busy.delete(key);
+  }
+}
+
+/** Une pièce classée « document » est en fait une facture : on la rend à la liste. */
+async function requalifier(id) {
+  const inv = findInvoice(id);
+  if (!inv) return;
+  const ok = await confirmDialog({
+    title: 'Remettre cette pièce dans les factures ?',
+    body: 'Elle repassera dans « À contrôler » pour être encodée normalement.',
+    confirm: 'Oui, c\'est une facture'
+  });
+  if (!ok) return;
+  try {
+    const { error } = await supabase.rpc('set_document_kind', { p_invoice: id, p_kind: 'facture' });
+    if (error) throw error;
+    inv.review_status = 'a_controler';
+    inv.doc_type = 'facture';
+    toast('Pièce remise dans les factures à contrôler.');
+    await getInvoices(true);
+    renderInvoices();
+    notifyDataChange();
+  } catch (err) {
+    console.error(err);
+    toast(errorMessage(err, 'Requalification impossible.'), 'error');
+  }
 }
 
 /**
@@ -844,7 +982,23 @@ function syncFilterInputs() {
 // ---------------------------------------------------------------------
 // Initialisation
 // ---------------------------------------------------------------------
-export function initInvoices() {
+export function initInvoices(onOpenDocument = null) {
+  // Vues du tableau : factures, à contrôler, documents
+  $$('.view-chips [data-view]').forEach((chip) => {
+    chip.addEventListener('click', () => {
+      filters.view = chip.dataset.view;
+      $$('.view-chips [data-view]').forEach((c) => {
+        const actif = c === chip;
+        c.classList.toggle('active', actif);
+        c.setAttribute('aria-selected', actif ? 'true' : 'false');
+      });
+      // Les documents ne sont pas datés comme des factures : les enfermer
+      // dans le mois affiché les rendrait invisibles.
+      if (filters.view === 'documents') { filters.period = 'all'; syncFilterInputs(); }
+      renderInvoices();
+    });
+  });
+
   // Barre d'outils
   $('#f-search').addEventListener('input', (e) => { filters.q = e.target.value; renderInvoices(); });
   $('#f-period').addEventListener('change', (e) => { filters.period = e.target.value; syncFilterInputs(); renderInvoices(); });
@@ -898,7 +1052,34 @@ export function initInvoices() {
     const edit = e.target.closest('[data-edit]');
     if (edit) return openInvoiceModal(findInvoice(edit.dataset.edit));
 
+    const requalify = e.target.closest('[data-requalify]');
+    if (requalify) { e.stopPropagation(); return requalifier(requalify.dataset.requalify); }
+
     if (e.target.closest('[data-empty-new]')) return openInvoiceModal();
+
+    // Reste du clic : ouvrir la pièce en pleine page, document à gauche et
+    // champs à droite. Les cases à cocher et les champs de saisie gardent
+    // leur comportement propre.
+    if (e.target.closest('input, select, textarea, button, a')) return;
+    const tr = e.target.closest('tr[data-id]');
+    if (tr && onOpenDocument) onOpenDocument(tr.dataset.id);
+  });
+
+  // Référence Smart saisie directement dans le tableau : c'est le numéro qui
+  // fait le lien avec WinAuditor, il ne doit demander aucun détour.
+  $('#inv-tbody').addEventListener('keydown', (e) => {
+    const champ = e.target.closest('[data-smartref]');
+    if (!champ) return;
+    if (e.key === 'Enter') { e.preventDefault(); champ.blur(); }
+    if (e.key === 'Escape') {
+      const inv = findInvoice(champ.dataset.smartref);
+      champ.value = inv?.smart_ref || '';
+      champ.blur();
+    }
+  });
+  $('#inv-tbody').addEventListener('focusout', (e) => {
+    const champ = e.target.closest('[data-smartref]');
+    if (champ) saveSmartRef(champ.dataset.smartref, champ.value, champ);
   });
 
   // Cases à cocher de sélection

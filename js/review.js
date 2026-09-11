@@ -20,6 +20,7 @@ let queue = [];          // factures en attente de contrôle
 let current = null;      // facture ouverte
 let signedUrl = null;    // lien signé du document affiché
 let confirmed = new Set(); // champs douteux explicitement confirmés par l'utilisateur
+let fromInvoices = false;  // ouvert depuis le tableau : liste de gauche masquée
 
 // ---------------------------------------------------------------------
 // Données
@@ -57,10 +58,56 @@ function parseNotes(raw) {
 
 export function reviewCount() { return queue.length; }
 
+/**
+ * Ouvre UNE pièce, quelle qu'elle soit, depuis le tableau des factures :
+ * document d'origine à gauche, champs à droite, sur la même page. La liste
+ * de gauche est masquée — le tableau qu'on vient de quitter la remplace.
+ *
+ * Fonctionne aussi sur une facture déjà validée : c'est l'écran de
+ * consultation et de correction, plus seulement celui du premier contrôle.
+ */
+export async function openDocument(id, showTab) {
+  const { data, error } = await supabase
+    .from('invoices')
+    .select('*, supplier:suppliers(id, name, vat_number, needs_review)')
+    .eq('id', id).maybeSingle();
+  if (error || !data) {
+    toast(errorMessage(error, 'Facture introuvable.'), 'error');
+    return;
+  }
+  await getSuppliers();
+  current = { ...data, supplier_name: data.supplier?.name || '—', meta: parseNotes(data.extraction_notes) };
+  fromInvoices = true;
+
+  if (showTab) showTab('review');
+  $('#review-layout').classList.add('solo');
+  $('#review-back').hidden = false;
+  $('#rv-back-label').textContent = `${current.supplier_name} · ${current.invoice_number}`;
+  $('#catchup').hidden = true;
+  renderDetail();
+}
+
+/**
+ * Rend son écran complet à « À contrôler ». Appelée quand on y arrive par
+ * le menu : sans cela l'écran resterait figé sur la pièce ouverte depuis
+ * le tableau.
+ */
+export function resetDocumentView() {
+  fromInvoices = false;
+  current = null;
+  const layout = $('#review-layout');
+  if (layout) layout.classList.remove('solo');
+  const back = $('#review-back');
+  if (back) back.hidden = true;
+}
+
 // ---------------------------------------------------------------------
 // Rendu de la liste
 // ---------------------------------------------------------------------
 export async function renderReview() {
+  // Ouvert depuis le tableau : c'est openDocument qui a choisi la pièce à
+  // afficher. Re-rendre la file ici l'écraserait par la première de la liste.
+  if (fromInvoices) return;
   const list = $('#review-list');
   list.innerHTML = '<div class="muted small" style="padding:12px">Chargement…</div>';
   try {

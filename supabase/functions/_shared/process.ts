@@ -58,12 +58,21 @@ export function parseUbl(xml: string) {
 // ---------------------------------------------------------------------
 // Extraction PDF — chemin principal
 // ---------------------------------------------------------------------
-const EXTRACTION_PROMPT = `Tu extrais les données d'une facture fournisseur belge ou européenne.
+const EXTRACTION_PROMPT = `Tu examines une pièce jointe reçue par une cuisiniste belge.
+
+Commence par dire CE QUE C'EST. Les fournisseurs agrafent à chaque envoi
+leurs conditions générales, leurs bons de commande et leurs listings : ces
+pièces ne sont pas des factures et ne doivent pas être traitées comme
+telles.
 
 Réponds UNIQUEMENT avec un objet JSON, sans texte avant ou après,
 sans balises markdown.
 
 {
+  "type_document": "facture"|"note_credit"|"conditions_generales"|"bon_commande"|"proforma"|"listing"|"rappel"|"autre",
+  "synthese": string,          // UNE phrase, 200 caractères maximum : ce que
+                               // contient le document et sur quoi il porte.
+                               // Doit suffire à le reconnaître sans l'ouvrir.
   "fournisseur_nom": string,
   "fournisseur_tva": string|null,
   "fournisseur_adresse": string|null,   // adresse de facturation complète, sur une ligne
@@ -97,8 +106,26 @@ Règles strictes :
   signale-le dans commentaire.
 - Ajoute à champs_incertains tout champ lu sur un document flou, coupé
   ou ambigu.
-- Si le document n'est pas une facture, renvoie tous les champs à null et
-  explique-le dans commentaire.`;
+
+Nature du document :
+- "facture" : une somme est réclamée pour une livraison ou une prestation,
+  avec un numéro de facture et une date.
+- "note_credit" : un avoir, montants négatifs.
+- "conditions_generales" : conditions générales de vente ou d'achat, CGV,
+  AGB, algemene voorwaarden. Aucun montant propre au client, souvent le
+  même fichier joint à tous les envois.
+- "bon_commande" : commande passée, rien n'est encore réclamé.
+- "proforma" : facture d'annonce, avant livraison.
+- "listing" : relevé de compte, balance, liste de postes ouverts.
+- "rappel" : mise en demeure ou rappel d'échéance, sans nouvelle somme due.
+- "autre" : tout le reste — certificat, catalogue, courrier, photo.
+
+- synthese est TOUJOURS remplie, quel que soit le type.
+- Si type_document n'est ni "facture" ni "note_credit", garde
+  fournisseur_nom et fournisseur_tva s'ils figurent sur le document — ils
+  servent à le classer — et mets à null le numéro, les dates et tous les
+  montants : il n'y a rien à encoder. Ne fabrique jamais un numéro ou un
+  montant à partir d'un document qui n'en a pas.`;
 
 function toBase64(bytes: Uint8Array): string {
   let bin = '';
@@ -118,7 +145,9 @@ export async function extractFromPdf(bytes: Uint8Array) {
     },
     body: JSON.stringify({
       model: 'claude-sonnet-5',
-      max_tokens: 1500,
+      // 1500 suffisait avant la synthèse ; la réponse se faisait couper en
+      // plein milieu d'une chaîne et le JSON devenait illisible.
+      max_tokens: 3000,
       messages: [{
         role: 'user',
         content: [
@@ -312,7 +341,13 @@ async function traiterFichier(
     notes = 'échec extraction';
   }
 
-  const alerts = notes ? [] : runChecks(extracted);
+  // Nature de la pièce. Si l'extraction a échoué on ne sait rien : la pièce
+  // reste une facture à contrôler, pour qu'aucun document ne disparaisse
+  // silencieusement du travail de Marie.
+  const kind = notes ? 'facture' : (String(extracted.type_document ?? '').trim() || 'facture');
+  const estFacture = kind === 'facture' || kind === 'note_credit';
+
+  const alerts = notes || !estFacture ? [] : runChecks(extracted);
   const uncertain = Array.isArray(extracted.champs_incertains) ? extracted.champs_incertains as string[] : [];
 
   const { data: match } = await sb.rpc('match_or_create_supplier', {
@@ -332,8 +367,13 @@ async function traiterFichier(
     notes = notes || 'fournisseur non identifié';
   }
 
-  const number = String(extracted.numero_facture ?? '').trim()
-    || `SANS-NUMERO-${crypto.randomUUID().slice(0, 8)}`;
+  // Une pièce qui n'est pas une facture n'a pas de numéro. On la repère par
+  // son nom de fichier : les conditions générales d'un fournisseur, agrafées
+  // à chacun de ses envois, se dédoublonnent alors d'elles-mêmes au lieu de
+  // créer une ligne par e-mail.
+  const number = estFacture
+    ? (String(extracted.numero_facture ?? '').trim() || `SANS-NUMERO-${crypto.randomUUID().slice(0, 8)}`)
+    : `DOC-${cible.name}`.slice(0, 120);
 
   const { data: dup } = await sb.from('invoices').select('id')
     .eq('supplier_id', supplierId).eq('invoice_number', number).maybeSingle();
@@ -353,7 +393,9 @@ async function traiterFichier(
     amount_htva: Number.isFinite(htva) ? htva : 0,
     vat_rate: rate !== null && LEGAL_RATES.includes(rate) ? rate : 0.21,
     source: 'email',
-    review_status: 'a_controler',
+    review_status: estFacture ? 'a_controler' : 'document',
+    doc_type: kind,
+    doc_summary: (extracted.synthese as string) ?? null,
     file_path: cible.path,
     sender_email: row.sender_email,
     message_id: row.message_id,

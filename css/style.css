@@ -1143,6 +1143,76 @@ kbd {
 }
 
 /* ---------------------------------------------------------------
+   Vues du tableau : factures · à contrôler · documents
+   --------------------------------------------------------------- */
+.view-chips { display: flex; gap: 6px; margin: 0 0 10px; flex-wrap: wrap; }
+.chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 14px; border: 1px solid var(--border);
+  background: var(--surface); color: var(--text-muted);
+  border-radius: 999px; font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.chip:hover { background: var(--surface-hover); color: var(--text); }
+.chip.active {
+  background: var(--primary); border-color: var(--primary); color: var(--on-dark);
+}
+.chip-count {
+  min-width: 20px; padding: 1px 6px; border-radius: 999px;
+  background: var(--surface-sunken); color: var(--text);
+  font-size: 11px; font-variant-numeric: tabular-nums; text-align: center;
+}
+.chip.active .chip-count { background: var(--on-dark-fill-2); color: var(--on-dark); }
+.chip-count[hidden] { display: none; }
+
+/* ---------------------------------------------------------------
+   Référence Smart saisie dans le tableau
+   --------------------------------------------------------------- */
+.smartref-input {
+  width: 100%; min-width: 90px; max-width: 140px;
+  padding: 4px 6px; border: 1px solid transparent; border-radius: 6px;
+  background: transparent; color: var(--text);
+  font: inherit; font-size: 13px; font-variant-numeric: tabular-nums;
+}
+.smartref-input::placeholder { color: var(--text-muted); }
+.smartref-input:hover { border-color: var(--border); background: var(--surface-alt); }
+.smartref-input:focus {
+  outline: none; border-color: var(--primary); background: var(--surface);
+  box-shadow: 0 0 0 3px var(--row-select);
+}
+.smartref-input.saving { opacity: .55; }
+.smartref-input.saved { border-color: var(--border-ok); background: var(--ok-soft); }
+
+/* ---------------------------------------------------------------
+   Pièces qui ne sont pas des factures
+   --------------------------------------------------------------- */
+.table-invoices tbody tr.row-document { cursor: pointer; }
+.row-document .td-doc { padding: 8px 10px; }
+.doc-kind {
+  display: inline-block; margin-right: 8px; padding: 2px 8px;
+  border: 1px solid var(--border); border-radius: 999px;
+  background: var(--surface-sunken); color: var(--text-muted);
+  font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .02em;
+}
+.doc-file { font-size: 13px; color: var(--text); word-break: break-all; }
+.doc-summary {
+  display: block; margin-top: 3px; max-width: 80ch;
+  font-size: 12px; line-height: 1.45; color: var(--text-muted);
+}
+
+/* Une ligne de facture s'ouvre au clic : on l'annonce au curseur */
+.table-invoices tbody tr[data-id] { cursor: pointer; }
+.table-invoices tbody tr[data-id] .td-check,
+.table-invoices tbody tr[data-id] .td-smartref,
+.table-invoices tbody tr[data-id] .td-actions { cursor: auto; }
+
+/* ---------------------------------------------------------------
+   Pièce ouverte en pleine page depuis le tableau
+   --------------------------------------------------------------- */
+.review-back { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.review-layout.solo .review-list { display: none; }
+.review-layout.solo { grid-template-columns: 1fr; }
+
+/* ---------------------------------------------------------------
    Impression / PDF
    --------------------------------------------------------------- */
 @media print {

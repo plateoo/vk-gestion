@@ -178,7 +178,15 @@
       </div>
       <div id="catchup" class="card pad catchup" hidden></div>
 
-      <div class="review-layout">
+      <!-- Ouvert depuis le tableau des factures, l'écran ne montre que le
+           document : la liste de gauche ferait doublon avec le tableau
+           qu'on vient de quitter. -->
+      <div id="review-back" class="review-back no-print" hidden>
+        <button type="button" class="btn btn-ghost" id="rv-back">← Retour aux factures</button>
+        <span class="muted small" id="rv-back-label"></span>
+      </div>
+
+      <div class="review-layout" id="review-layout">
         <aside id="review-list" class="review-list"></aside>
         <div id="review-detail" class="review-detail"></div>
       </div>
@@ -203,6 +211,17 @@
           </div>
           <button type="button" class="btn" data-print>Imprimer / PDF</button>
         </div>
+      </div>
+
+      <!-- Trois vues du même tableau. Les pièces qui ne sont pas des factures
+           — conditions générales, bons de commande — ont leur propre vue et
+           ne se mêlent jamais aux factures à encoder. -->
+      <div class="view-chips no-print" role="tablist" aria-label="Vue du tableau">
+        <button type="button" class="chip active" data-view="factures" role="tab" aria-selected="true">Factures</button>
+        <button type="button" class="chip" data-view="a_controler" role="tab" aria-selected="false">
+          À contrôler <span class="chip-count" id="chip-count-review">0</span></button>
+        <button type="button" class="chip" data-view="documents" role="tab" aria-selected="false">
+          Documents <span class="chip-count" id="chip-count-docs">0</span></button>
       </div>
 
       <div class="toolbar no-print">
@@ -709,7 +728,7 @@ import { startTour, maybeStartTour } from './js/tour.js';
 import { initInvoices, renderInvoices, refreshInvoices, openInvoiceModal, focusSearch } from './js/invoices.js';
 import { initSuppliers, renderSuppliers, resetSupplierView } from './js/suppliers.js';
 import { initDashboard, renderDashboard } from './js/dashboard.js';
-import { initReview, renderReview, refreshReviewBadge } from './js/review.js';
+import { initReview, renderReview, refreshReviewBadge, openDocument, resetDocumentView } from './js/review.js';
 import { initSettings, renderSettings } from './js/settings.js';
 import { initSearch, openSearch } from './js/search.js';
 import { initPayments, renderPayments } from './js/payments.js';
@@ -825,8 +844,12 @@ $('#fab-new').addEventListener('click', () => openInvoiceModal());
 // ---------- Navigation ----------
 $$('[data-tab]').forEach((b) => b.addEventListener('click', () => {
   if (b.dataset.tab === 'suppliers') resetSupplierView();
+  if (b.dataset.tab === 'review') resetDocumentView();
   showTab(b.dataset.tab);
 }));
+
+// Retour au tableau depuis une pièce ouverte en pleine page
+$('#rv-back').addEventListener('click', () => { resetDocumentView(); showTab('invoices'); });
 
 // ---------- Modales : fermeture ----------
 document.addEventListener('click', (e) => {
@@ -874,7 +897,9 @@ window.addEventListener('vk:goto-invoices', () => showTab('invoices'));
 window.addEventListener('vk:month', () => { if (activeTab === 'suppliers') renderSuppliers(); });
 
 // ---------- Initialisation des modules ----------
-initInvoices();
+// Un clic sur une ligne ouvre la pièce en pleine page : document d'origine
+// à gauche, champs pré-remplis à droite.
+initInvoices((id) => openDocument(id, showTab));
 initSuppliers();
 initDashboard();
 initReview();
