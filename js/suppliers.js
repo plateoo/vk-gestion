@@ -7,7 +7,7 @@ import { downloadInvoicesCSV } from './export.js';
 import {
   $, $$, fmtEUR, fmtDate, escapeHtml, toast, errorMessage, openModal, closeModal,
   confirmDialog, skeletonRows, emptyRow, getMonth, monthLabel, inMonth,
-  statusLabel, statusClass, isOverdue, slugify, notifyDataChange
+  statusLabel, statusClass, isOverdue, slugify, notifyDataChange, estDue
 } from './ui.js';
 import { isManager } from './auth.js';
 import { findSupplierDuplicates, NIVEAU_LABELS } from './duplicates.js';
@@ -50,7 +50,8 @@ function statsFor(invoices) {
   for (const i of invoices) {
     const t = Number(i.amount_tvac) || 0;
     total += t;
-    if (i.payment_status === 'paye') paid += t; else due += t;
+    if (i.payment_status === 'paye') paid += t;
+    else if (estDue(i)) due += t;   // « avant reprise » n'est dû à personne
   }
   return { count: invoices.length, total, paid, due };
 }

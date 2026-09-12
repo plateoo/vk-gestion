@@ -8,7 +8,7 @@ import { findDuplicates, duplicateCount, NIVEAU_LABELS } from './duplicates.js';
 import {
   $, $$, fmtEUR, fmtDate, escapeHtml, toast, errorMessage, openModal, closeModal,
   confirmDialog, skeletonRows, getMonth, setMonth, monthLabel, shiftMonth,
-  currentMonthKey, inMonth, inPeriod, getPeriod, setPeriod, periodLabel,
+  currentMonthKey, inMonth, inPeriod, getPeriod, setPeriod, periodLabel, estDue,
   statusLabel, statusClass, isOverdue, isDueSoon, isComplete,
   todayISO, addDays, notifyDataChange, ICONS, openPopover, closePopover
 } from './ui.js';
@@ -784,7 +784,7 @@ function clearSelection() {
 
 /** Marque toutes les factures sélectionnées comme payées (une seule requête) */
 async function bulkPay() {
-  const rows = selectedInvoices().filter((i) => i.payment_status !== 'paye');
+  const rows = selectedInvoices().filter(estDue);
   if (!rows.length) { toast('Ces factures sont déjà payées.'); return; }
   const ids = rows.map((i) => i.id);
   const date = todayISO();
@@ -809,6 +809,62 @@ async function bulkPay() {
 }
 
 /** Marque toutes les factures sélectionnées comme envoyées à WinAuditor */
+/**
+ * Reprise d'historique.
+ *
+ * L'ancien franchisé a retransmis sa boîte : des dizaines de factures
+ * échues depuis des mois, déjà réglées par lui, s'affichaient comme
+ * impayées. Elles ne sont effacées ni masquées — elles reçoivent un état
+ * qui dit ce qu'elles sont, et sortent du reste à payer.
+ *
+ * Réversible : le filtre « Avant reprise » les retrouve, et le même
+ * bouton les remet dans le circuit.
+ */
+async function bulkTakeover() {
+  const choisies = selectedInvoices();
+  if (!choisies.length) return;
+
+  // Si tout le lot est déjà marqué, le geste devient l'annulation : c'est
+  // le même bouton, et il fait la seule chose qui ait du sens.
+  const toutesMarquees = choisies.every((i) => i.payment_status === 'avant_reprise');
+  const cibles = toutesMarquees
+    ? choisies
+    : choisies.filter((i) => i.payment_status === 'a_payer' || i.payment_status === 'en_retard');
+
+  if (!cibles.length) {
+    return toast('Aucune de ces factures n\'est concernée : les factures payées et les litiges ne sont pas touchés.', 'error');
+  }
+
+  const total = cibles.reduce((s, i) => s + (Number(i.amount_tvac) || 0), 0);
+  const ok = await confirmDialog(
+    toutesMarquees
+      ? `Remettre ${cibles.length} facture(s) dans le circuit de paiement ?\n`
+        + `${fmtEUR(total)} repasseront en « à payer » et réapparaîtront dans les retards.`
+      : `Déclarer ${cibles.length} facture(s) réglée(s) avant la reprise du magasin ?\n`
+        + `${fmtEUR(total)} sortiront du reste à payer et des alertes de retard.\n`
+        + 'Elles restent consultables, cherchables et exportables. Les factures payées et les litiges ne sont pas touchés.',
+    toutesMarquees ? 'Remettre à payer' : 'Réglées avant reprise');
+  if (!ok) return;
+
+  try {
+    const { data, error } = await supabase.rpc('mark_before_takeover', {
+      p_ids: cibles.map((i) => i.id), p_undo: toutesMarquees
+    });
+    if (error) throw error;
+    const r = typeof data === 'string' ? JSON.parse(data) : data;
+    toast(toutesMarquees
+      ? `${r.traitees} facture(s) remises à payer.`
+      : `${r.traitees} facture(s) sorties du reste à payer.`);
+    clearSelection();
+    await getInvoices(true);
+    renderInvoices();
+    notifyDataChange();
+  } catch (err) {
+    console.error(err);
+    toast(errorMessage(err, 'Opération impossible.'), 'error');
+  }
+}
+
 async function bulkWinauditor() {
   const rows = selectedInvoices().filter((i) => !i.in_winauditor);
   if (!rows.length) { toast('Ces factures sont déjà envoyées à WinAuditor.'); return; }
@@ -1199,6 +1255,7 @@ export function initInvoices(onOpenDocument = null) {
   // Barre d'actions en lot
   $('#bulk-pay').addEventListener('click', bulkPay);
   $('#bulk-winauditor').addEventListener('click', bulkWinauditor);
+  $('#bulk-takeover').addEventListener('click', bulkTakeover);
   $('#bulk-export').addEventListener('click', () => {
     downloadInvoicesCSV(selectedInvoices(), `VK_factures_selection_${getMonth()}.csv`);
   });

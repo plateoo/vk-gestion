@@ -1147,6 +1147,14 @@ kbd {
    deviendraient indistinguables au moment de supprimer. */
 #confirm-message { white-space: pre-line; }
 
+/* Validation en série, en tête de la file à contrôler */
+.review-bulk {
+  display: flex; flex-direction: column; gap: 4px; align-items: flex-start;
+  padding: 10px; margin-bottom: 8px;
+  border: 1px solid var(--border); border-radius: 8px;
+  background: var(--surface-alt);
+}
+
 /* Boutons de rattrapage sous la barre d'avancement */
 .catchup-actions {
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap;

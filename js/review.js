@@ -59,6 +59,91 @@ function parseNotes(raw) {
 export function reviewCount() { return queue.length; }
 
 /**
+ * Cette facture peut-elle être validée sans qu'on l'ouvre ?
+ *
+ * Uniquement si l'extraction n'a RIEN laissé en suspens : fournisseur
+ * identifié, numéro lu, date, montant, taux légal cohérent avec la TVA du
+ * document, aucun champ incertain, aucune alerte, aucun IBAN divergent.
+ *
+ * Les mêmes conditions que la validation à l'unité, appliquées aux
+ * données plutôt qu'aux champs à l'écran. Au moindre doute, la facture
+ * reste à ouvrir : c'est le sens du filtre, pas une formalité.
+ */
+export function validableSansOuvrir(i) {
+  const m = i.meta || {};
+  if (m.failed) return false;
+  if (m.alerts?.length || m.uncertain?.length) return false;
+  if (m.rapprochement?.iban_divergent) return false;
+  if (!i.supplier_id || i.supplier?.needs_review) return false;
+  if (i.supplier_name === 'À identifier') return false;
+  if (!i.invoice_number || /^SANS-NUMERO/i.test(i.invoice_number)) return false;
+  if (!i.invoice_date) return false;
+  if (!(Number(i.amount_htva) > 0)) return false;
+  const taux = Number(i.vat_rate);
+  if (!LEGAL_RATES.includes(taux)) return false;
+  // Le contrôle de TVA reste bloquant : si le rapport TVA / HTVA du
+  // document contredit le taux enregistré, on n'y touche pas en série.
+  if (vatMismatch(Number(i.amount_htva), Number(m.brut?.montant_tva), taux) === true) return false;
+  return true;
+}
+
+/**
+ * Valide en série les factures que l'extraction a lues sans réserve.
+ *
+ * Elles partent SANS référence Smart : ce numéro n'est pas sur le
+ * document, il s'attribue à l'encodage. Il se saisit ensuite directement
+ * dans la ligne du tableau des factures, ce qui est bien plus rapide que
+ * d'ouvrir chaque document pour ne rien y corriger d'autre.
+ */
+async function validerSansReserve() {
+  const lot = queue.filter(validableSansOuvrir);
+  if (!lot.length) return toast('Aucune facture ne peut être validée sans être ouverte.', 'error');
+
+  const total = lot.reduce((s, i) => s + (Number(i.amount_tvac) || 0), 0);
+  const apercu = lot.slice(0, 8)
+    .map((i) => `• ${i.supplier_name} · ${i.invoice_number} · ${fmtEUR(i.amount_tvac)}`).join('\n');
+  const ok = await confirmDialog(
+    `Valider ${lot.length} facture(s) sans les ouvrir ?\n`
+    + `${fmtEUR(total)} au total. Ce sont celles que l'extraction a lues sans la moindre réserve :\n`
+    + apercu + (lot.length > 8 ? `\n… et ${lot.length - 8} autre(s)` : '')
+    + '\n\nElles passeront dans les factures, sans référence Smart — tu la saisiras directement dans le tableau.',
+    `Valider les ${lot.length}`);
+  if (!ok) return;
+
+  const bouton = $('#rv-bulk');
+  if (bouton) { bouton.disabled = true; bouton.textContent = 'Validation…'; }
+
+  let faites = 0;
+  const soucis = [];
+  for (const i of lot) {
+    // L'échéance se déduit des conditions du fournisseur quand le document
+    // ne la porte pas — exactement comme à la validation à l'unité.
+    let echeance = i.due_date;
+    if (!echeance && i.invoice_date) {
+      const sup = suppliersCache().find((x) => x.id === i.supplier_id);
+      if (sup?.payment_terms) {
+        const d = new Date(i.invoice_date);
+        d.setDate(d.getDate() + Number(sup.payment_terms));
+        echeance = d.toISOString().slice(0, 10);
+      }
+    }
+    const { error } = await supabase.from('invoices')
+      .update({ review_status: 'valide', due_date: echeance || null })
+      .eq('id', i.id);
+    if (error) soucis.push(`${i.invoice_number} : ${errorMessage(error, 'refusée')}`);
+    else faites++;
+  }
+
+  toast(soucis.length
+    ? `${faites} validée(s), ${soucis.length} refusée(s) : ${soucis[0]}`
+    : `${faites} facture(s) validées. Saisis maintenant les références Smart dans le tableau.`,
+    soucis.length ? 'error' : 'success');
+  invalidateInvoices();
+  notifyDataChange();
+  renderReview();
+}
+
+/**
  * Ouvre UNE pièce, quelle qu'elle soit, depuis le tableau des factures :
  * document d'origine à gauche, champs à droite, sur la même page. La liste
  * de gauche est masquée — le tableau qu'on vient de quitter la remplace.
@@ -127,7 +212,15 @@ export async function renderReview() {
     return;
   }
 
-  list.innerHTML = queue.map((i) => {
+  const sansReserve = queue.filter(validableSansOuvrir).length;
+  const entete = sansReserve > 1 ? `
+    <div class="review-bulk">
+      <button type="button" class="btn btn-primary btn-sm" id="rv-bulk">
+        Valider les ${sansReserve} sans réserve</button>
+      <span class="muted small">lues sans champ douteux ni alerte</span>
+    </div>` : '';
+
+  list.innerHTML = entete + queue.map((i) => {
     const problems = i.meta.failed ? 'échec extraction'
       : (i.meta.alerts.length ? i.meta.alerts[0] : (i.meta.uncertain.length ? 'champs incertains' : ''));
     return `
@@ -138,6 +231,8 @@ export async function renderReview() {
       ${problems ? `<span class="ri-flag">${escapeHtml(problems)}</span>` : ''}
     </button>`;
   }).join('');
+
+  $('#rv-bulk')?.addEventListener('click', validerSansReserve);
 
   if (!current || !queue.some((i) => i.id === current.id)) current = queue[0];
   renderDetail();

@@ -5,7 +5,7 @@ import { getInvoices, setInvoiceFilters } from './invoices.js';
 import {
   $, fmtEUR, escapeHtml, toast, errorMessage, getMonth, setMonth, shiftMonth,
   currentMonthKey, monthLabel, inMonth, isOverdue, ICONS,
-  getPeriod, periodLabel, inPeriod, previousRange, inRange
+  getPeriod, periodLabel, inPeriod, previousRange, inRange, estDue
 } from './ui.js';
 
 export async function renderDashboard() {
@@ -40,7 +40,7 @@ export async function renderDashboard() {
   const htva = rows.reduce((s, i) => s + (Number(i.amount_htva) || 0), 0);
   const tvac = rows.reduce((s, i) => s + (Number(i.amount_tvac) || 0), 0);
   const tva = tvac - htva;
-  const due = rows.filter((i) => i.payment_status !== 'paye')
+  const due = rows.filter(estDue)
     .reduce((s, i) => s + (Number(i.amount_tvac) || 0), 0);
   const late = rows.filter(isOverdue);
 
@@ -92,7 +92,7 @@ export async function renderDashboard() {
     const e = map.get(key);
     e.count += 1;
     e.total += Number(i.amount_tvac) || 0;
-    if (i.payment_status !== 'paye') e.due += Number(i.amount_tvac) || 0;
+    if (estDue(i)) e.due += Number(i.amount_tvac) || 0;
   }
   const top = [...map.values()].sort((a, b) => b.total - a.total);
 

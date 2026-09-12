@@ -251,14 +251,34 @@ export const STATUSES = {
   paye:     { label: 'Payé',           cls: 'st-green'  },
   en_retard:{ label: 'En retard',      cls: 'st-red'    },
   litige:   { label: 'Litige',         cls: 'st-red'    },
-  acompte:  { label: 'Acompte versé',  cls: 'st-grey'   }
+  acompte:  { label: 'Acompte versé',  cls: 'st-grey'   },
+  // Réglée par l'ancienne franchise avant la reprise du magasin : elle
+  // existe, elle se consulte, mais elle n'est due par personne ici.
+  avant_reprise: { label: 'Avant reprise', cls: 'st-grey' }
 };
 export function statusLabel(s) { return (STATUSES[s] || {}).label || s || ''; }
 export function statusClass(s) { return (STATUSES[s] || {}).cls || 'st-grey'; }
 
 // ---------- Échéance dépassée / proche ----------
 export function isOverdue(inv) {
-  return !!inv.due_date && inv.payment_status !== 'paye' && inv.due_date < todayISO();
+  // Une facture antérieure à la reprise n'est pas « en retard » : elle
+  // n'est pas due. La compter alimenterait une alerte fausse, et une
+  // alerte fausse finit par rendre toutes les autres invisibles.
+  return !!inv.due_date
+      && inv.payment_status !== 'paye'
+      && inv.payment_status !== 'avant_reprise'
+      && inv.due_date < todayISO();
+}
+
+/**
+ * Cette facture représente-t-elle une somme à décaisser ?
+ *
+ * Non si elle est payée, non si elle précède la reprise du magasin. Un
+ * seul endroit en décide, pour que le tableau de bord, les fiches
+ * fournisseur et le tableau ne puissent jamais se contredire.
+ */
+export function estDue(inv) {
+  return inv.payment_status !== 'paye' && inv.payment_status !== 'avant_reprise';
 }
 
 /** Nombre de jours entre aujourd'hui et une date ISO (négatif = passé) */

@@ -258,6 +258,7 @@
           <option value="overdue">En retard (échéance dépassée)</option>
           <option value="litige">Litige</option>
           <option value="acompte">Acompte versé</option>
+          <option value="avant_reprise">Avant reprise (historique)</option>
         </select>
         <select id="f-smart" aria-label="Smart">
           <option value="">Smart : tous</option>
@@ -487,6 +488,9 @@
     <div class="bulk-actions">
       <button type="button" id="bulk-pay" class="btn btn-primary btn-sm">Marquer payées</button>
       <button type="button" id="bulk-winauditor" class="btn btn-sm">Marquer envoyées WinAuditor</button>
+      <!-- Reprise d'historique : sort les factures de l'ancienne franchise
+           du reste à payer, sans les effacer. Gérant uniquement. -->
+      <button type="button" id="bulk-takeover" class="btn btn-sm manager-only" hidden>Réglées avant reprise</button>
       <button type="button" id="bulk-export" class="btn btn-sm">Exporter la sélection</button>
       <button type="button" id="bulk-clear" class="btn btn-ghost btn-sm">Désélectionner</button>
     </div>
