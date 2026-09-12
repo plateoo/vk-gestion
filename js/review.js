@@ -21,6 +21,9 @@ let current = null;      // facture ouverte
 let signedUrl = null;    // lien signé du document affiché
 let confirmed = new Set(); // champs douteux explicitement confirmés par l'utilisateur
 let fromInvoices = false;  // ouvert depuis le tableau : liste de gauche masquée
+// Marie encode dans Smart fournisseur par fournisseur : elle a besoin de
+// grouper la file comme elle travaille, pas comme les messages sont arrivés.
+let tri = { fournisseur: '', ordre: 'date' };   // 'date' | 'fournisseur'
 
 // ---------------------------------------------------------------------
 // Données
@@ -220,7 +223,35 @@ export async function renderReview() {
       <span class="muted small">lues sans champ douteux ni alerte</span>
     </div>` : '';
 
-  list.innerHTML = entete + queue.map((i) => {
+  // Regroupement : un fournisseur à la fois, ou tout par date. Encoder
+  // dans Smart se fait fournisseur par fournisseur — la file doit pouvoir
+  // s'ordonner comme le travail, pas comme les messages sont arrivés.
+  const fournisseurs = [...new Set(queue.map((i) => i.supplier_name))].sort((a, b) => a.localeCompare(b, 'fr'));
+  const compte = (nom) => queue.filter((i) => i.supplier_name === nom).length;
+  const barre = `
+    <div class="review-filters">
+      <select id="rv-filter-sup" aria-label="Filtrer par fournisseur">
+        <option value="">Tous les fournisseurs (${queue.length})</option>
+        ${fournisseurs.map((n) => `<option value="${escapeHtml(n)}" ${tri.fournisseur === n ? 'selected' : ''}>${escapeHtml(n)} (${compte(n)})</option>`).join('')}
+      </select>
+      <select id="rv-filter-order" aria-label="Trier">
+        <option value="date" ${tri.ordre === 'date' ? 'selected' : ''}>Par date de facture</option>
+        <option value="fournisseur" ${tri.ordre === 'fournisseur' ? 'selected' : ''}>Par fournisseur</option>
+      </select>
+    </div>`;
+
+  let visibles = tri.fournisseur ? queue.filter((i) => i.supplier_name === tri.fournisseur) : queue.slice();
+  visibles.sort((a, b) => tri.ordre === 'fournisseur'
+    ? a.supplier_name.localeCompare(b.supplier_name, 'fr') || String(a.invoice_date || '').localeCompare(String(b.invoice_date || ''))
+    : String(a.invoice_date || '').localeCompare(String(b.invoice_date || '')));
+
+  if (!visibles.length) {
+    list.innerHTML = barre + `<div class="empty"><p>Aucune facture pour ce fournisseur.</p></div>`;
+    wireReviewFilters();
+    return;
+  }
+
+  list.innerHTML = barre + entete + visibles.map((i) => {
     const problems = i.meta.failed ? 'échec extraction'
       : (i.meta.alerts.length ? i.meta.alerts[0] : (i.meta.uncertain.length ? 'champs incertains' : ''));
     return `
@@ -233,9 +264,24 @@ export async function renderReview() {
   }).join('');
 
   $('#rv-bulk')?.addEventListener('click', validerSansReserve);
+  wireReviewFilters();
 
-  if (!current || !queue.some((i) => i.id === current.id)) current = queue[0];
+  // La facture ouverte doit rester dans ce qui est affiché, sinon la liste
+  // et le document ne parleraient plus de la même chose.
+  if (!current || !visibles.some((i) => i.id === current.id)) current = visibles[0];
   renderDetail();
+}
+
+function wireReviewFilters() {
+  $('#rv-filter-sup')?.addEventListener('change', (e) => {
+    tri.fournisseur = e.target.value;
+    current = null;             // on repart sur la première du fournisseur choisi
+    renderReview();
+  });
+  $('#rv-filter-order')?.addEventListener('change', (e) => {
+    tri.ordre = e.target.value;
+    renderReview();
+  });
 }
 
 /**
@@ -456,7 +502,11 @@ async function renderDetail() {
           </div>
           <div class="field">
             <label for="rv-htva">Montant HTVA (€)</label>
-            <input id="rv-htva" data-f="amount_htva" type="number" step="0.01" value="${Number(i.amount_htva)}">
+            <div class="field-with-calc">
+              <input id="rv-htva" data-f="amount_htva" type="number" step="0.01" value="${Number(i.amount_htva)}">
+              <button type="button" class="btn-calc-inline" data-calc-open="rv-htva"
+                      title="Additionner plusieurs lignes (Alt+C)" aria-label="Ouvrir la calculette">=</button>
+            </div>
           </div>
         </div>
 

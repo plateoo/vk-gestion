@@ -39,239 +39,444 @@
   <nav class="guide-toc no-print" aria-label="Sommaire">
     <p class="guide-toc-title">Sommaire</p>
     <a href="#a-quoi-ca-sert">1. À quoi sert cette application</a>
-    <a href="#se-connecter">2. Se connecter</a>
-    <a href="#qui-fait-quoi">3. Qui fait quoi</a>
-    <a href="#encoder">4. Encoder une facture</a>
-    <a href="#fournisseur">5. Créer un fournisseur</a>
-    <a href="#couleurs">6. Le code couleur</a>
-    <a href="#paiement">7. Valider un paiement</a>
-    <a href="#cloture">8. La clôture de fin de mois</a>
-    <a href="#export">9. Exporter les données</a>
-    <a href="#faq">10. Questions fréquentes</a>
+    <a href="#se-connecter">2. Se connecter, et qui fait quoi</a>
+    <a href="#parcours">3. Le voyage d'une facture</a>
+    <a href="#controler">4. Contrôler une facture</a>
+    <a href="#serie">5. En valider plusieurs d'un coup</a>
+    <a href="#smart">6. La référence Smart</a>
+    <a href="#documents">7. Les pièces qui ne sont pas des factures</a>
+    <a href="#doublons">8. Les doublons</a>
+    <a href="#periode">9. Choisir la période affichée</a>
+    <a href="#paiement">10. Payer une facture, et l'escompte</a>
+    <a href="#export">11. Exporter, et le dossier du comptable</a>
+    <a href="#fournisseurs">12. Les fournisseurs</a>
+    <a href="#email">13. Recevoir les factures par e-mail</a>
+    <a href="#sauvegardes">14. Sauvegardes et sécurité</a>
+    <a href="#couleurs">15. Le code couleur</a>
+    <a href="#faq">16. Questions fréquentes</a>
   </nav>
 
   <main class="guide-content">
 
     <h1 class="guide-title">Suivi des factures fournisseurs</h1>
     <p class="guide-lead">Ce document explique, pas à pas, comment utiliser l'application.
-       Aucune connaissance technique n'est nécessaire.</p>
+       Aucune connaissance technique n'est nécessaire. Les sections marquées
+       <span class="tag">gérant</span> ne concernent que Jordan.</p>
 
     <!-- 1 -->
     <section id="a-quoi-ca-sert">
       <h2>1. À quoi sert cette application</h2>
-      <p>Cette application <strong>ne remplace ni Smart ni WinAuditor</strong>. Les factures continuent
+      <p>Elle <strong>ne remplace ni Smart ni WinAuditor</strong>. Les factures continuent
          d'être encodées dans Smart, et la comptabilité continue de passer par WinAuditor.</p>
-      <p>Ici, c'est le <strong>tableau de contrôle</strong>. En un coup d'œil, il montre pour chaque facture :</p>
+      <p>Ici, c'est le <strong>tableau de contrôle</strong>. Il montre, pour chaque facture :</p>
       <ul>
         <li>si elle a été <strong>encodée dans Smart</strong> ;</li>
         <li>si elle a été <strong>envoyée au comptable</strong> (WinAuditor) ;</li>
         <li>si la marchandise est <strong>entrée en stock</strong> ;</li>
         <li>et surtout, si elle est <strong>payée ou non</strong>.</li>
       </ul>
-      <p>Tout ce qui s'affiche concerne le mois choisi dans le bandeau noir, en haut de l'écran.</p>
+      <p>Sa particularité : <strong>les factures arrivent toutes seules</strong>. Elles sont lues
+         automatiquement depuis la boîte mail, et il ne reste qu'à les vérifier.</p>
     </section>
 
     <!-- 2 -->
     <section id="se-connecter">
-      <h2>2. Se connecter</h2>
-      <p>L'application s'ouvre sur un écran de connexion. Entrez votre adresse et votre mot de passe,
-         puis cliquez sur <em>Se connecter</em>. La session reste ouverte : inutile de se reconnecter
-         à chaque fois, sauf si vous cliquez sur <em>Se déconnecter</em>.</p>
-      <p><strong>Mot de passe oublié ?</strong> Il n'y a pas de récupération automatique.
-         Contactez Jordan, qui vous en attribuera un nouveau.</p>
-      <p>Les comptes sont créés à la main : personne d'autre ne peut s'inscrire ni voir les factures.</p>
+      <h2>2. Se connecter, et qui fait quoi</h2>
+      <p>Adresse du site : <strong>plateoo.github.io/vk-gestion</strong>. Chacun a son compte
+         et son mot de passe. Mets la page en favori, tu y reviendras tous les jours.</p>
+      <p>Deux rôles, deux écrans différents :</p>
+      <ul>
+        <li><strong>Marie, secrétaire</strong> — Tableau de bord, À contrôler, Factures,
+            Fournisseurs. Elle vérifie les factures, saisit les références Smart, gère les fiches.</li>
+        <li><strong>Jordan, gérant</strong> — les quatre mêmes, plus Paiements, Réglages
+            et Administration. Lui seul enregistre un paiement, supprime une facture,
+            autorise un expéditeur.</li>
+      </ul>
+      <p>Ce n'est pas qu'une question d'affichage : même en s'y essayant, un compte
+         secrétaire ne peut pas enregistrer un paiement. Le serveur refuse.</p>
     </section>
 
     <!-- 3 -->
-    <section id="qui-fait-quoi">
-      <h2>3. Qui fait quoi</h2>
-      <table class="guide-table">
-        <thead><tr><th>Marie — secrétaire</th><th>Jordan — gérant</th></tr></thead>
-        <tbody>
-          <tr>
-            <td>Encode les factures reçues</td>
-            <td>Voit tout ce que voit Marie</td>
-          </tr>
-          <tr>
-            <td>Coche Smart, WinAuditor et l'entrée en stock</td>
-            <td>Valide les paiements</td>
-          </tr>
-          <tr>
-            <td>Crée et modifie les fournisseurs</td>
-            <td>Supprime une facture ou un fournisseur si nécessaire</td>
-          </tr>
-        </tbody>
-      </table>
-      <p class="guide-note"><strong>C'est normal et voulu :</strong> chez Marie, les boutons de paiement
-         n'apparaissent pas. Elle voit l'état de chaque facture (payée, à payer, en retard) mais ne peut
-         pas le modifier. Seul Jordan valide les paiements.</p>
+    <section id="parcours">
+      <h2>3. Le voyage d'une facture</h2>
+      <p>C'est la section la plus importante du document. Tout le reste en découle.</p>
+      <ol class="guide-steps">
+        <li><strong>Le fournisseur envoie sa facture par e-mail.</strong> Elle atterrit dans
+            la boîte, et on la range dans le dossier <strong>Factures</strong> d'Outlook.</li>
+        <li><strong>L'application la récupère toute seule</strong>, quelques minutes plus tard,
+            avec ses pièces jointes.</li>
+        <li><strong>Elle la lit.</strong> Fournisseur, numéro, date, échéance, montants, TVA :
+            tout est extrait du PDF automatiquement.</li>
+        <li><strong>Elle atterrit dans « À contrôler ».</strong> C'est la file d'attente de
+            tout ce qui est entré sans qu'un humain l'ait vu.</li>
+        <li><strong>Marie la vérifie et la valide.</strong> Elle sort alors de cette file.</li>
+        <li><strong>Jordan la paie</strong> et clique sur « Marquer payé ».</li>
+      </ol>
+      <div class="guide-note">
+        <p><strong>Un seul passage suffit.</strong> Tout se fait dans l'écran « À contrôler » :
+           on ouvre la facture, on l'encode dans Smart, on tape la référence Smart dans le
+           premier champ, on valide — et l'écran enchaîne tout seul sur la suivante.
+           Il n'y a <em>pas</em> à repasser ensuite par l'écran « Factures ».</p>
+        <p>Une facture est d'ailleurs <em>déjà</em> dans « Factures » avant d'être validée,
+           et compte déjà dans les totaux. « À contrôler » n'est pas un autre endroit : c'est
+           un filtre sur le même tableau, qui montre ce qui n'a pas encore été vérifié.</p>
+      </div>
+
+      <div class="guide-note">
+        <p><strong>Plus besoin de trier dans Outlook.</strong> L'application reconnaît
+           elle-même ce qui est une facture et ce qui n'en est pas — conditions générales,
+           bons de commande, rappels, logos de signature. Tout ce qui vient d'un fournisseur
+           peut aller dans le dossier <strong>Factures</strong> sans réfléchir : le tri se fait
+           ici, et ce qui n'est pas une facture n'apparaîtra jamais dans la file à contrôler.</p>
+        <p>Seule réserve : un mail venant d'un expéditeur pas encore autorisé attend en
+           quarantaine jusqu'à ce que Jordan l'autorise.</p>
+      </div>
+
+      <h3>Deux façons de travailler, au choix</h3>
+      <ul>
+        <li><strong>Facture par facture</strong> — la plus simple. Dans « À contrôler »,
+            choisis un fournisseur dans la liste déroulante pour n'avoir que les siennes,
+            puis enchaîne : encoder dans Smart, taper la référence, valider, suivante.
+            Chaque facture n'est touchée qu'une fois.</li>
+        <li><strong>En lot, quand il y a du retard</strong> — « Valider les N sans réserve »
+            écarte d'un coup tout ce qui ne pose aucune question, puis les références Smart
+            se saisissent à la chaîne dans le tableau des factures, une ligne après l'autre.
+            Plus rapide sur un gros volume, mais la référence arrive après coup.</li>
+      </ul>
+      <p>Au-dessus du tableau des factures, quatre boutons font office de filtres :</p>
+      <ul>
+        <li><strong>Factures</strong> — tout, sauf les pièces qui n'en sont pas ;</li>
+        <li><strong>À contrôler</strong> — ce qui attend une vérification ;</li>
+        <li><strong>Documents</strong> — conditions générales, bons de commande, rappels… ;</li>
+        <li><strong>Doublons</strong> — ce qui semble avoir été enregistré deux fois.</li>
+      </ul>
     </section>
 
     <!-- 4 -->
-    <section id="encoder">
-      <h2>4. Encoder une facture, pas à pas</h2>
-      <p>Onglet <em>Factures</em>, bouton <strong>+ Nouvelle facture</strong> (ou la touche
-         <kbd>N</kbd> du clavier). Le formulaire se remplit entièrement au clavier : la touche
-         <kbd>Tab</kbd> passe au champ suivant, <kbd>Entrée</kbd> enregistre.</p>
-      <table class="guide-table">
-        <thead><tr><th>Champ</th><th>Ce qu'il faut savoir</th></tr></thead>
-        <tbody>
-          <tr><td>Fournisseur</td><td>Tapez les premières lettres, la liste se filtre. S'il n'existe pas encore, cliquez sur <em>+ créer un fournisseur</em> : votre saisie n'est pas perdue.</td></tr>
-          <tr><td>N° facture</td><td>Le numéro imprimé sur la facture. <strong>Un même numéro ne peut pas être encodé deux fois pour le même fournisseur</strong> : l'application le signale et propose d'aller voir la ligne existante.</td></tr>
-          <tr><td>Date facture</td><td>La date imprimée sur le document. C'est elle qui détermine le mois d'affichage.</td></tr>
-          <tr><td>Échéance</td><td><strong>Calculée automatiquement</strong> : date de la facture + délai de paiement du fournisseur. Vous pouvez la corriger si la facture indique autre chose.</td></tr>
-          <tr><td>Montant HTVA</td><td>Le montant hors TVA.</td></tr>
-          <tr><td>Taux TVA</td><td>21 % par défaut (taux belge standard), sinon 12 %, 6 % ou 0 %.</td></tr>
-          <tr><td>Total TVAC</td><td><strong>Calculé automatiquement</strong> et affiché en direct sous les montants. Il n'y a rien à saisir.</td></tr>
-          <tr><td>Smart / WinAuditor</td><td>Cochez si c'est déjà fait au moment de l'encodage. Sinon, vous cocherez plus tard d'un simple clic dans le tableau.</td></tr>
-          <tr><td>Entrée en stock / Sortie</td><td>Dates d'arrivée de la marchandise au magasin et de livraison au client. Facultatif.</td></tr>
-          <tr><td>Type de dépense</td><td>Marchandise, transport, frais généraux… Utile pour les exports.</td></tr>
-          <tr><td>Date d'encodage</td><td>La date du jour par défaut. C'est la trace de « quand » la facture est entrée dans le circuit.</td></tr>
-        </tbody>
-      </table>
-      <p><strong>Astuce :</strong> le bouton <em>Enregistrer et suivant</em> enregistre la facture et rouvre
-         un formulaire vide sur le même fournisseur. Idéal pour encoder une pile de factures d'un même fournisseur.</p>
-      <p><strong>Facture qui revient chaque mois</strong> (énergie, loyer, transport) : dans le menu
-         <em>⋯</em> au bout de la ligne, choisissez <em>Dupliquer</em>. Le montant et le type de dépense sont
-         repris, il ne reste qu'à saisir le numéro et les dates.</p>
+    <section id="controler">
+      <h2>4. Contrôler une facture</h2>
+      <p>Clique sur une ligne, n'importe où sauf sur un bouton. La pièce s'ouvre en pleine
+         page : <strong>le document d'origine à gauche, les champs à droite</strong>.
+         Tout est déjà rempli — le travail consiste à <strong>confirmer</strong>, pas à retaper.</p>
+
+      <h3>Ce qu'il faut regarder, dans l'ordre</h3>
+      <ol class="guide-steps">
+        <li><strong>Référence Smart</strong> — le curseur y est déjà. C'est le seul champ qui
+            ne figure pas sur le document : c'est le numéro que Smart a donné à l'encodage.
+            Le saisir coche « Encodé Smart » tout seul.</li>
+        <li><strong>Références</strong> — bon de commande, chantier, nom du client. Libre.
+            Plusieurs, séparées par des virgules. Elles sont retrouvables par la recherche.</li>
+        <li><strong>Fournisseur</strong> — vérifier que c'est le bon. Si la mention
+            <em>« fiche créée automatiquement, à vérifier »</em> apparaît, c'est qu'aucune fiche
+            ne correspondait et qu'il en a été créé une.</li>
+        <li><strong>Numéro, date, échéance</strong> — la date est réécrite en toutes lettres
+            sous le champ (« vendredi 5 septembre 2026 ») : un navigateur en anglais affiche
+            09/05 pour le 5 septembre, et cette phrase lève le doute.</li>
+        <li><strong>Montant HTVA et taux de TVA</strong> — le cœur du contrôle, voir ci-dessous.</li>
+        <li><strong>Escompte, type de dépense, entrée en stock, remarques</strong> — utiles,
+            jamais bloquants.</li>
+      </ol>
+
+      <h3>Le contrôle de TVA</h3>
+      <p>Le bloc TVA affiche trois choses : la TVA <strong>calculée</strong> à partir du montant
+         et du taux, le <strong>total TVAC</strong>, et la TVA <strong>lue sur le document</strong>.
+         Si les deux ne concordent pas, le verdict passe en rouge et
+         <strong>la validation est bloquée</strong>. C'est voulu : une TVA fausse se propage
+         jusqu'à la déclaration.</p>
+
+      <h3>Ce qui empêche de valider</h3>
+      <ul>
+        <li>le taux de TVA ne correspond pas au montant lu sur le document ;</li>
+        <li>des champs signalés douteux par la lecture automatique, tant qu'ils ne sont pas
+            confirmés un par un ;</li>
+        <li>un <strong>IBAN différent de celui de la fiche fournisseur</strong>, tant qu'on n'a
+            pas tranché : garder celui de la fiche, ou le remplacer ;</li>
+        <li>fournisseur, numéro ou date manquants.</li>
+      </ul>
+      <div class="guide-note warn">
+        <p><strong>L'alerte IBAN mérite un coup de téléphone.</strong> Un numéro de compte qui
+           change d'une facture à l'autre est le schéma classique de la fraude au virement.
+           Vérifie auprès du fournisseur, par un numéro que tu connais déjà — pas celui écrit
+           sur la facture suspecte.</p>
+      </div>
+
+      <h3>Les autres boutons</h3>
+      <ul>
+        <li><strong>Rejeter</strong> — ce n'est pas une facture, ou elle ne nous concerne pas.</li>
+        <li><strong>Relancer l'extraction</strong> — la lecture a échoué ou semble fausse.
+            L'application relit le document.</li>
+      </ul>
     </section>
 
     <!-- 5 -->
-    <section id="fournisseur">
-      <h2>5. Créer un fournisseur</h2>
-      <p>Onglet <em>Fournisseurs</em>, bouton <strong>+ Nouveau fournisseur</strong>. On peut aussi le faire
-         directement depuis le formulaire de facture, sans perdre sa saisie.</p>
-      <p>Le champ le plus important est le <strong>délai de paiement en jours</strong> (30 par défaut) :
-         c'est lui qui calcule automatiquement l'échéance de toutes les factures de ce fournisseur.
-         Si un fournisseur accorde 60 jours, indiquez 60, et toutes ses échéances suivront.</p>
-      <p>Cliquer sur le nom d'un fournisseur ouvre sa <strong>fiche</strong> : coordonnées, nombre de factures,
-         total, montant payé, reste dû, et l'historique complet de ses factures.</p>
-      <p>Un fournisseur qui ne travaille plus avec le magasin peut être <em>archivé</em> plutôt que supprimé :
-         il disparaît des listes, mais ses factures restent.</p>
+    <section id="serie">
+      <h2>5. En valider plusieurs d'un coup</h2>
+      <p>En haut de la liste « À contrôler », un bouton annonce
+         <strong>« Valider les N sans réserve »</strong>.</p>
+      <p>Ce sont les factures que la lecture automatique a comprises <strong>sans la moindre
+         hésitation</strong> : fournisseur identifié, numéro lu, date, montant, taux de TVA
+         cohérent avec le document, aucun champ douteux, aucune alerte, aucun IBAN divergent.
+         Les ouvrir une par une pour n'y rien corriger est du temps perdu.</p>
+      <p>Avant de confirmer, l'application montre les premières et le total. Au moindre doute
+         sur une facture, elle n'est <strong>pas</strong> dans le lot et reste à ouvrir.</p>
+      <p>Ces factures partent <strong>sans référence Smart</strong> — ce numéro n'existe qu'après
+         l'encodage dans Smart. Il se saisit ensuite directement dans le tableau, ligne par
+         ligne, ce qui va beaucoup plus vite que d'ouvrir chaque document.</p>
     </section>
 
     <!-- 6 -->
-    <section id="couleurs" class="guide-highlight">
-      <h2>6. Le code couleur</h2>
-      <p>C'est la section la plus importante : toute l'application repose sur ces quatre couleurs.</p>
-      <table class="guide-table guide-colors">
-        <thead><tr><th>Couleur</th><th>Signification</th><th>Où vous la voyez</th></tr></thead>
-        <tbody>
-          <tr>
-            <td><span class="swatch sw-ok"></span> Vert</td>
-            <td><strong>Fait, ou payé</strong></td>
-            <td>Pastille Smart ou WinAuditor cochée, entrée en stock enregistrée, mention « Payé le … », bloc d'alerte à zéro.</td>
-          </tr>
-          <tr>
-            <td><span class="swatch sw-warn"></span> Orange</td>
-            <td><strong>À faire, ou échéance proche</strong></td>
-            <td>Bouton « Marquer payé », factures encore à payer, échéance dans les 5 jours, blocs d'alerte non résolus.</td>
-          </tr>
-          <tr>
-            <td><span class="swatch sw-danger"></span> Rouge</td>
-            <td><strong>En retard, ou litige</strong></td>
-            <td>Barre verticale à gauche de la ligne et date d'échéance en rouge dès que la date est dépassée et que la facture n'est pas payée.</td>
-          </tr>
-          <tr>
-            <td><span class="swatch sw-todo"></span> Gris</td>
-            <td><strong>Pas encore fait</strong></td>
-            <td>Pastille Smart ou WinAuditor non cochée (contour en pointillés), pas d'entrée en stock.</td>
-          </tr>
-        </tbody>
-      </table>
-      <p class="guide-note">Le rouge vif du logo Vanden Borre Kitchen est la couleur de la <strong>marque</strong>
-         (bandeau, bouton d'ajout). Le rouge des <strong>alertes</strong> est plus sombre et toujours posé sur
-         un fond pâle : les deux ne se confondent pas.</p>
-      <p>Une petite <strong>coche verte tout à gauche de la ligne</strong> signale une facture entièrement
-         traitée : encodée dans Smart, envoyée à WinAuditor et payée. Il n'y a plus rien à en faire.</p>
+    <section id="smart">
+      <h2>6. La référence Smart</h2>
+      <p>C'est le numéro qui fait le lien entre cette application et la comptabilité.
+         Il se saisit à <strong>deux endroits</strong>, au choix :</p>
+      <ul>
+        <li>dans l'écran de contrôle, premier champ, quand on vérifie la facture ;</li>
+        <li><strong>directement dans le tableau des factures</strong>, colonne « Réf. Smart ».
+            Clique dans la case, tape le numéro, appuie sur Entrée. La pastille Smart passe
+            au vert aussitôt.</li>
+      </ul>
+      <p>Dans le tableau, une case vide se reconnaît à ses pointillés et à l'invite
+         <em>« à saisir »</em>. Échap annule la saisie en cours.</p>
+      <p>Une fois la référence renseignée, la pastille Smart se verrouille : la référence fait
+         foi, et on ne peut plus la décocher sans effacer le numéro.</p>
     </section>
 
     <!-- 7 -->
-    <section id="paiement">
-      <h2>7. Valider un paiement</h2>
-      <p><em>Réservé à Jordan.</em></p>
-      <ul>
-        <li><strong>Un seul clic</strong> sur le bouton <em>Marquer payé</em> : la facture est payée et la
-            date du jour s'inscrit toute seule. Aucune confirmation à valider.</li>
-        <li><strong>Annuler</strong> : un message apparaît en bas à droite pendant 6 secondes avec un lien
-            <em>Annuler</em>. Passé ce délai, cliquez sur la pastille verte « Payé le … » et confirmez par <em>Oui</em>.</li>
-        <li><strong>Corriger la date</strong> (paiement effectué la semaine dernière, par exemple) : cliquez
-            sur la date affichée dans la pastille verte, choisissez la bonne date, puis <em>Enregistrer</em>.</li>
-        <li><strong>Plusieurs factures d'un coup</strong> : cochez les cases à gauche des lignes concernées.
-            Une barre noire apparaît en bas avec le nombre de factures, leur total, et le bouton
-            <em>Marquer payées</em>. C'est le geste à utiliser après un virement groupé.</li>
-        <li><strong>Litige ou acompte</strong> : menu <em>⋯</em> au bout de la ligne. Un acompte signifie
-            qu'une partie du montant a été payée d'avance et que le solde reste dû.</li>
-      </ul>
-      <p>« En retard » ne se choisit pas à la main : l'application le calcule seule dès que l'échéance est
-         dépassée et que la facture n'est pas payée.</p>
+    <section id="documents">
+      <h2>7. Les pièces qui ne sont pas des factures</h2>
+      <p>Les fournisseurs agrafent toutes sortes de choses à leurs envois : conditions
+         générales, bons de commande, proformas, rappels, relevés de compte, logos de
+         signature. L'application les <strong>reconnaît</strong> et les met de côté.</p>
+      <p>Elles vont dans la vue <strong>Documents</strong>, avec leur nature et une phrase qui
+         dit ce qu'elles contiennent — de quoi les reconnaître sans les ouvrir. Elles ne
+         comptent dans aucun total.</p>
+      <p>Si l'application s'est trompée et qu'il s'agit bien d'une facture, le bouton
+         <strong>« C'est une facture »</strong> la remet dans la file à contrôler.</p>
+      <p>Un document de plus de 40 pages n'est pas lu : ce n'est jamais une facture, et la
+         lecture automatique refuserait de toute façon. Il est rangé dans Documents avec
+         l'explication.</p>
     </section>
 
     <!-- 8 -->
-    <section id="cloture">
-      <h2>8. La clôture de fin de mois</h2>
-      <p>La routine, en cinq points :</p>
-      <ol>
-        <li>Ouvrir le <strong>tableau de bord</strong> et vérifier que les <strong>trois blocs d'alerte sont verts</strong>
-            (rien à encoder dans Smart, rien à envoyer à WinAuditor, rien sans entrée en stock).</li>
-        <li>Contrôler le <strong>total du mois</strong> : nombre de factures, total HTVA, TVA, total TVAC.</li>
-        <li><strong>Pointer les paiements</strong> : filtrer sur « À payer », cocher les factures réglées et
-            cliquer sur <em>Marquer payées</em>.</li>
-        <li><strong>Exporter le CSV du mois</strong> depuis l'onglet Factures.</li>
-        <li><strong>Envoyer le fichier au comptable</strong>, éventuellement accompagné du récapitulatif imprimé.</li>
-      </ol>
+    <section id="doublons">
+      <h2>8. Les doublons</h2>
+      <p>Une même facture peut arriver deux fois : le fournisseur l'envoie en direct et
+         quelqu'un la retransmet aussi, ou son numéro est écrit différemment d'une source à
+         l'autre. La vue <strong>Doublons</strong> les rapproche et dit <strong>pourquoi</strong> :</p>
+      <ul>
+        <li><strong>Doublon</strong> — même numéro et même montant. Il n'y a pas à hésiter.</li>
+        <li><strong>Probable</strong> — le numéro est écrit autrement, mais le montant est
+            identique.</li>
+        <li><strong>À vérifier</strong> — même fournisseur, même date, même montant, mais
+            numéros différents. Ce sont peut-être deux livraisons du même jour.
+            <strong>Regarde avant de supprimer.</strong></li>
+      </ul>
+      <p>Rien n'est jamais supprimé automatiquement. La corbeille sur la ligne supprime une
+         facture, après une confirmation qui la nomme en entier — fournisseur, numéro, date,
+         montant — car entre deux lignes jumelles, « supprimer cette facture ? » ne suffit pas.
+         <span class="tag">gérant</span></p>
     </section>
 
     <!-- 9 -->
-    <section id="export">
-      <h2>9. Exporter les données</h2>
-      <p>Bouton <strong>Exporter</strong> dans l'onglet Factures, trois possibilités :</p>
-      <ul>
-        <li><strong>CSV du mois affiché</strong> — toutes les factures du mois sélectionné ;</li>
-        <li><strong>CSV de la sélection courante</strong> — exactement ce qui est affiché à l'écran, filtres compris ;</li>
-        <li><strong>CSV complet</strong> — toutes les factures, toutes périodes.</li>
-      </ul>
-      <p>Le fichier <strong>s'ouvre directement dans Excel</strong> : les accents s'affichent correctement,
-         les dates sont au format jour/mois/année et les montants utilisent la virgule décimale.
-         Le nom du fichier indique le mois, par exemple <code>VK_factures_2026-09.csv</code>.</p>
-      <p>La fiche d'un fournisseur possède aussi son propre bouton d'export. Enfin, le bouton
-         <strong>Imprimer / PDF</strong> produit un récapitulatif papier propre, sans menus ni boutons.</p>
+    <section id="periode">
+      <h2>9. Choisir la période affichée</h2>
+      <p>Un seul réglage commande <strong>tout</strong> : le tableau, ses totaux, le tableau de
+         bord et les exports. Un chiffre affiché correspond toujours à ce qui est listé
+         en dessous.</p>
+      <p>Dans la barre au-dessus du tableau : <strong>Mois</strong>, <strong>Trimestre</strong>,
+         <strong>Année</strong>, <strong>Dates au choix</strong>, ou <strong>Toutes périodes</strong>.
+         Le mois se change aussi avec les flèches du bandeau noir, en haut.</p>
+      <p>Le tableau de bord compare la période à la précédente de même nature : un trimestre
+         avec le trimestre d'avant, une année avec l'année d'avant.</p>
     </section>
 
     <!-- 10 -->
-    <section id="faq">
-      <h2>10. Questions fréquentes</h2>
+    <section id="paiement">
+      <h2>10. Payer une facture, et l'escompte <span class="tag">gérant</span></h2>
+      <p>Sur la ligne, le bouton <strong>« Marquer payé »</strong> enregistre le paiement à la
+         date du jour. Une bande apparaît en bas de l'écran pendant six secondes pour annuler
+         si c'était une erreur. Ensuite, un clic sur la date permet de la corriger, et le
+         menu <strong>⋯</strong> permet d'annuler le paiement.</p>
 
-      <p class="faq-q">J'ai encodé une facture en double.</p>
-      <p>Normalement, c'est impossible : l'application refuse deux fois le même numéro pour le même
-         fournisseur et propose d'aller voir la ligne existante. Si un doublon est passé malgré tout
-         (numéro écrit différemment), demandez à Jordan de supprimer la ligne en trop via le menu <em>⋯</em>.</p>
+      <h3>L'escompte</h3>
+      <p>Certains fournisseurs accordent une réduction en cas de paiement rapide — par exemple
+         2 % si l'on paie sous 21 jours. Quand une facture en bénéficie et que le délai court
+         encore, un repère <strong>−2 %</strong> s'affiche à côté du montant.</p>
+      <p>Au moment de marquer payé, l'application demande <strong>quel montant a réellement été
+         versé</strong> : le total, ou le total diminué de l'escompte. Elle le demande même hors
+         délai — un fournisseur l'accorde parfois en retard, et il arrive d'oublier de le
+         déduire à temps. C'est le montant <strong>réellement décaissé</strong> qui doit être
+         enregistré, sinon les totaux sont faux.</p>
+      <div class="guide-note">
+        <p><strong>Règle belge :</strong> l'escompte ne touche jamais la base TVA. La TVA reste
+           calculée sur le montant plein. Seul le montant hors TVA est diminué.</p>
+      </div>
 
-      <p class="faq-q">Je me suis trompé de montant.</p>
-      <p>Cliquez sur l'icône crayon au bout de la ligne, corrigez le montant, enregistrez. Le total TVAC
-         se recalcule automatiquement.</p>
-
-      <p class="faq-q">J'ai marqué une facture payée par erreur.</p>
-      <p>Utilisez le lien <em>Annuler</em> du message qui apparaît en bas à droite. S'il a disparu, cliquez
-         sur la pastille verte « Payé le … » et répondez <em>Oui</em> à la question « Annuler ce paiement ? ».</p>
-
-      <p class="faq-q">Je ne trouve pas un fournisseur.</p>
-      <p>Vérifiez d'abord l'orthographe dans la recherche. Il est peut-être archivé : cochez
-         <em>Afficher les archivés</em> dans l'onglet Fournisseurs. Sinon, créez-le.</p>
-
-      <p class="faq-q">L'application ne répond plus.</p>
-      <p>Rechargez la page (<kbd>Ctrl</kbd>+<kbd>R</kbd>, ou <kbd>Cmd</kbd>+<kbd>R</kbd> sur Mac).
-         <strong>Les données sont enregistrées sur le serveur : rien n'est perdu.</strong>
-         Si le problème persiste, vérifiez la connexion internet, puis prévenez Jordan.</p>
-
-      <p class="faq-q">Je veux revoir la visite guidée.</p>
-      <p>Cliquez sur le <strong>?</strong> dans le bandeau noir, puis <em>Revoir la visite guidée</em>.</p>
+      <h3>Les factures d'avant la reprise <span class="tag">gérant</span></h3>
+      <p>Les factures reprises de l'ancienne franchise, déjà réglées par elle, portent l'état
+         <strong>« Avant reprise »</strong>. Elles restent consultables et exportables, mais ne
+         comptent ni dans le reste à payer ni dans les retards. Le filtre du même nom les
+         retrouve ; le bouton de lot les remet dans le circuit si l'une se révèle réellement
+         impayée.</p>
     </section>
 
-    <div class="guide-foot no-print">
-      <button type="button" class="btn btn-primary" onclick="window.print()">Imprimer ce guide</button>
-      <a class="btn" href="index.html">Retour à l'application</a>
-    </div>
+    <!-- 11 -->
+    <section id="export">
+      <h2>11. Exporter, et le dossier du comptable</h2>
+      <p>Bouton <strong>« Exporter ▾ »</strong> en haut de l'écran Factures :</p>
+      <ul>
+        <li><strong>Excel (.xlsx) — période affichée</strong> : un vrai classeur, avec de vraies
+            dates et de vrais nombres. Le comptable trie et additionne sans rien reformater.
+            C'est le format à privilégier.</li>
+        <li><strong>Dossier pour le comptable (ZIP)</strong> : le récapitulatif Excel
+            <em>et</em> les PDF d'origine, renommés « Fournisseur - Numéro » pour se rapprocher
+            du tableau ligne à ligne. Si un document manque, il est écrit dans un fichier
+            <em>DOCUMENTS_MANQUANTS.txt</em> à l'intérieur de l'archive — rien n'est passé
+            sous silence.</li>
+        <li><strong>CSV</strong> : trois variantes, pour dépanner. Le CSV n'a pas de types :
+            une date y redevient du texte et un numéro commençant par zéro le perd.</li>
+      </ul>
+      <p>Le bouton <strong>Imprimer / PDF</strong> produit une version papier propre, sans les
+         menus ni les boutons.</p>
+    </section>
+
+    <!-- 12 -->
+    <section id="fournisseurs">
+      <h2>12. Les fournisseurs</h2>
+      <p>Une fiche se crée toute seule à la première facture d'un fournisseur inconnu. Elle
+         porte alors la mention <em>« à vérifier »</em> : il faut y passer une fois, compléter
+         le numéro de TVA, les conditions de paiement et l'escompte éventuel.</p>
+      <p>Ce qui est renseigné sur la fiche <strong>pré-remplit les factures suivantes</strong> :
+         délai de paiement, taux de TVA habituel, escompte, type de dépense.</p>
+
+      <h3>Réunir des fiches en double <span class="tag">gérant</span></h3>
+      <p>Le même fournisseur peut se retrouver éclaté en plusieurs fiches — « Electrolux »,
+         « Electrolux Belgium N.V. », « Electrolux Belgium N.V. / SA ». Tant qu'elles sont
+         séparées, <strong>les totaux par fournisseur sont faux</strong>.</p>
+      <p>Un bloc en haut de l'écran Fournisseurs les signale et propose de les réunir. La fiche
+         conservée est celle qui porte le plus de factures. Les adresses e-mail de la fiche
+         absorbée sont reprises, pour que la reconnaissance automatique continue de
+         fonctionner.</p>
+    </section>
+
+    <!-- 13 -->
+    <section id="email">
+      <h2>13. Recevoir les factures par e-mail <span class="tag">gérant</span></h2>
+      <p>Tout mail rangé dans le dossier <strong>Factures</strong> d'Outlook est repris par
+         l'application. Mais <strong>seuls les expéditeurs autorisés</strong> sont traités :
+         les autres attendent en quarantaine.</p>
+      <p>Écran <strong>Réglages</strong>, premier bloc. Pour chaque expéditeur en attente :
+         son adresse, le nombre de messages, le sujet du dernier. Deux gestes :</p>
+      <ul>
+        <li><strong>Cocher « transitaire »</strong> si cette adresse retransmet les factures
+            d'<em>autres</em> sociétés — un ancien franchisé, un comptable, une boîte interne.
+            Son adresse ne servira alors jamais à identifier un fournisseur. Sans cette case,
+            toutes ses factures seraient rattachées à un seul et même fournisseur.</li>
+        <li><strong>« Autoriser et rejouer »</strong> : ses messages partent en lecture.</li>
+      </ul>
+      <p>Dans l'écran « À contrôler », un bandeau indique combien de messages sont arrivés mais
+         pas encore lus, avec un bouton <strong>« Lire les N messages en attente »</strong>.
+         Compte une dizaine de secondes par message ; on peut arrêter et reprendre.</p>
+      <p>Un message dont aucune pièce jointe n'est exploitable — souvent une facture restée
+         dans le corps du mail, ou un simple logo de signature — apparaît dans Administration
+         sous <strong>« Messages reçus sans facture »</strong>, avec son objet, pour être
+         retrouvé dans Outlook.</p>
+      <div class="guide-note">
+        <p><strong>Attention :</strong> supprimer un mail du dossier Outlook <em>ne supprime pas</em>
+           la facture dans l'application. C'est une recopie, pas une synchronisation. Pour
+           retirer une facture, il faut la supprimer ici. À l'inverse, remettre un mail déjà
+           traité dans le dossier ne crée pas de doublon : il est reconnu.</p>
+      </div>
+    </section>
+
+    <!-- 14 -->
+    <section id="sauvegardes">
+      <h2>14. Sauvegardes et sécurité <span class="tag">gérant</span></h2>
+      <p>Écran <strong>Administration</strong>. Deux protections, contre deux risques
+         différents — il faut les deux :</p>
+      <ul>
+        <li><strong>Dans la base</strong>, chaque nuit à 2 h 15, automatiquement. Protège du
+            geste malheureux : une facture supprimée par erreur se restaure depuis un
+            instantané, avec le bouton « Factures supprimées… ».</li>
+        <li><strong>Hors de la base</strong>, en téléchargeant l'archive. Protège de la perte
+            du service lui-même. Une sauvegarde rangée à côté de l'original disparaît avec lui
+            — il faut la mettre ailleurs.</li>
+      </ul>
+      <p>Le <strong>contrôle de sécurité</strong>, juste en dessous, vérifie neuf points et dit
+         en français ce qui ne va pas. S'il passe au rouge sur la sauvegarde hors ligne, c'est
+         qu'elle n'a plus été emportée depuis trop longtemps.</p>
+    </section>
+
+    <!-- 15 -->
+    <section id="couleurs">
+      <h2>15. Le code couleur</h2>
+      <ul class="guide-legend">
+        <li><span class="badge st-orange">À payer</span> en attente de paiement</li>
+        <li><span class="badge st-green">Payé</span> réglée</li>
+        <li><span class="badge st-red">En retard</span> échéance dépassée, non payée</li>
+        <li><span class="badge st-red">Litige</span> contestée auprès du fournisseur</li>
+        <li><span class="badge st-grey">Acompte versé</span> partiellement réglée</li>
+        <li><span class="badge st-grey">Avant reprise</span> réglée par l'ancienne franchise</li>
+      </ul>
+      <p>Dans le tableau, une <strong>barre rouge</strong> à gauche d'une ligne signale une
+         échéance dépassée, une <strong>barre orange</strong> une échéance sous cinq jours.
+         Une coche verte marque une facture entièrement traitée : encodée dans Smart, envoyée
+         à WinAuditor, et payée.</p>
+      <p>Les pastilles <strong>Smart</strong>, <strong>WinAuditor</strong> et <strong>Reçu</strong>
+         se cliquent directement dans le tableau : grises pointillées si ce n'est pas fait,
+         vertes une fois faites.</p>
+    </section>
+
+    <!-- 16 -->
+    <section id="faq">
+      <h2>16. Questions fréquentes</h2>
+
+      <h3>Pourquoi toutes mes factures sont-elles dans « À contrôler » ?</h3>
+      <p>Parce qu'aucune n'a encore été vérifiée. Toute facture arrivée par e-mail y entre et y
+         reste jusqu'à sa validation. Le bouton « Valider les N sans réserve » vide rapidement
+         celles qui ne posent aucune question.</p>
+
+      <h3>Où est-ce que je tape le numéro Smart ?</h3>
+      <p>Dans le tableau des factures, colonne « Réf. Smart » : clique dans la case, tape,
+         Entrée. Ou dans l'écran de contrôle, tout en haut à droite.</p>
+
+      <h3>Comment envoyer les factures au comptable ?</h3>
+      <p>Écran Factures, choisis la période, puis <strong>Exporter → Dossier pour le comptable
+         (ZIP)</strong>. L'archive contient le récapitulatif Excel et tous les PDF. Un trimestre
+         pèse une dizaine de mégaoctets : il passe en pièce jointe d'un mail.</p>
+
+      <h3>Une facture est arrivée en double, que faire ?</h3>
+      <p>Va dans la vue <strong>Doublons</strong>. Elle rapproche les lignes et explique
+         pourquoi. Vérifie que ce sont bien les mêmes — deux livraisons du même jour au même
+         prix arrivent — puis supprime la ligne en trop avec la corbeille.</p>
+
+      <h3>La lecture automatique s'est trompée sur un montant.</h3>
+      <p>Corrige le champ dans l'écran de contrôle et valide. Si tout est faux, le bouton
+         <strong>Relancer l'extraction</strong> fait relire le document.</p>
+
+      <h3>J'ai supprimé une facture par erreur.</h3>
+      <p>Administration → Sauvegardes → <strong>« Factures supprimées… »</strong> sur un
+         instantané. L'application liste celles qui manquent et les remet en place.
+         <span class="tag">gérant</span></p>
+
+      <h3>Une facture d'un fournisseur que je ne connais pas n'apparaît nulle part.</h3>
+      <p>Son expéditeur n'est probablement pas encore autorisé. Réglages → Quarantaine.
+         <span class="tag">gérant</span></p>
+
+      <h3>Les raccourcis clavier</h3>
+      <ul>
+        <li><strong>N</strong> — nouvelle facture</li>
+        <li><strong>/</strong> — aller à la recherche</li>
+        <li><strong>←</strong> et <strong>→</strong> — mois précédent, mois suivant</li>
+        <li><strong>?</strong> — afficher les raccourcis</li>
+        <li><strong>Échap</strong> — fermer une fenêtre</li>
+      </ul>
+
+      <h3>En cas de doute</h3>
+      <p>Rien n'est définitif sauf la suppression, et elle demande toujours confirmation en
+         nommant ce qui va disparaître. Une facture mal validée se rouvre et se corrige.
+         Un paiement enregistré par erreur s'annule.</p>
+    </section>
 
   </main>
 </div>

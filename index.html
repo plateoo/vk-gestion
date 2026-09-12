@@ -58,6 +58,7 @@
         <span id="user-role" class="user-role">—</span>
       </div>
       <button type="button" id="btn-search" class="appbar-btn round" title="Rechercher (/)" aria-label="Rechercher">⌕</button>
+      <button type="button" id="btn-calc" class="appbar-btn round" title="Calculette (C)" aria-label="Calculette">=</button>
       <button type="button" id="btn-help" class="appbar-btn round" title="Aide" aria-label="Aide" aria-haspopup="menu">?</button>
       <button type="button" id="btn-logout" class="appbar-btn">Se déconnecter</button>
     </div>
@@ -548,7 +549,11 @@
       </div>
       <div class="field">
         <label for="inv-htva">Montant HTVA (€)</label>
-        <input id="inv-htva" type="number" step="0.01" inputmode="decimal" placeholder="0,00">
+        <div class="field-with-calc">
+          <input id="inv-htva" type="number" step="0.01" inputmode="decimal" placeholder="0,00">
+          <button type="button" class="btn-calc-inline" data-calc-open="inv-htva"
+                  title="Additionner plusieurs lignes (Alt+C)" aria-label="Ouvrir la calculette">=</button>
+        </div>
         <p class="field-hint">Le montant hors TVA, tel qu'il figure sur la facture.</p>
       </div>
       <div class="field">
@@ -757,6 +762,46 @@
   <button type="button" class="btn btn-sm btn-ghost" id="update-dismiss">Plus tard</button>
 </div>
 
+<!-- Calculette à bande. Une bande plutôt qu'un simple écran : pour
+     additionner des lignes de facture, il faut voir ce qu'on a saisi. -->
+<div id="calc" class="calc" hidden role="dialog" aria-label="Calculette">
+  <div class="calc-head">
+    <strong>Calculette</strong>
+    <span class="spacer"></span>
+    <button type="button" class="icon-btn" data-calc="close" title="Fermer (Échap)">✕</button>
+  </div>
+
+  <ul id="calc-tape" class="calc-tape"></ul>
+
+  <div class="calc-total-row">
+    <span class="muted small">Total</span>
+    <strong id="calc-total" class="calc-total">0,00 €</strong>
+  </div>
+
+  <div class="calc-entry">
+    <input id="calc-input" type="text" inputmode="decimal" placeholder="montant"
+           autocomplete="off" aria-label="Montant à ajouter">
+    <button type="button" class="btn btn-primary btn-sm" data-calc="plus" title="Ajouter (Entrée)">+</button>
+    <button type="button" class="btn btn-sm" data-calc="moins" title="Soustraire">−</button>
+    <button type="button" class="btn btn-sm" data-calc="fois" title="Multiplier">×</button>
+    <button type="button" class="btn btn-sm" data-calc="divise" title="Diviser">÷</button>
+  </div>
+
+  <div class="calc-vat">
+    <button type="button" class="btn btn-sm" data-calc="tva21">+ TVA 21 %</button>
+    <button type="button" class="btn btn-sm" data-calc="tva6">+ TVA 6 %</button>
+    <button type="button" class="btn btn-sm" data-calc="sanstva21">retirer 21 %</button>
+    <button type="button" class="btn btn-sm" data-calc="sanstva6">retirer 6 %</button>
+  </div>
+
+  <div class="calc-foot">
+    <button type="button" class="btn btn-sm" data-calc="back">Annuler la dernière</button>
+    <button type="button" class="btn btn-sm" data-calc="clear">Tout effacer</button>
+    <span class="spacer"></span>
+    <button type="button" class="btn btn-primary btn-sm" data-calc="paste">Reporter le total</button>
+  </div>
+</div>
+
 <div id="toasts" class="toasts" aria-live="polite"></div>
 
 <!-- ============================================================
@@ -771,6 +816,7 @@ import { initSuppliers, renderSuppliers, resetSupplierView } from './js/supplier
 import { initDashboard, renderDashboard } from './js/dashboard.js';
 import { initReview, renderReview, refreshReviewBadge, openDocument, resetDocumentView } from './js/review.js';
 import { initUpdateCheck } from './js/maintenance.js';
+import { initCalc, ouvrirCalc } from './js/calc.js';
 import { initSettings, renderSettings } from './js/settings.js';
 import { initSearch, openSearch } from './js/search.js';
 import { initPayments, renderPayments } from './js/payments.js';
@@ -945,6 +991,7 @@ initInvoices((id) => openDocument(id, showTab));
 // Le site est statique : sans ce contrôle, un navigateur garderait
 // indéfiniment l'ancienne version en cache sans le dire.
 initUpdateCheck();
+initCalc();
 initSuppliers();
 initDashboard();
 initReview();
