@@ -1292,14 +1292,21 @@ kbd {
 /* ---------------------------------------------------------------
    Référence Smart saisie dans le tableau
    --------------------------------------------------------------- */
+/* Un champ transparent ressemble à du texte mort : personne ne devine
+   qu'on peut y taper. Vide, il se montre donc comme un champ — pointillés
+   et fond léger. Rempli, il s'efface pour ne pas alourdir le tableau. */
 .smartref-input {
   width: 100%; min-width: 90px; max-width: 140px;
-  padding: 4px 6px; border: 1px solid transparent; border-radius: 6px;
-  background: transparent; color: var(--text);
+  padding: 4px 6px; border: 1px dashed var(--border-dashed); border-radius: 6px;
+  background: var(--surface-alt); color: var(--text);
   font: inherit; font-size: 13px; font-variant-numeric: tabular-nums;
+  cursor: text;
 }
-.smartref-input::placeholder { color: var(--text-muted); }
-.smartref-input:hover { border-color: var(--border); background: var(--surface-alt); }
+.smartref-input:not(:placeholder-shown) {
+  border-color: transparent; background: transparent; font-weight: 600;
+}
+.smartref-input::placeholder { color: var(--text-muted); font-style: italic; }
+.smartref-input:hover { border-color: var(--border-strong); background: var(--surface-hover); }
 .smartref-input:focus {
   outline: none; border-color: var(--primary); background: var(--surface);
   box-shadow: 0 0 0 3px var(--row-select);

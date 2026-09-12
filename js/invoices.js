@@ -319,7 +319,7 @@ function rowHtml(i, manager) {
     <td class="td-number" data-label="N°">${escapeHtml(i.invoice_number)}<span class="mob-meta">${fmtDate(i.invoice_date)}${i.due_date ? ` · éch. ${fmtDate(i.due_date)}` : ''}</span></td>
     <td class="td-smartref" data-label="Réf. Smart">
       <input type="text" class="smartref-input" data-smartref="${i.id}"
-        value="${escapeHtml(i.smart_ref || '')}" placeholder="—" autocomplete="off" spellcheck="false"
+        value="${escapeHtml(i.smart_ref || '')}" placeholder="à saisir" autocomplete="off" spellcheck="false"
         aria-label="Référence Smart de la facture ${escapeHtml(i.invoice_number)}"></td>
     <td class="td-refs" data-label="Références">${(i.external_refs || []).length
       ? i.external_refs.map((r) => `<span class="ref-chip">${escapeHtml(r)}</span>`).join('')
