@@ -132,3 +132,146 @@ export const NIVEAU_LABELS = {
   probable: 'Probable',
   verifier: 'À vérifier'
 };
+
+// =====================================================================
+// Fiches fournisseur en double
+//
+// Chaque facture dont le fournisseur n'est pas reconnu crée une fiche.
+// Avec le temps, un même fournisseur s'éparpille : Electrolux existait en
+// quatre fiches — « Electrolux Belgium N.V. / SA », « Electrolux Belgium
+// N.V. », « Electrolux Group », « Electrolux » — soit 26 factures
+// réparties sur quatre totaux, tous faux.
+// =====================================================================
+
+/** Formes juridiques : elles ne distinguent pas deux sociétés */
+const FORMES = /\b(nv|sa|bv|sprl|srl|bvba|gmbh|co|kg|ag|lda|ltda|asbl|vzw|ltd|plc|se|snc|scrl|scs|sas|sarl|spa|srls|oy|ab|as)\b/g;
+
+/** « Belgrani, Lda. » et « belgrani » donnent tous deux « belgrani ». */
+export function normalizeSupplier(nom) {
+  return String(nom || '')
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')   // accents
+    .toLowerCase()
+    // Les points disparaissent SANS laisser d'espace : « n.v. » doit
+    // devenir « nv » pour être reconnu comme forme juridique. Le découper
+    // en « n v » le rendrait invisible, et « Electrolux Belgium N.V. »
+    // resterait distinct d'« Electrolux Belgium ».
+    .replace(/\./g, '')
+    .replace(/[,;/\\|-]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .replace(FORMES, ' ')
+    .replace(/[^a-z0-9]/g, '');
+}
+
+/** Numéro de TVA réduit à ses caractères significatifs */
+function normalizeVat(v) {
+  return String(v || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+}
+
+/**
+ * Groupes de fiches fournisseur susceptibles d'être la même société.
+ * @param {object[]} suppliers  fiches, avec id et name
+ * @param {object[]} invoices   factures, pour compter ce que chaque fiche porte
+ */
+export function findSupplierDuplicates(suppliers, invoices = []) {
+  const compte = new Map();
+  for (const i of invoices) {
+    compte.set(i.supplier_id, (compte.get(i.supplier_id) || 0) + 1);
+  }
+  const fiches = (suppliers || [])
+    .filter((s) => !s.archived)
+    .map((s) => ({ ...s, factures: compte.get(s.id) || 0, cle: normalizeSupplier(s.name) }))
+    .filter((s) => s.cle.length >= 3);
+
+  // Les rapprochements se cumulent : « Electrolux Belgium N.V. » et
+  // « Electrolux Belgium N.V. / SA » portent le même nom, et « Electrolux »
+  // est le début des deux. Trois fiches, UNE société — donc un seul groupe,
+  // pas deux qui se chevauchent. On relie, puis on prend les composantes.
+  const liens = [];
+  const ajouter = (niveau, motif, membres) => {
+    if (membres.length < 2) return;
+    for (let i = 1; i < membres.length; i++) {
+      liens.push({ a: membres[0].id, b: membres[i].id, niveau, motif });
+    }
+  };
+
+  // 1. Même numéro de TVA : c'est la même société, sans discussion possible.
+  const parTva = new Map();
+  for (const s of fiches) {
+    const v = normalizeVat(s.vat_number);
+    if (v.length < 8) continue;
+    if (!parTva.has(v)) parTva.set(v, []);
+    parTva.get(v).push(s);
+  }
+  for (const [, membres] of parTva) {
+    ajouter('certain', 'Même numéro de TVA : c\'est la même société.', membres);
+  }
+
+  // 2. Même nom, une fois retirées ponctuation et forme juridique.
+  const parNom = new Map();
+  for (const s of fiches) {
+    if (!parNom.has(s.cle)) parNom.set(s.cle, []);
+    parNom.get(s.cle).push(s);
+  }
+  for (const [, membres] of parNom) {
+    ajouter('certain', 'Même nom, à la forme juridique et à la ponctuation près.', membres);
+  }
+
+  // 3. Un nom est le début de l'autre : « Electrolux » et « Electrolux
+  //    Belgium ». Très probable, mais deux sociétés d'un même groupe
+  //    peuvent être distinctes — d'où un niveau en dessous.
+  const restantes = fiches.slice().sort((a, b) => a.cle.length - b.cle.length);
+  for (let i = 0; i < restantes.length; i++) {
+    const proches = [restantes[i]];
+    for (let j = i + 1; j < restantes.length; j++) {
+      if (restantes[j].cle.startsWith(restantes[i].cle) && restantes[i].cle.length >= 6) {
+        proches.push(restantes[j]);
+      }
+    }
+    ajouter('probable', 'Un nom est le début de l\'autre : probablement la même société.', proches);
+  }
+
+  // Composantes connexes, par union-find : chaque société ne ressort
+  // qu'une fois, avec toutes ses fiches.
+  const parent = new Map(fiches.map((s) => [s.id, s.id]));
+  const racine = (x) => {
+    while (parent.get(x) !== x) { parent.set(x, parent.get(parent.get(x))); x = parent.get(x); }
+    return x;
+  };
+  const unir = (a, b) => {
+    const ra = racine(a); const rb = racine(b);
+    if (ra !== rb) parent.set(ra, rb);
+  };
+  for (const l of liens) unir(l.a, l.b);
+
+  // Le motif retenu est celui du lien le plus sûr de la composante : c'est
+  // lui qui justifie le rapprochement. Le regroupement peut être généreux
+  // sans danger — chaque fusion se confirme fiche par fiche, en nommant
+  // précisément ce qui part et ce qui reste.
+  const parRacine = new Map();
+  for (const s of fiches) {
+    const r = racine(s.id);
+    if (!parRacine.has(r)) parRacine.set(r, { membres: [], niveau: null, motif: '' });
+    parRacine.get(r).membres.push(s);
+  }
+  for (const l of liens) {
+    const g = parRacine.get(racine(l.a));
+    if (!g) continue;
+    if (!g.niveau || NIVEAUX[l.niveau] > NIVEAUX[g.niveau]) { g.niveau = l.niveau; g.motif = l.motif; }
+  }
+
+  return [...parRacine.values()]
+    .filter((g) => g.membres.length > 1)
+    .map((g) => ({
+      niveau: g.niveau || 'probable',
+      motif: g.motif,
+      // La fiche à garder : celle qui porte le plus de factures. À égalité,
+      // le nom le plus complet — il contient en général la forme juridique.
+      suppliers: g.membres.slice().sort((a, b) =>
+        (b.factures - a.factures) || (String(b.name).length - String(a.name).length))
+    }))
+    .sort((a, b) => {
+      const n = NIVEAUX[b.niveau] - NIVEAUX[a.niveau];
+      if (n) return n;
+      return b.suppliers.length - a.suppliers.length;
+    });
+}

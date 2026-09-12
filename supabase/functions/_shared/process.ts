@@ -127,6 +127,41 @@ Nature du document :
   montants : il n'y a rien à encoder. Ne fabrique jamais un numéro ou un
   montant à partir d'un document qui n'en a pas.`;
 
+/**
+ * Appel à l'API d'extraction, avec reprise sur saturation.
+ *
+ * En vidant la file de 143 messages, un seul document a échoué — sur un
+ * 429, parce que les appels s'enchaînaient trop vite. Abandonner à la
+ * première saturation revenait à perdre une pièce pour une raison
+ * purement passagère. On patiente et on réessaie, en doublant l'attente.
+ *
+ * Les autres erreurs ne sont PAS réessayées : une clé invalide ou un
+ * document illisible le resteront, et insister ne ferait que retarder le
+ * message suivant.
+ */
+async function appelerApi(corps: unknown, essais = 3): Promise<Response> {
+  let attente = 4000;
+  for (let n = 1; ; n++) {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': ANTHROPIC_KEY,
+        'anthropic-version': '2023-06-01'
+      },
+      body: JSON.stringify(corps)
+    });
+    // 429 : trop d'appels. 529 : service débordé. Les deux passent.
+    if ((res.status !== 429 && res.status !== 529) || n >= essais) return res;
+
+    // L'API indique parfois elle-même combien de temps patienter.
+    const dit = Number(res.headers.get('retry-after'));
+    const delai = Number.isFinite(dit) && dit > 0 ? Math.min(dit * 1000, 30000) : attente;
+    await new Promise((r) => setTimeout(r, delai));
+    attente = Math.min(attente * 2, 30000);
+  }
+}
+
 function toBase64(bytes: Uint8Array): string {
   let bin = '';
   const chunk = 0x8000;
@@ -162,24 +197,16 @@ export async function extractFromImage(bytes: Uint8Array) {
   const type = sniffImage(bytes);
   if (!type) throw new Error('format d\'image non reconnu');
 
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      'x-api-key': ANTHROPIC_KEY,
-      'anthropic-version': '2023-06-01'
-    },
-    body: JSON.stringify({
-      model: 'claude-sonnet-5',
-      max_tokens: 3000,
-      messages: [{
-        role: 'user',
-        content: [
-          { type: 'image', source: { type: 'base64', media_type: type, data: toBase64(bytes) } },
-          { type: 'text', text: EXTRACTION_PROMPT }
-        ]
-      }]
-    })
+  const res = await appelerApi({
+    model: 'claude-sonnet-5',
+    max_tokens: 3000,
+    messages: [{
+      role: 'user',
+      content: [
+        { type: 'image', source: { type: 'base64', media_type: type, data: toBase64(bytes) } },
+        { type: 'text', text: EXTRACTION_PROMPT }
+      ]
+    }]
   });
   if (!res.ok) throw new Error(`API Anthropic ${res.status} : ${(await res.text()).slice(0, 300)}`);
   const body = await res.json();
@@ -192,26 +219,18 @@ export async function extractFromImage(bytes: Uint8Array) {
 
 export async function extractFromPdf(bytes: Uint8Array) {
   if (!ANTHROPIC_KEY) throw new Error('ANTHROPIC_API_KEY absente');
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      'x-api-key': ANTHROPIC_KEY,
-      'anthropic-version': '2023-06-01'
-    },
-    body: JSON.stringify({
-      model: 'claude-sonnet-5',
-      // 1500 suffisait avant la synthèse ; la réponse se faisait couper en
-      // plein milieu d'une chaîne et le JSON devenait illisible.
-      max_tokens: 3000,
-      messages: [{
-        role: 'user',
-        content: [
-          { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: toBase64(bytes) } },
-          { type: 'text', text: EXTRACTION_PROMPT }
-        ]
-      }]
-    })
+  const res = await appelerApi({
+    model: 'claude-sonnet-5',
+    // 1500 suffisait avant la synthèse ; la réponse se faisait couper en
+    // plein milieu d'une chaîne et le JSON devenait illisible.
+    max_tokens: 3000,
+    messages: [{
+      role: 'user',
+      content: [
+        { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: toBase64(bytes) } },
+        { type: 'text', text: EXTRACTION_PROMPT }
+      ]
+    }]
   });
   if (!res.ok) throw new Error(`API Anthropic ${res.status} : ${(await res.text()).slice(0, 300)}`);
   const body = await res.json();

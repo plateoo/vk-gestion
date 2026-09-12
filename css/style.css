@@ -1205,6 +1205,20 @@ kbd {
 .sec-bad .sec-text span { color: var(--danger); }
 
 /* ---------------------------------------------------------------
+   Fiches fournisseur en double
+   --------------------------------------------------------------- */
+.sup-dup { border-left: 4px solid var(--warn); }
+.dup-sup { padding: 10px 0; border-top: 1px solid var(--line-soft); }
+.dup-sup:first-of-type { border-top: 0; }
+.dup-sup-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+.dup-sup-list { list-style: none; margin: 0; padding: 0; }
+.dup-sup-list li {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 5px 0 5px 12px; border-left: 2px solid var(--border);
+}
+.dup-sup-name { font-weight: 600; font-size: 13.5px; }
+
+/* ---------------------------------------------------------------
    Doublons
    --------------------------------------------------------------- */
 .dup-head td {

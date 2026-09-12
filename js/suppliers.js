@@ -2,7 +2,7 @@
 // suppliers.js — CRUD fournisseurs, liste, fiche fournisseur
 // =====================================================================
 import { supabase } from './supabase.js';
-import { getInvoices } from './invoices.js';
+import { getInvoices, invalidateInvoices } from './invoices.js';
 import { downloadInvoicesCSV } from './export.js';
 import {
   $, $$, fmtEUR, fmtDate, escapeHtml, toast, errorMessage, openModal, closeModal,
@@ -10,6 +10,7 @@ import {
   statusLabel, statusClass, isOverdue, slugify, notifyDataChange
 } from './ui.js';
 import { isManager } from './auth.js';
+import { findSupplierDuplicates, NIVEAU_LABELS } from './duplicates.js';
 
 let cache = null;                 // liste des fournisseurs en mémoire
 let detailId = null;              // fiche fournisseur ouverte (null = liste)
@@ -75,6 +76,8 @@ export async function renderSuppliers() {
     toast(errorMessage(err, 'Chargement des fournisseurs impossible.'), 'error');
     return;
   }
+
+  renderSupplierDuplicates(suppliers, invoices);
 
   const q = ($('#sup-search').value || '').trim().toLowerCase();
   const showArchived = $('#sup-archived').checked;
@@ -437,7 +440,87 @@ async function deleteSupplier() {
 // ---------------------------------------------------------------------
 // Initialisation
 // ---------------------------------------------------------------------
+/**
+ * Fiches en double, avec de quoi les réunir.
+ *
+ * Fusionner déplace les factures et conserve les adresses connues de la
+ * fiche absorbée, pour que la reconnaissance automatique continue de
+ * fonctionner sur ses e-mails. C'est irréversible : on nomme donc
+ * précisément ce qui part et ce qui reste.
+ */
+function renderSupplierDuplicates(suppliers, invoices) {
+  const box = $('#sup-dup');
+  if (!box) return;
+  const groupes = isManager() ? findSupplierDuplicates(suppliers, invoices) : [];
+  if (!groupes.length) { box.hidden = true; box.innerHTML = ''; return; }
+
+  const fiches = groupes.reduce((n, g) => n + g.suppliers.length, 0);
+  box.hidden = false;
+  box.innerHTML = `
+    <div class="card-head" style="padding:0 0 8px">
+      <h2>${groupes.length} fournisseur${groupes.length > 1 ? 's' : ''} en double</h2>
+      <p class="muted small">${fiches} fiches pour ${groupes.length} société${groupes.length > 1 ? 's' : ''}.
+        Tant qu'elles sont séparées, les totaux par fournisseur sont faux.</p>
+    </div>
+    ${groupes.map((g, k) => {
+      const garde = g.suppliers[0];
+      return `
+      <div class="dup-sup">
+        <div class="dup-sup-head">
+          <span class="dup-level dup-${g.niveau}">${escapeHtml(NIVEAU_LABELS[g.niveau])}</span>
+          <span class="dup-reason">${escapeHtml(g.motif)}</span>
+        </div>
+        <ul class="dup-sup-list">
+          ${g.suppliers.map((s, idx) => `
+            <li>
+              <span class="dup-sup-name">${escapeHtml(s.name)}</span>
+              <span class="muted small">${s.factures} facture${s.factures > 1 ? 's' : ''}${
+                s.vat_number ? ` <span class="sep">·</span> ${escapeHtml(s.vat_number)}` : ''}</span>
+              ${idx === 0
+                ? '<span class="tag">fiche conservée</span>'
+                : `<button type="button" class="btn btn-sm" data-merge-keep="${garde.id}" data-merge-drop="${s.id}"
+                     data-merge-label="${escapeHtml(s.name)}" data-merge-into="${escapeHtml(garde.name)}"
+                     data-merge-count="${s.factures}">Réunir dans « ${escapeHtml(garde.name)} »</button>`}
+            </li>`).join('')}
+        </ul>
+      </div>`;
+    }).join('')}`;
+}
+
+async function fusionner(btn) {
+  const { mergeKeep, mergeDrop, mergeLabel, mergeInto, mergeCount } = btn.dataset;
+  const n = Number(mergeCount) || 0;
+  const ok = await confirmDialog(
+    `Réunir « ${mergeLabel} » dans « ${mergeInto} » ?\n`
+    + `${n} facture${n > 1 ? 's' : ''} ${n > 1 ? 'seront rattachées' : 'sera rattachée'} à la fiche conservée, `
+    + 'et les adresses e-mail connues seront reprises pour que la reconnaissance automatique continue de fonctionner.\n'
+    + 'La fiche absorbée disparaît. Cette action ne peut pas être annulée.',
+    'Réunir les fiches');
+  if (!ok) return;
+
+  btn.disabled = true;
+  try {
+    const { data, error } = await supabase.rpc('merge_suppliers', { p_keep: mergeKeep, p_drop: mergeDrop });
+    if (error) throw error;
+    const r = typeof data === 'string' ? JSON.parse(data) : data;
+    toast(`Fiches réunies — ${r.moved_invoices} facture(s) rattachée(s) à « ${mergeInto} ».`);
+    invalidateInvoices();
+    await getSuppliers(true);
+    notifyDataChange();
+    renderSuppliers();
+  } catch (err) {
+    console.error(err);
+    btn.disabled = false;
+    toast(errorMessage(err, 'Fusion impossible.'), 'error');
+  }
+}
+
 export function initSuppliers() {
+  $('#sup-dup')?.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-merge-keep]');
+    if (b) fusionner(b);
+  });
+
   $('#form-supplier').addEventListener('submit', saveSupplier);
   $('#sup-delete').addEventListener('click', deleteSupplier);
   $('#btn-new-supplier').addEventListener('click', () => openSupplierModal(null, () => renderSuppliers()));

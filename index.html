@@ -324,6 +324,14 @@
           <input id="sup-search" type="search" class="search" placeholder="Rechercher un fournisseur…" aria-label="Recherche fournisseur">
           <label class="check"><input type="checkbox" id="sup-archived"> Afficher les archivés</label>
         </div>
+
+        <!-- Fiches en double. Chaque facture dont le fournisseur n'est pas
+             reconnu crée une fiche ; avec le temps un même fournisseur
+             s'éparpille et ses totaux deviennent faux. -->
+        <div id="sup-dup" class="card pad sup-dup" hidden></div>
+
+        <div class="toolbar no-print" hidden>
+        </div>
         <div class="card">
           <div class="table-wrap">
             <table class="table">
