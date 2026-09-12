@@ -220,6 +220,44 @@ export async function extractFromImage(bytes: Uint8Array) {
   return { ...JSON.parse(json), _source: 'image' };
 }
 
+/**
+ * Nombre de pages d'un PDF, compté à la volée dans ses octets.
+ *
+ * Approximatif à dessein : pas de bibliothèque PDF ici. Sur un fichier
+ * dont l'arborescence est compressée, le compte retombe à zéro — et c'est
+ * le bon sens de l'erreur : on tente la lecture au lieu de refuser à tort.
+ */
+export function compterPages(bytes: Uint8Array): number {
+  const texte = new TextDecoder('latin1').decode(bytes);
+  return (texte.match(/\/Type\s*\/Page[^s]/g) || []).length;
+}
+
+/** Au-delà, aucune facture ne ressemble à cela — et l'API refusera. */
+const PAGES_MAX = 40;
+const OCTETS_MAX = 8 * 1024 * 1024;
+
+/**
+ * Un document hors gabarit doit-il seulement être envoyé ?
+ *
+ * Un certificat de fin de travaux de 703 pages a échoué quatre fois de
+ * suite sur un plafond de 500 000 jetons par minute. Le message de l'API
+ * était pourtant clair : « would exceed » — la requête dépasse la limite à
+ * elle seule, aucune attente n'y changera rien. Insister coûtait deux
+ * minutes par tentative et finissait sur « échec extraction », ce qui
+ * laissait croire à une panne passagère.
+ */
+export function refusAvantLecture(bytes: Uint8Array): string | null {
+  if (bytes.length > OCTETS_MAX) {
+    return `Document de ${(bytes.length / 1024 / 1024).toFixed(1)} Mo : trop volumineux pour être lu automatiquement.`;
+  }
+  const pages = compterPages(bytes);
+  if (pages > PAGES_MAX) {
+    return `Document de ${pages} pages : trop long pour être lu automatiquement. `
+         + 'Une facture en compte quelques-unes ; il s\'agit ici d\'un autre type de pièce.';
+  }
+  return null;
+}
+
 export async function extractFromPdf(bytes: Uint8Array) {
   if (!ANTHROPIC_KEY) throw new Error('ANTHROPIC_API_KEY absente');
   const res = await appelerApi({
@@ -431,13 +469,24 @@ async function traiterFichier(
 
   let extracted: Record<string, unknown>;
   let notes = '';
-  try {
-    extracted = estXml ? parseUbl(new TextDecoder().decode(bytes))
-              : estPdf ? await extractFromPdf(bytes)
-              : await extractFromImage(bytes);
-  } catch (e) {
-    extracted = { _source: 'échec', commentaire: e instanceof Error ? e.message : String(e) };
-    notes = 'échec extraction';
+
+  // Hors gabarit : on le range sans l'envoyer. Ce n'est pas un échec, c'est
+  // un constat — et le dire ainsi évite de faire chercher une panne.
+  const refus = estPdf ? refusAvantLecture(bytes) : null;
+  if (refus) {
+    extracted = {
+      _source: 'refusé', type_document: 'autre', synthese: refus,
+      commentaire: refus, champs_incertains: []
+    };
+  } else {
+    try {
+      extracted = estXml ? parseUbl(new TextDecoder().decode(bytes))
+                : estPdf ? await extractFromPdf(bytes)
+                : await extractFromImage(bytes);
+    } catch (e) {
+      extracted = { _source: 'échec', commentaire: e instanceof Error ? e.message : String(e) };
+      notes = 'échec extraction';
+    }
   }
 
   // Nature de la pièce. Si l'extraction a échoué on ne sait rien : la pièce
