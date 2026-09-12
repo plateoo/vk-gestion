@@ -150,6 +150,10 @@
         <button type="button" id="alert-stock" class="alert"><span class="alert-text">—</span><span class="alert-go">Voir ›</span></button>
       </div>
 
+      <!-- Courrier : ce qui est arrivé, résumé. Rien n'est déplacé, et
+           ce bloc reste muet tant que le flux n'est pas branché. -->
+      <div id="courrier" class="card courrier" hidden></div>
+
       <!-- Top fournisseurs -->
       <div class="card">
         <div class="card-head"><h2>Top fournisseurs du mois</h2></div>
@@ -853,6 +857,7 @@ import { initReview, renderReview, refreshReviewBadge, openDocument, resetDocume
 import { initUpdateCheck } from './js/maintenance.js';
 import { initCalc, ouvrirCalc } from './js/calc.js';
 import { initHelp } from './js/help.js';
+import { renderCourrier } from './js/courrier.js';
 import { initSettings, renderSettings } from './js/settings.js';
 import { initSearch, openSearch } from './js/search.js';
 import { initPayments, renderPayments } from './js/payments.js';
@@ -870,7 +875,7 @@ function showTab(name) {
   activeTab = name;
   $$('.tab').forEach((s) => { s.hidden = s.id !== `tab-${name}`; });
   $$('[data-tab]').forEach((b) => b.classList.toggle('active', b.dataset.tab === name));
-  if (name === 'dashboard') renderDashboard();
+  if (name === 'dashboard') { renderDashboard(); renderCourrier(); }
   if (name === 'review') renderReview();
   if (name === 'payments') renderPayments();
   if (name === 'admin') renderAdmin();
