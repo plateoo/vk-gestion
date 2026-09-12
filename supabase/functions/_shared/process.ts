@@ -139,8 +139,11 @@ Nature du document :
  * document illisible le resteront, et insister ne ferait que retarder le
  * message suivant.
  */
-async function appelerApi(corps: unknown, essais = 3): Promise<Response> {
-  let attente = 4000;
+async function appelerApi(corps: unknown, essais = 4): Promise<Response> {
+  // La limite qui nous touche est un plafond de jetons PAR MINUTE. Attendre
+  // trente secondes ne suffit donc pas : la fenêtre ne s'est pas encore
+  // rouverte. On va jusqu'à soixante-cinq.
+  let attente = 8000;
   for (let n = 1; ; n++) {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -156,9 +159,9 @@ async function appelerApi(corps: unknown, essais = 3): Promise<Response> {
 
     // L'API indique parfois elle-même combien de temps patienter.
     const dit = Number(res.headers.get('retry-after'));
-    const delai = Number.isFinite(dit) && dit > 0 ? Math.min(dit * 1000, 30000) : attente;
+    const delai = Number.isFinite(dit) && dit > 0 ? Math.min(dit * 1000, 65000) : attente;
     await new Promise((r) => setTimeout(r, delai));
-    attente = Math.min(attente * 2, 30000);
+    attente = Math.min(attente * 2, 65000);
   }
 }
 
