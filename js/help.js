@@ -18,6 +18,7 @@ let chargement = null;
 /** Écran affiché -> section d'aide la plus utile */
 const PAR_ECRAN = {
   dashboard: 'parcours',
+  planning: 'planning',
   review: 'controler',
   invoices: 'parcours',
   suppliers: 'fournisseurs',

@@ -68,6 +68,7 @@
   <aside class="sidebar">
     <nav class="nav">
       <button type="button" class="nav-item active" data-tab="dashboard"><span class="ico">▤</span> Tableau de bord</button>
+      <button type="button" class="nav-item" data-tab="planning"><span class="ico">▦</span> Planning</button>
       <button type="button" class="nav-item" data-tab="review"><span class="ico">◉</span> À contrôler<span id="review-badge" class="nav-badge" hidden>0</span></button>
       <button type="button" class="nav-item" data-tab="invoices"><span class="ico">▣</span> Factures</button>
       <button type="button" class="nav-item" data-tab="suppliers"><span class="ico">◫</span> Fournisseurs</button>
@@ -195,6 +196,21 @@
         <aside id="review-list" class="review-list"></aside>
         <div id="review-detail" class="review-detail"></div>
       </div>
+    </section>
+
+    <!-- ========================================================
+         1 bis. PLANNING — les échéances vues comme un calendrier
+         ======================================================== -->
+    <section id="tab-planning" class="tab" hidden>
+      <div class="page-head">
+        <h1>Planning — <span id="planning-label" class="head-month">—</span></h1>
+        <div class="page-actions">
+          <button type="button" id="planning-prev" class="btn btn-icon" title="Mois précédent" aria-label="Mois précédent">‹</button>
+          <button type="button" id="planning-next" class="btn btn-icon" title="Mois suivant" aria-label="Mois suivant">›</button>
+          <button type="button" class="btn" data-print>Imprimer / PDF</button>
+        </div>
+      </div>
+      <div id="planning-body"></div>
     </section>
 
     <!-- ========================================================
@@ -858,6 +874,7 @@ import { initUpdateCheck } from './js/maintenance.js';
 import { initCalc, ouvrirCalc } from './js/calc.js';
 import { initHelp } from './js/help.js';
 import { renderCourrier } from './js/courrier.js';
+import { initPlanning, renderPlanning } from './js/planning.js';
 import { initSettings, renderSettings } from './js/settings.js';
 import { initSearch, openSearch } from './js/search.js';
 import { initPayments, renderPayments } from './js/payments.js';
@@ -876,6 +893,7 @@ function showTab(name) {
   $$('.tab').forEach((s) => { s.hidden = s.id !== `tab-${name}`; });
   $$('[data-tab]').forEach((b) => b.classList.toggle('active', b.dataset.tab === name));
   if (name === 'dashboard') { renderDashboard(); renderCourrier(); }
+  if (name === 'planning') renderPlanning();
   if (name === 'review') renderReview();
   if (name === 'payments') renderPayments();
   if (name === 'admin') renderAdmin();
@@ -1024,6 +1042,9 @@ initInvoices((id) => openDocument(id, showTab));
 // indéfiniment l'ancienne version en cache sans le dire.
 initUpdateCheck();
 initCalc();
+initPlanning();
+// Le planning montre, le tableau permet d'agir : un jour cliqué y renvoie.
+window.addEventListener('vk:goto', (e) => showTab(e.detail));
 initSuppliers();
 initDashboard();
 initReview();
