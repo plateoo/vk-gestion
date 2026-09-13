@@ -186,6 +186,12 @@ export function initHelp(onTour, onShortcuts, ecranActif) {
       window.open('guide.html', '_blank', 'noopener');
       return;
     }
+    // Deux pages à imprimer et à poser près du clavier, pour les premiers
+    // jours. Le mode d'emploi complet reste à côté, pour le reste.
+    if (act === 'demarrage') {
+      window.open('demarrage.html', '_blank', 'noopener');
+      return;
+    }
     if (act === 'tour') { closeModal('modal-help'); return onTour?.(); }
     if (act === 'keys') { closeModal('modal-help'); return onShortcuts?.(); }
     if (act === 'print') {

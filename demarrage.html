@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Par où commencer — VK Gestion</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+<style>
+  /* Fiche de démarrage : deux pages A4, à poser à côté du clavier. */
+  @page { size: A4 portrait; margin: 13mm; }
+
+  .dem { max-width: 780px; margin: 0 auto; padding: 20px 18px 50px; }
+  .dem h1 { font-size: 26px; margin: 0 0 4px; }
+  .dem .sous { color: var(--text-muted); font-size: 14px; margin: 0 0 20px; }
+
+  .dem h2 {
+    font-size: 15.5px; margin: 17px 0 8px; padding-bottom: 4px;
+    border-bottom: 2px solid var(--vbk-red);
+  }
+  .dem h2:first-of-type { margin-top: 14px; }
+  .dem p, .dem li { font-size: 13px; line-height: 1.48; margin: 6px 0; }
+
+  /* Les étapes : le cœur de la fiche */
+  .etapes { list-style: none; counter-reset: e; margin: 0; padding: 0; }
+  .etapes > li {
+    counter-increment: e; position: relative;
+    padding: 7px 0 7px 42px; border-bottom: 1px solid var(--line-soft);
+  }
+  .etapes > li:last-child { border-bottom: 0; }
+  .etapes > li::before {
+    content: counter(e); position: absolute; left: 0; top: 7px;
+    width: 26px; height: 26px; border-radius: 50%;
+    background: var(--vbk-red); color: var(--vbk-white);
+    display: grid; place-items: center; font-weight: 700; font-size: 14px;
+  }
+  .etapes strong { display: block; font-size: 14px; margin-bottom: 2px; }
+
+  .encadre {
+    padding: 10px 12px; border-radius: 10px; margin: 11px 0;
+    background: var(--surface-alt); border-left: 4px solid var(--primary);
+  }
+  .encadre.stop { background: var(--danger-soft); border-left-color: var(--danger); }
+  .encadre.ok { background: var(--ok-soft); border-left-color: var(--ok); }
+  .encadre p { margin: 0 0 6px; }
+  .encadre p:last-child { margin-bottom: 0; }
+  .encadre .t { font-weight: 700; }
+
+  .deux { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .touche {
+    display: inline-block; padding: 1px 7px; border: 1px solid var(--border-strong);
+    border-bottom-width: 2px; border-radius: 5px; background: var(--surface);
+    font-size: 12px; font-weight: 600; font-family: inherit;
+  }
+  .saut { break-before: page; }
+
+  @media print {
+    .no-print { display: none !important; }
+    .dem { padding: 0; max-width: none; }
+  }
+  @media (max-width: 700px) { .deux { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body class="guide-body">
+
+<header class="appbar no-print">
+  <a class="appbar-logo" href="index.html" title="Retour à l'application">
+    <img src="assets/logo-vbk-blanc.svg" alt="Vanden Borre Kitchen" width="120">
+  </a>
+  <div class="appbar-center"><span class="guide-appbar-title">Par où commencer</span></div>
+  <div class="appbar-right">
+    <button type="button" class="appbar-btn" onclick="window.print()">Imprimer</button>
+    <a class="appbar-btn" href="guide.html">Mode d'emploi complet</a>
+    <a class="appbar-btn" href="index.html">Retour à l'application</a>
+  </div>
+</header>
+
+<div class="dem">
+
+  <div class="print-only" style="margin-bottom:14px">
+    <img src="assets/logo-vbk.svg" alt="Vanden Borre Kitchen" width="150">
+  </div>
+
+  <h1>Par où commencer</h1>
+  <p class="sous">Suivi des factures fournisseurs — l'essentiel en deux pages.
+     Le mode d'emploi complet reste dans l'application, bouton <strong>?</strong>.</p>
+
+  <h2>Ce que fait cette application</h2>
+  <p>Les factures <strong>arrivent toutes seules</strong> par e-mail et sont lues
+     automatiquement : fournisseur, numéro, date, montants, TVA. Ton travail consiste à
+     <strong>vérifier</strong> et à ajouter le numéro Smart — pas à tout retaper. Tu continues
+     d'encoder dans Smart exactement comme avant : ici, c'est le tableau de contrôle.</p>
+
+  <div class="encadre ok">
+    <p class="t">Tu n'as plus à trier les mails</p>
+    <p>Mets dans le dossier <strong>Factures</strong> d'Outlook tout ce qui vient d'un
+       fournisseur, sans réfléchir. L'application reconnaît elle-même les conditions
+       générales, les bons de commande et les publicités, et les met de côté. Elles
+       n'apparaîtront jamais dans ta liste.</p>
+  </div>
+
+  <h2>Ta journée, en cinq gestes</h2>
+  <ol class="etapes">
+    <li>
+      <strong>Ouvre « À contrôler » dans le menu de gauche</strong>
+      C'est la liste des factures arrivées et pas encore vérifiées. Le chiffre à côté du
+      nom te dit combien il en reste.
+    </li>
+    <li>
+      <strong>Choisis un fournisseur dans la liste déroulante</strong>
+      Tu ne verras que ses factures, de la plus ancienne à la plus récente — pratique pour
+      les encoder d'affilée dans Smart.
+    </li>
+    <li>
+      <strong>Clique sur une facture</strong>
+      Le document s'ouvre à gauche, les champs déjà remplis à droite. Compare, corrige
+      si besoin.
+    </li>
+    <li>
+      <strong>Encode dans Smart, puis tape le numéro Smart</strong>
+      C'est le premier champ, le curseur y est déjà. C'est le seul renseignement qui ne
+      figure pas sur la facture.
+    </li>
+    <li>
+      <strong>Clique sur « Valider »</strong>
+      La facture suivante s'ouvre toute seule. Tu enchaînes sans rien chercher.
+    </li>
+  </ol>
+
+  <h2>Le raccourci quand il y en a beaucoup</h2>
+  <p>En haut de la liste, <strong>« Valider les N sans réserve »</strong> : les factures
+     comprises sans la moindre hésitation. L'application te montre lesquelles avant de
+     confirmer.</p>
+  <p>Elles partent <strong>sans numéro Smart</strong>. Tu les saisiras à la chaîne dans
+     l'écran <strong>Factures</strong>, colonne <em>Réf. Smart</em> : clique dans la case en
+     pointillés, tape, <span class="touche">Entrée</span>.</p>
+  <p><strong>Une facture validée, c'est terminé</strong> — tu n'y reviens pas.</p>
+
+  <!-- ================= PAGE 2 ================= -->
+  <div class="saut"></div>
+
+  <h2>Ce qui t'empêchera de valider — et c'est voulu</h2>
+  <p>Dans quatre cas, le bouton « Valider » reste bloqué. Ce n'est pas une panne : c'est
+     que quelque chose demande ton avis.</p>
+  <ul>
+    <li><strong>La TVA ne correspond pas.</strong> Le bloc TVA devient rouge : le taux
+        enregistré ne colle pas au montant de TVA lu sur la facture. Regarde le document et
+        corrige le taux, ou le montant.</li>
+    <li><strong>Des champs sont signalés douteux.</strong> La lecture n'était pas sûre
+        d'elle. Vérifie-les sur le document et confirme-les un par un.</li>
+    <li><strong>Le numéro de compte a changé.</strong> L'IBAN de la facture diffère de celui
+        de la fiche fournisseur. Choisis : garder celui de la fiche, ou le remplacer.</li>
+    <li><strong>Il manque le fournisseur, le numéro ou la date.</strong> Complète-les.</li>
+  </ul>
+
+  <div class="encadre stop">
+    <p class="t">Un numéro de compte qui change : préviens Jordan</p>
+    <p>C'est la façon la plus courante d'escroquer une entreprise : un faux fournisseur
+       envoie une vraie facture avec son propre compte bancaire. Ne remplace jamais un IBAN
+       sans en parler. Dans le doute, laisse la facture de côté.</p>
+  </div>
+
+  <h2>Deux outils qui font gagner du temps</h2>
+  <div class="deux">
+    <div>
+      <p><strong>La calculette</strong> — bouton <span class="touche">=</span> en haut à
+         droite, ou la touche <span class="touche">C</span>.</p>
+      <p>Elle garde à l'écran tout ce que tu tapes, comme une machine de bureau : pour
+         additionner les lignes d'une facture, tu vois ta saisie et tu retrouves ton erreur
+         sans tout recommencer.</p>
+      <p>Quatre boutons ajoutent ou retirent la TVA à 21 % et 6 %. Et
+         <strong>« Reporter le total »</strong> l'écrit directement dans le champ montant.</p>
+      <p>Depuis un champ de montant : le petit <span class="touche">=</span> à côté, ou
+         <span class="touche">Alt</span>+<span class="touche">C</span>.</p>
+    </div>
+    <div>
+      <p><strong>L'aide</strong> — bouton <span class="touche">?</span> en haut à droite.</p>
+      <p>Elle s'ouvre directement sur le sujet de l'écran où tu te trouves. Sinon, tape un
+         mot : <em>escompte</em>, <em>doublon</em>, <em>Smart</em>. Les accents ne comptent
+         pas.</p>
+      <p>Chaque sujet peut s'imprimer séparément.</p>
+    </div>
+  </div>
+
+  <h2>Ce dont tu n'as pas à t'occuper, et en cas de doute</h2>
+  <p>Les <strong>paiements</strong>, les <strong>réglages</strong> et les <strong>comptes</strong>
+     sont réservés à Jordan. Les pièces qui ne sont pas des factures, et les anciennes
+     factures de la franchise marquées « avant reprise », sont écartées toutes seules.</p>
+  <p><strong>Rien n'est définitif.</strong> Une facture mal validée se rouvre depuis l'écran
+     Factures : clique sur sa ligne, corrige, valide à nouveau. Si ce n'est pas une facture,
+     <strong>Rejeter</strong> la met de côté ; si la lecture semble fausse,
+     <strong>Relancer l'extraction</strong> fait relire le document.</p>
+
+  <div class="encadre">
+    <p class="t">Les raccourcis qui servent vraiment</p>
+    <p><span class="touche">C</span> calculette · <span class="touche">/</span> rechercher ·
+       <span class="touche">?</span> aide · <span class="touche">Échap</span> fermer une
+       fenêtre · <span class="touche">Entrée</span> valider une saisie.</p>
+  </div>
+
+  <p class="sous" style="margin-top:22px">
+    Adresse de l'application : <strong>plateoo.github.io/vk-gestion</strong> — à mettre en favori.
+  </p>
+
+</div>
+
+</body>
+</html>
