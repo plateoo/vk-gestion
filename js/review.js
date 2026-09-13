@@ -439,6 +439,7 @@ async function renderDetail() {
   box.innerHTML = `
     ${m.comment ? `<div class="review-banner">${ICONS.dash}<span>${escapeHtml(m.comment)}</span></div>` : ''}
     ${m.failed ? `<div class="review-banner danger">${ICONS.dash}<span>L'extraction automatique a échoué. Les champs sont à saisir à la main.</span></div>` : ''}
+    ${reprisebanniere(i)}
     ${ibanAlertHtml(m)}
     ${escompteBanniere(i)}
 
@@ -679,6 +680,29 @@ function currentRate() {
  * Bannière d'escompte. Le montant escompté vient de la base : la TVA n'est
  * jamais recalculée, seul le HTVA est diminué — règle belge.
  */
+/**
+ * Facture de l'ancienne franchise.
+ *
+ * Elle a peut-être DÉJÀ été encodée dans Smart par David — personne n'en
+ * est sûr. L'encoder une seconde fois créerait un doublon en comptabilité,
+ * et un doublon en comptabilité coûte plus cher à défaire qu'à éviter.
+ * D'où l'ordre : chercher dans Smart d'abord, reporter le numéro s'il
+ * existe, encoder seulement s'il n'existe pas.
+ *
+ * L'avertissement est ici, sur la facture, et pas seulement dans le mode
+ * d'emploi : c'est au moment d'agir qu'on a besoin de le lire.
+ */
+function reprisebanniere(i) {
+  if (i.payment_status !== 'avant_reprise') return '';
+  return `
+    <div class="review-banner warn">${ICONS.dash}<span>
+      <strong>Facture de l'ancienne franchise, déjà payée par elle.</strong>
+      Elle reste à encoder et à envoyer au comptable — mais
+      <strong>cherche-la d'abord dans Smart</strong> : si David l'y a déjà encodée,
+      reporte son numéro ici au lieu de l'encoder une seconde fois.
+    </span></div>`;
+}
+
 function escompteBanniere(i) {
   if (!i.discount_rate || !i.amount_discounted) return '';
   const limite = i.discount_deadline;

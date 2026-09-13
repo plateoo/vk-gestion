@@ -757,6 +757,9 @@ body.modal-open { overflow: hidden; }
   border-radius: var(--radius); padding: 9px 12px; font-size: 13px;
 }
 .review-banner.danger { background: var(--danger-soft); color: var(--danger); border-color: var(--border-danger); }
+/* Avertissement, pas alerte : il demande une vérification, pas un arrêt.
+   Le rouge est réservé à ce qui bloque — l'IBAN, la TVA incohérente. */
+.review-banner.warn { background: var(--warn-soft); color: var(--warn); border-color: var(--border-warn); }
 .review-banner .ico-svg { width: 16px; height: 16px; flex: none; }
 
 .review-split { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 14px; align-items: start; }
