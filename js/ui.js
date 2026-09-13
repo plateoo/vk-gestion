@@ -252,9 +252,11 @@ export const STATUSES = {
   en_retard:{ label: 'En retard',      cls: 'st-red'    },
   litige:   { label: 'Litige',         cls: 'st-red'    },
   acompte:  { label: 'Acompte versé',  cls: 'st-grey'   },
-  // Réglée par l'ancienne franchise avant la reprise du magasin : elle
-  // existe, elle se consulte, mais elle n'est due par personne ici.
-  avant_reprise: { label: 'Avant reprise', cls: 'st-grey' }
+  // Le PAIEMENT est réglé, rien d'autre. Le libellé doit le dire : ces
+  // factures restent à encoder dans Smart et à envoyer à WinAuditor
+  // comme les autres. « Avant reprise » tout court laissait croire
+  // qu'elles sortaient du travail — elles n'en sortent pas.
+  avant_reprise: { label: 'Payée avant reprise', cls: 'st-grey' }
 };
 export function statusLabel(s) { return (STATUSES[s] || {}).label || s || ''; }
 export function statusClass(s) { return (STATUSES[s] || {}).cls || 'st-grey'; }

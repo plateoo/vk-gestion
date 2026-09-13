@@ -842,7 +842,9 @@ async function bulkTakeover() {
         + `${fmtEUR(total)} repasseront en « à payer » et réapparaîtront dans les retards.`
       : `Déclarer ${cibles.length} facture(s) réglée(s) avant la reprise du magasin ?\n`
         + `${fmtEUR(total)} sortiront du reste à payer et des alertes de retard.\n`
-        + 'Elles restent consultables, cherchables et exportables. Les factures payées et les litiges ne sont pas touchés.',
+        + 'SEUL LE PAIEMENT est concerné : elles restent à contrôler, à encoder dans Smart '
+        + 'et à envoyer à WinAuditor comme les autres.\n'
+        + 'Les factures payées et les litiges ne sont pas touchés.',
     toutesMarquees ? 'Remettre à payer' : 'Réglées avant reprise');
   if (!ok) return;
 

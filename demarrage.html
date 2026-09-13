@@ -18,7 +18,7 @@
   .dem .sous { color: var(--text-muted); font-size: 14px; margin: 0 0 20px; }
 
   .dem h2 {
-    font-size: 15.5px; margin: 17px 0 8px; padding-bottom: 4px;
+    font-size: 15.5px; margin: 14px 0 7px; padding-bottom: 4px;
     border-bottom: 2px solid var(--vbk-red);
   }
   .dem h2:first-of-type { margin-top: 14px; }
@@ -40,7 +40,7 @@
   .etapes strong { display: block; font-size: 14px; margin-bottom: 2px; }
 
   .encadre {
-    padding: 10px 12px; border-radius: 10px; margin: 11px 0;
+    padding: 9px 12px; border-radius: 10px; margin: 9px 0;
     background: var(--surface-alt); border-left: 4px solid var(--primary);
   }
   .encadre.stop { background: var(--danger-soft); border-left-color: var(--danger); }
@@ -187,21 +187,27 @@
 
   <h2>Ce dont tu n'as pas à t'occuper, et en cas de doute</h2>
   <p>Les <strong>paiements</strong>, les <strong>réglages</strong> et les <strong>comptes</strong>
-     sont réservés à Jordan. Les pièces qui ne sont pas des factures, et les anciennes
-     factures de la franchise marquées « avant reprise », sont écartées toutes seules.</p>
+     sont réservés à Jordan. Les pièces qui ne sont pas des factures sont écartées toutes
+     seules.</p>
+
+  <div class="encadre stop">
+    <p class="t">Les factures « payée avant reprise » sont à encoder comme les autres</p>
+    <p>Elles viennent de l'ancienne franchise, qui les a déjà payées. <strong>Seul le
+       paiement est réglé.</strong> Elles doivent être contrôlées, encodées dans Smart et
+       envoyées à WinAuditor exactement comme les autres — ne les saute pas. Tu les trouves
+       dans « À contrôler », mêlées aux autres.</p>
+  </div>
   <p><strong>Rien n'est définitif.</strong> Une facture mal validée se rouvre depuis l'écran
      Factures : clique sur sa ligne, corrige, valide à nouveau. Si ce n'est pas une facture,
      <strong>Rejeter</strong> la met de côté ; si la lecture semble fausse,
      <strong>Relancer l'extraction</strong> fait relire le document.</p>
 
-  <div class="encadre">
-    <p class="t">Les raccourcis qui servent vraiment</p>
-    <p><span class="touche">C</span> calculette · <span class="touche">/</span> rechercher ·
-       <span class="touche">?</span> aide · <span class="touche">Échap</span> fermer une
-       fenêtre · <span class="touche">Entrée</span> valider une saisie.</p>
-  </div>
+  <p style="margin-top:12px"><strong>Raccourcis :</strong>
+     <span class="touche">C</span> calculette · <span class="touche">/</span> rechercher ·
+     <span class="touche">?</span> aide · <span class="touche">Échap</span> fermer ·
+     <span class="touche">Entrée</span> valider.</p>
 
-  <p class="sous" style="margin-top:22px">
+  <p class="sous" style="margin-top:14px">
     Adresse de l'application : <strong>plateoo.github.io/vk-gestion</strong> — à mettre en favori.
   </p>
 
