@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Guide du gérant — VK Gestion</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+<style>
+  @page { size: A4 portrait; margin: 13mm; }
+
+  .ger { max-width: 780px; margin: 0 auto; padding: 20px 18px 50px; }
+  .ger h1 { font-size: 25px; margin: 0 0 4px; }
+  .ger .sous { color: var(--text-muted); font-size: 13.5px; margin: 0 0 16px; }
+  .ger h2 {
+    font-size: 15.5px; margin: 16px 0 7px; padding-bottom: 4px;
+    border-bottom: 2px solid var(--vbk-red);
+  }
+  .ger h2:first-of-type { margin-top: 12px; }
+  .ger h3 { font-size: 13.5px; margin: 12px 0 4px; }
+  .ger p, .ger li { font-size: 12.8px; line-height: 1.44; margin: 5px 0; }
+
+  .etapes { list-style: none; counter-reset: e; margin: 0; padding: 0; }
+  .etapes > li {
+    counter-increment: e; position: relative;
+    padding: 6px 0 6px 40px; border-bottom: 1px solid var(--line-soft);
+  }
+  .etapes > li:last-child { border-bottom: 0; }
+  .etapes > li::before {
+    content: counter(e); position: absolute; left: 0; top: 6px;
+    width: 25px; height: 25px; border-radius: 50%;
+    background: var(--vbk-red); color: var(--vbk-white);
+    display: grid; place-items: center; font-weight: 700; font-size: 13px;
+  }
+  .etapes strong { display: block; font-size: 13.2px; margin-bottom: 1px; }
+
+  .encadre {
+    padding: 9px 12px; border-radius: 10px; margin: 9px 0;
+    background: var(--surface-alt); border-left: 4px solid var(--primary);
+  }
+  .encadre.stop { background: var(--danger-soft); border-left-color: var(--danger); }
+  .encadre.ok { background: var(--ok-soft); border-left-color: var(--ok); }
+  .encadre p { margin: 0 0 5px; }
+  .encadre p:last-child { margin-bottom: 0; }
+  .encadre .t { font-weight: 700; }
+
+  table.exp { width: 100%; border-collapse: collapse; margin: 8px 0; }
+  table.exp th, table.exp td {
+    text-align: left; padding: 4px 6px; font-size: 11.5px;
+    border-bottom: 1px solid var(--line-soft); vertical-align: top;
+  }
+  table.exp th { font-size: 10.5px; text-transform: uppercase; letter-spacing: .03em; color: var(--text-muted); }
+  table.exp td.n { text-align: right; font-variant-numeric: tabular-nums; width: 34px; }
+  .coche { font-weight: 700; color: var(--vbk-red); white-space: nowrap; }
+  .rien { color: var(--text-muted); }
+
+  .touche {
+    display: inline-block; padding: 1px 6px; border: 1px solid var(--border-strong);
+    border-bottom-width: 2px; border-radius: 5px; background: var(--surface);
+    font-size: 11.5px; font-weight: 600;
+  }
+  /* Pas de saut forcé : on laisse la pagination se faire, mais on
+     interdit qu'un tableau, un encadré ou une liste d'étapes soit coupé
+     en deux — c'est ce qui rend un document imprimé pénible à suivre.
+     Et un titre ne reste jamais seul en bas de page. */
+  .ger h2, .ger h3 { break-after: avoid; }
+  .encadre, .etapes, table.exp, .etapes > li { break-inside: avoid; }
+  @media print { .no-print { display: none !important; } .ger { padding: 0; max-width: none; } }
+</style>
+</head>
+<body class="guide-body">
+
+<header class="appbar no-print">
+  <a class="appbar-logo" href="index.html" title="Retour à l'application">
+    <img src="assets/logo-vbk-blanc.svg" alt="Vanden Borre Kitchen" width="120">
+  </a>
+  <div class="appbar-center"><span class="guide-appbar-title">Guide du gérant</span></div>
+  <div class="appbar-right">
+    <button type="button" class="appbar-btn" onclick="window.print()">Imprimer</button>
+    <a class="appbar-btn" href="guide.html">Mode d'emploi complet</a>
+    <a class="appbar-btn" href="index.html">Retour à l'application</a>
+  </div>
+</header>
+
+<div class="ger">
+
+  <div class="print-only" style="margin-bottom:12px">
+    <img src="assets/logo-vbk.svg" alt="Vanden Borre Kitchen" width="150">
+  </div>
+
+  <h1>Guide du gérant</h1>
+  <p class="sous">Autoriser les expéditeurs, et tout ce qui n'appartient qu'à toi.
+     Le travail de Marie est décrit dans sa propre fiche.</p>
+
+  <!-- ================================================================ -->
+  <h2>1. Autoriser un expéditeur</h2>
+
+  <p>Aucune facture n'est lue tant que son expéditeur n'est pas autorisé. C'est voulu :
+     n'importe qui peut écrire à la boîte du magasin, et une pièce jointe inconnue n'a rien
+     à faire dans la comptabilité. Les messages attendent donc en <strong>quarantaine</strong>.</p>
+
+  <ol class="etapes">
+    <li>
+      <strong>Ouvre « Réglages » dans le menu de gauche</strong>
+      Le premier bloc s'appelle <em>Quarantaine</em>. Une ligne par expéditeur.
+    </li>
+    <li>
+      <strong>Lis la ligne avant de décider</strong>
+      Elle donne l'adresse, le nombre de messages, la date du dernier et l'objet du dernier
+      message. C'est ce qui te dit de qui il s'agit.
+    </li>
+    <li>
+      <strong>Coche « transitaire » si l'adresse n'identifie PAS un fournisseur</strong>
+      Voir ci-dessous : c'est la seule décision qui demande de réfléchir.
+    </li>
+    <li>
+      <strong>Clique sur « Autoriser et rejouer »</strong>
+      Ses messages partent en lecture. Les factures apparaissent dans « À contrôler »
+      quelques minutes plus tard.
+    </li>
+  </ol>
+
+  <h3>La case « transitaire », et pourquoi elle compte</h3>
+  <p>Pour reconnaître un fournisseur, l'application utilise trois indices : le numéro de TVA
+     lu sur la facture, le nom, et <strong>l'adresse d'expédition</strong>. Ce troisième
+     indice ne vaut que si l'adresse appartient réellement au fournisseur.</p>
+  <div class="encadre stop">
+    <p class="t">Coche « transitaire » dès que l'adresse retransmet les factures d'AUTRES sociétés</p>
+    <p>Un ancien franchisé, un comptable, une adresse interne, ou un <strong>relais d'envoi</strong>
+       du type <em>sent-via</em>, <em>no-reply@mailer…</em>. Sans cette case, toutes les
+       factures reçues de cette adresse seraient rattachées à un seul et même fournisseur —
+       et il faudrait ensuite les démêler une par une.</p>
+  </div>
+
+  <h3>Tes 16 expéditeurs en attente</h3>
+  <p>Ce que je recommande. Vérifie tout de même : c'est toi qui connais tes fournisseurs.</p>
+
+  <table class="exp">
+    <thead><tr><th class="n">msg</th><th>adresse</th><th>transitaire ?</th><th>pourquoi</th></tr></thead>
+    <tbody>
+      <tr><td class="n">10</td><td>system@sent-via.netsuite.com</td><td class="coche">☑ OUI</td>
+          <td>Relais d'envoi, pas un fournisseur. Le plus important des seize.</td></tr>
+      <tr><td class="n">2</td><td>kbe@proxicompta.be</td><td class="coche">☑ OUI</td>
+          <td>Un comptable transmet les factures de ses clients.</td></tr>
+      <tr><td class="n">1</td><td>asach@vandenborrekitchen.be</td><td class="coche">☑ OUI</td>
+          <td>Adresse interne : « transmission de facture ».</td></tr>
+      <tr><td class="n">2</td><td>contact.serenitybelgium@gmail.com</td><td class="coche">☑ OUI</td>
+          <td>Déjà identifié comme transfert ponctuel.</td></tr>
+      <tr><td class="n">1</td><td>no-reply@mailer.falco-app.be</td><td class="coche">☑ OUI</td>
+          <td>Relais d'une application (facture INKWELL.BE).</td></tr>
+      <tr><td class="n">2</td><td>elicafrancecompta1@elica.com</td><td class="rien">non</td><td>Elica</td></tr>
+      <tr><td class="n">2</td><td>etellegen@fbdgroup.fr</td><td class="rien">non</td><td>FBD Group</td></tr>
+      <tr><td class="n">1</td><td>be_btc@beko.com</td><td class="rien">non</td><td>Beko</td></tr>
+      <tr><td class="n">1</td><td>financeiro@belgrani.com</td><td class="rien">non</td><td>Belgrani</td></tr>
+      <tr><td class="n">1</td><td>hs-fbn-dunning.be@franke.com</td><td class="rien">non</td><td>Franke</td></tr>
+      <tr><td class="n">1</td><td>invoicing-infra@megabyte.be</td><td class="rien">non</td><td>Megabyte</td></tr>
+      <tr><td class="n">1</td><td>jean-francois.gregoire@blanco.be</td><td class="rien">non</td><td>Blanco</td></tr>
+      <tr><td class="n">1</td><td>odoo@componenti.be</td><td class="rien">non</td><td>CompoNenti</td></tr>
+      <tr><td class="n">1</td><td>wim_vermoezen@nobilia.de</td><td class="rien">non</td><td>nobilia</td></tr>
+      <tr><td class="n">1</td><td>cg12amenagement@gmail.com</td><td class="rien">non ?</td>
+          <td>« Factures impayées » — à vérifier, une adresse Gmail peut cacher un transfert.</td></tr>
+      <tr><td class="n">4</td><td>aozenne@innoserve.fr</td><td class="rien">non ?</td>
+          <td>« Appel de primes » — à toi de dire si Innoserve facture pour lui-même.</td></tr>
+    </tbody>
+  </table>
+
+  <div class="encadre">
+    <p class="t">Si tu te trompes, rien n'est perdu</p>
+    <p>Un expéditeur autorisé par erreur se retire dans le bloc <em>Expéditeurs autorisés</em>,
+       juste en dessous. Et un rejeu s'annule : les factures créées repartent, sans toucher
+       à celles que Marie aurait déjà validées.</p>
+  </div>
+
+  <h2>2. Lire les messages en attente</h2>
+  <p>Autoriser un expéditeur lance la lecture de ses messages, <strong>vingt à la fois</strong>.
+     S'il en reste, un bandeau apparaît en haut de l'écran <em>À contrôler</em> :
+     <strong>« Lire les N messages en attente »</strong>.</p>
+  <p>Compte une dizaine de secondes par message. On peut arrêter et reprendre plus tard :
+     ce qui est lu reste lu. Ces messages sont déjà arrivés — Outlook ne les redonnera pas,
+     c'est ici que la lecture se déclenche.</p>
+
+  <h2>3. Réunir les fiches fournisseur en double</h2>
+  <p>Chaque facture d'un fournisseur inconnu crée une fiche. Avec le temps, un même
+     fournisseur s'éparpille — <em>nobilia</em> et <em>nobilia-Werke J. Stickling</em>, quatre
+     variantes d'<em>Electrolux</em>. <strong>Tant qu'elles sont séparées, tes totaux par
+     fournisseur sont faux.</strong></p>
+  <p>Écran <em>Fournisseurs</em> : un bloc en haut signale les fiches à réunir et dit pourquoi.
+     La fiche conservée est celle qui porte le plus de factures ; les adresses e-mail de
+     l'autre sont reprises, pour que la reconnaissance continue de fonctionner.</p>
+  <div class="encadre">
+    <p class="t">Une exception dans ta liste</p>
+    <p><em>Vanden Borre Kitchen</em> et <em>Vanden Borre Kitchen BONCELLES</em> sont ta propre
+       société. Ne les fusionne pas avec un fournisseur : leurs quatre pièces sont des
+       documents, pas des achats.</p>
+  </div>
+
+  <h2>4. Payer une facture, et l'escompte</h2>
+  <p>Sur la ligne, <strong>« Marquer payé »</strong> enregistre le paiement du jour. Une bande
+     apparaît six secondes pour annuler. Ensuite, un clic sur la date la corrige, et le menu
+     <strong>⋯</strong> permet d'annuler le paiement.</p>
+  <p>Quand un escompte existe, l'application demande <strong>quel montant a réellement été
+     versé</strong> — même hors délai, car un fournisseur l'accorde parfois en retard. C'est
+     le montant décaissé qui doit être enregistré, sinon les totaux sont faux.</p>
+  <p><strong>Règle belge :</strong> l'escompte ne touche jamais la base TVA. Seul le hors-TVA
+     est diminué.</p>
+
+  <h2>5. Le planning</h2>
+  <p>Le mois en calendrier : ce qui échoit quel jour, et quels escomptes expirent. Trois
+     chiffres en haut — à payer, en retard, escomptes encore saisissables. Un jour cliqué
+     ouvre les factures concernées.</p>
+
+  <h2>6. Donner les factures au comptable</h2>
+  <p>Écran <em>Factures</em> : choisis la période (mois, trimestre, année), puis
+     <strong>Exporter → Dossier pour le comptable (ZIP)</strong>. L'archive contient le
+     récapitulatif Excel et tous les PDF, renommés « Fournisseur - Numéro ». Un document
+     introuvable est signalé dans un fichier à l'intérieur de l'archive, jamais passé sous
+     silence.</p>
+  <p>Un trimestre pèse une dizaine de mégaoctets : ça passe en pièce jointe d'un mail.</p>
+
+  <h2>7. Sauvegardes et sécurité</h2>
+  <p>Écran <em>Administration</em>. Deux protections, contre deux risques :</p>
+  <ul>
+    <li><strong>Dans la base</strong>, automatique chaque nuit à 2 h 15. Protège d'une
+        suppression par erreur : le bouton « Factures supprimées… » remet en place ce qui
+        manque.</li>
+    <li><strong>Hors de la base</strong>, en téléchargeant l'archive. <strong>C'est le seul
+        recours si le service disparaît.</strong> Range-la ailleurs que sur l'ordinateur du
+        magasin.</li>
+  </ul>
+  <p>Le <em>contrôle de sécurité</em>, juste en dessous, vérifie neuf points et dit en
+     français ce qui ne va pas. S'il passe au rouge sur la sauvegarde hors ligne, c'est
+     qu'elle n'a plus été emportée depuis trop longtemps.</p>
+
+  <h2>8. Ce qui reste à brancher</h2>
+  <p>Deux flux Power Automate, dont les recettes détaillées sont dans les fichiers que je
+     t'ai préparés :</p>
+  <ul>
+    <li><strong>Sauvegarde hebdomadaire vers OneDrive</strong> — pour que l'archive sorte de
+        la base sans que tu y penses.</li>
+    <li><strong>Aperçu du courrier</strong> — pour alimenter le bloc « Courrier » de la page
+        d'accueil. Le flux actuel ne surveille que le dossier Factures.</li>
+  </ul>
+
+  <div class="encadre ok">
+    <p class="t">L'aide est dans l'application</p>
+    <p>Bouton <span class="touche">?</span> en haut à droite : elle s'ouvre sur le sujet de
+       l'écran où tu te trouves, et se cherche par mot-clé. Chaque sujet s'imprime
+       séparément.</p>
+  </div>
+
+  <p class="sous" style="margin-top:14px">
+    <strong>plateoo.github.io/vk-gestion</strong>
+  </p>
+
+</div>
+
+</body>
+</html>

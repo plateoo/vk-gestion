@@ -192,6 +192,12 @@ export function initHelp(onTour, onShortcuts, ecranActif) {
       window.open('demarrage.html', '_blank', 'noopener');
       return;
     }
+    // Ce qui n'appartient qu'au gérant : autoriser un expéditeur, réunir
+    // des fiches, payer, sauvegarder. Le bouton lui est réservé.
+    if (act === 'gerant') {
+      window.open('gerant.html', '_blank', 'noopener');
+      return;
+    }
     if (act === 'tour') { closeModal('modal-help'); return onTour?.(); }
     if (act === 'keys') { closeModal('modal-help'); return onShortcuts?.(); }
     if (act === 'print') {
