@@ -174,6 +174,12 @@ export function initCalc() {
       if (a === 'tva6')  return appliquer('+ TVA 6 %',  (t) => t * 1.06);
       if (a === 'sanstva21') return appliquer('− TVA 21 %', (t) => t / 1.21);
       if (a === 'sanstva6')  return appliquer('− TVA 6 %',  (t) => t / 1.06);
+      // Remise commerciale : on RETIRE un pourcentage du total. À ne pas
+      // confondre avec « retirer la TVA », qui divise. −25 % de 100
+      // donne 75, alors que retirer 25 % de TVA de 100 donne 80.
+      if (a === 'remise5')  return appliquer('remise −5 %',  (t) => t * 0.95);
+      if (a === 'remise25') return appliquer('remise −25 %', (t) => t * 0.75);
+      if (a === 'remise75') return appliquer('remise −75 %', (t) => t * 0.25);
     }
     const del = e.target.closest('[data-calc-del]');
     if (del) {

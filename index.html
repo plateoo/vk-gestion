@@ -225,10 +225,10 @@
           <div class="dropdown">
             <button type="button" id="btn-export" class="btn">Exporter ▾</button>
             <div id="export-menu" class="dd-menu" hidden>
-              <button type="button" id="export-xlsx">Excel (.xlsx) — période affichée</button>
+              <button type="button" id="export-xlsx">Excel (.xlsx) — ce qui est affiché</button>
               <button type="button" id="export-accountant">Dossier pour le comptable (ZIP)</button>
               <div class="dd-sep" role="separator"></div>
-              <button type="button" id="export-month">CSV de la période affichée</button>
+              <button type="button" id="export-month">CSV de ce qui est affiché</button>
               <button type="button" id="export-selection">CSV de la sélection courante</button>
               <button type="button" id="export-all">CSV complet (toutes périodes)</button>
             </div>
@@ -683,6 +683,26 @@
         <input id="sup-vat" type="text" placeholder="BE0123.456.789" autocomplete="off">
       </div>
       <div class="field">
+        <label for="sup-country">Pays</label>
+        <select id="sup-country">
+          <option value="">À préciser</option>
+          <option value="BE">Belgique</option>
+          <option value="DE">Allemagne</option>
+          <option value="FR">France</option>
+          <option value="NL">Pays-Bas</option>
+          <option value="LU">Luxembourg</option>
+          <option value="IT">Italie</option>
+          <option value="ES">Espagne</option>
+          <option value="PT">Portugal</option>
+          <option value="AT">Autriche</option>
+          <option value="PL">Pologne</option>
+          <option value="__autre">Autre pays (hors Belgique)</option>
+        </select>
+        <p class="field-hint">Déduit du numéro de TVA quand il est lisible. Il sert à isoler
+          les achats hors Belgique pour la déclaration — pas le taux, qui peut être à 0 %
+          chez un fournisseur belge.</p>
+      </div>
+      <div class="field">
         <label for="sup-contact">Contact</label>
         <input id="sup-contact" type="text" autocomplete="off">
       </div>
@@ -849,6 +869,16 @@
     <button type="button" class="btn btn-sm" data-calc="tva6">+ TVA 6 %</button>
     <button type="button" class="btn btn-sm" data-calc="sanstva21">retirer 21 %</button>
     <button type="button" class="btn btn-sm" data-calc="sanstva6">retirer 6 %</button>
+  </div>
+
+  <!-- Remises commerciales. Rangées à part des boutons de TVA, et
+       étiquetées : « −25 % » n'est pas « retirer 25 % de TVA ». L'une
+       multiplie par 0,75, l'autre divise par 1,25. -->
+  <div class="calc-vat calc-remise">
+    <span class="calc-lbl">Remise</span>
+    <button type="button" class="btn btn-sm" data-calc="remise5">−5 %</button>
+    <button type="button" class="btn btn-sm" data-calc="remise25">−25 %</button>
+    <button type="button" class="btn btn-sm" data-calc="remise75">−75 %</button>
   </div>
 
   <div class="calc-foot">

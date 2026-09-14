@@ -39,6 +39,12 @@ const filters = {
   view: 'factures'     // 'factures' | 'a_controler' | 'documents' | 'doublons'
 };
 
+// Valeurs d'ensemble du filtre fournisseur. Préfixées pour ne jamais
+// entrer en collision avec un identifiant de fiche.
+const PAYS_BE = '__pays_be';
+const PAYS_ETRANGER = '__pays_etranger';
+const PAYS_INCONNU = '__pays_inconnu';
+
 // Tri actif
 let sort = { key: 'invoice_date', dir: 'desc' };
 
@@ -107,7 +113,13 @@ function applyFilters(rows) {
     // « month » veut dire : restreindre à la période affichée, quelle qu'elle
     // soit — mois, trimestre, année ou dates libres.
     if (filters.period !== 'all' && !inPeriod(i.invoice_date)) return false;
-    if (filters.supplier && i.supplier_id !== filters.supplier) return false;
+    if (filters.supplier) {
+      const pays = supplierById(i.supplier_id)?.country || null;
+      if (filters.supplier === PAYS_BE) { if (pays !== 'BE') return false; }
+      else if (filters.supplier === PAYS_ETRANGER) { if (!pays || pays === 'BE') return false; }
+      else if (filters.supplier === PAYS_INCONNU) { if (pays) return false; }
+      else if (i.supplier_id !== filters.supplier) return false;
+    }
     // « En retard » est calculé (échéance dépassée + non payée), il n'est plus saisi à la main
     if (filters.status === 'overdue' && !isOverdue(i)) return false;
     if (filters.status && filters.status !== 'overdue' && i.payment_status !== filters.status) return false;
@@ -485,12 +497,43 @@ function updateSortIndicators() {
   });
 }
 
+/**
+ * Liste des fournisseurs, groupée par pays.
+ *
+ * Les achats intracommunautaires se déclarent à part — autoliquidation,
+ * grilles séparées, listing intracommunautaire. Le comptable a besoin de
+ * les voir ENSEMBLE, pas dispersés parmi les factures belges. D'où deux
+ * entrées d'ensemble en tête de liste, avant les fournisseurs un par un.
+ *
+ * Le pays vient du numéro de TVA, jamais du taux : CESI est belge et
+ * facture à 0 %. Une fiche sans numéro de TVA reste « à préciser » —
+ * visible, plutôt que rangée d'office du mauvais côté.
+ */
 function fillSupplierFilter() {
   const sel = $('#f-supplier');
   const current = sel.value;
   const sups = suppliersCache().filter((s) => !s.archived || s.id === current);
-  sel.innerHTML = '<option value="">Tous les fournisseurs</option>' +
-    sups.map((s) => `<option value="${s.id}">${escapeHtml(s.name)}</option>`).join('');
+  const parNom = (a, b) => a.name.localeCompare(b.name, 'fr');
+
+  const belges = sups.filter((s) => s.country === 'BE').sort(parNom);
+  const etrangers = sups.filter((s) => s.country && s.country !== 'BE').sort(parNom);
+  const inconnus = sups.filter((s) => !s.country).sort(parNom);
+
+  const groupe = (titre, liste) => liste.length
+    ? `<optgroup label="${escapeHtml(titre)}">${liste
+        .map((s) => `<option value="${s.id}">${escapeHtml(s.name)}${
+          s.country && s.country !== 'BE' ? ` (${s.country})` : ''}</option>`).join('')}</optgroup>`
+    : '';
+
+  sel.innerHTML =
+    '<option value="">Tous les fournisseurs</option>' +
+    (belges.length ? `<option value="${PAYS_BE}">— Tous les fournisseurs belges (${belges.length})</option>` : '') +
+    (etrangers.length ? `<option value="${PAYS_ETRANGER}">— Tous les fournisseurs hors Belgique (${etrangers.length})</option>` : '') +
+    (inconnus.length ? `<option value="${PAYS_INCONNU}">— Pays à préciser (${inconnus.length})</option>` : '') +
+    groupe('Belgique', belges) +
+    groupe('Hors Belgique', etrangers) +
+    groupe('Pays à préciser', inconnus);
+
   sel.value = filters.supplier || '';
 }
 

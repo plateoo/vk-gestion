@@ -352,6 +352,12 @@ export function openSupplierModal(supplier = null, onSaved = null) {
   $('#sup-id').value = supplier?.id || '';
   $('#sup-name').value = supplier?.name || '';
   $('#sup-vat').value = supplier?.vat_number || '';
+  // Un pays connu mais absent de la liste courte — PT, DK… — se range sous
+  // « Autre » plutôt que de disparaître en silence à l'enregistrement.
+  const paysConnus = [...$('#sup-country').options].map((o) => o.value);
+  $('#sup-country').value = !supplier?.country ? ''
+    : (paysConnus.includes(supplier.country) ? supplier.country : '__autre');
+  $('#sup-country').dataset.reel = supplier?.country || '';
   $('#sup-contact').value = supplier?.contact_name || '';
   $('#sup-email').value = supplier?.email || '';
   $('#sup-phone').value = supplier?.phone || '';
@@ -377,6 +383,11 @@ async function saveSupplier(e) {
   const payload = {
     name: $('#sup-name').value.trim(),
     vat_number: $('#sup-vat').value.trim() || null,
+    // « Autre » conserve le code réel de la fiche : on ne le remplace pas
+    // par un fourre-tout qui ferait perdre l'information.
+    country: $('#sup-country').value === '__autre'
+      ? ($('#sup-country').dataset.reel || null)
+      : ($('#sup-country').value || null),
     contact_name: $('#sup-contact').value.trim() || null,
     email: $('#sup-email').value.trim() || null,
     phone: $('#sup-phone').value.trim() || null,

@@ -1,7 +1,8 @@
 // =====================================================================
 // export.js — export CSV (Excel FR) et impression / PDF
 // =====================================================================
-import { getInvoices, currentSelection } from './invoices.js';
+import { getInvoices, currentSelection, getFilters } from './invoices.js';
+import { suppliersCache } from './suppliers.js';
 import { supabase } from './supabase.js';
 import { buildXlsx } from './xlsx.js';
 import { buildZip, nomSur } from './zip.js';
@@ -174,23 +175,53 @@ export function downloadInvoicesXLSX(rows, filename, sheetName) {
 // Câblage des boutons
 // ---------------------------------------------------------------------
 
-/** Factures de la période affichée, documents exclus */
-async function facturesDeLaPeriode() {
+/**
+ * Ce qui part à l'export : EXACTEMENT ce qui est affiché.
+ *
+ * Un fichier nommé « hors Belgique » qui contiendrait toute la période
+ * serait pire qu'inutile — le comptable déclarerait de travers. On prend
+ * donc les lignes du tableau telles qu'elles sont, filtre compris.
+ *
+ * Le repli sur la période ne sert qu'au cas où le tableau n'a pas encore
+ * été rendu : mieux vaut exporter la période que rien du tout.
+ */
+async function facturesAffichees() {
+  const affichees = currentSelection().filter((i) => i.review_status !== 'document');
+  if (affichees.length) return affichees;
   const p = getPeriod();
   return (await getInvoices()).filter((i) =>
     i.review_status !== 'document' && inPeriod(i.invoice_date, p));
 }
 
+/**
+ * Ce que le nom du fichier doit dire en plus de la période.
+ *
+ * Un classeur qui ne contient que les achats hors Belgique et s'appelle
+ * « toutes périodes » ment au comptable. Le filtre en cours fait partie
+ * de ce que contient le fichier : il doit se lire sur l'étiquette.
+ */
+function suffixeFiltre() {
+  const f = getFilters();
+  if (f.supplier === '__pays_etranger') return '_hors-Belgique';
+  if (f.supplier === '__pays_be') return '_Belgique';
+  if (f.supplier === '__pays_inconnu') return '_pays-a-preciser';
+  if (f.supplier) {
+    const nom = suppliersCache().find((s) => s.id === f.supplier)?.name;
+    return nom ? '_' + nomSur(nom).replace(/\s+/g, '-').slice(0, 28) : '';
+  }
+  return '';
+}
+
 async function exportMonth() {
   try {
-    downloadInvoicesCSV(await facturesDeLaPeriode(), `VK_factures_${periodSlug()}.csv`);
+    downloadInvoicesCSV(await facturesAffichees(), `VK_factures_${periodSlug()}${suffixeFiltre()}.csv`);
   } catch (err) { toast(errorMessage(err, 'Export impossible.'), 'error'); }
 }
 
 async function exportXlsx() {
   try {
-    const rows = await facturesDeLaPeriode();
-    downloadInvoicesXLSX(rows, `VK_factures_${periodSlug()}.xlsx`, periodLabel());
+    const rows = await facturesAffichees();
+    downloadInvoicesXLSX(rows, `VK_factures_${periodSlug()}${suffixeFiltre()}.xlsx`, periodLabel());
   } catch (err) { toast(errorMessage(err, 'Export impossible.'), 'error'); }
 }
 
@@ -206,7 +237,7 @@ async function exportAccountant() {
   let rows;
   try {
     const selection = currentSelection().filter((i) => i.review_status !== 'document');
-    const periode = await facturesDeLaPeriode();
+    const periode = await facturesAffichees();
     // Une sélection explicite prime sur la période affichée.
     rows = selection.length && selection.length !== periode.length ? selection : periode;
   } catch (err) {
@@ -225,7 +256,7 @@ async function exportAccountant() {
     'Préparer l\'archive');
   if (!ok) return;
 
-  const etiquette = periodSlug();
+  const etiquette = periodSlug() + suffixeFiltre();
   const fichiers = [{
     name: `Recapitulatif_${etiquette}.xlsx`,
     data: new Uint8Array(await buildXlsx(COLONNES, rows.map(ligneXlsx), { sheetName: periodLabel() }).arrayBuffer())
