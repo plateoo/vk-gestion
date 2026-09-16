@@ -19,6 +19,7 @@ let chargement = null;
 const PAR_ECRAN = {
   dashboard: 'parcours',
   planning: 'planning',
+  taches: 'taches',
   review: 'controler',
   invoices: 'parcours',
   suppliers: 'fournisseurs',

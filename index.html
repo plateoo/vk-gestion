@@ -68,6 +68,7 @@
   <aside class="sidebar">
     <nav class="nav">
       <button type="button" class="nav-item active" data-tab="dashboard"><span class="ico">▤</span> Tableau de bord</button>
+      <button type="button" class="nav-item" data-tab="taches"><span class="ico">☑</span> À faire<span id="task-badge" class="nav-badge" hidden>0</span></button>
       <button type="button" class="nav-item" data-tab="planning"><span class="ico">▦</span> Planning</button>
       <button type="button" class="nav-item" data-tab="review"><span class="ico">◉</span> À contrôler<span id="review-badge" class="nav-badge" hidden>0</span></button>
       <button type="button" class="nav-item" data-tab="invoices"><span class="ico">▣</span> Factures</button>
@@ -196,6 +197,35 @@
         <aside id="review-list" class="review-list"></aside>
         <div id="review-detail" class="review-detail"></div>
       </div>
+    </section>
+
+    <!-- ========================================================
+         1 ter. À FAIRE — la liste partagée
+         ======================================================== -->
+    <section id="tab-taches" class="tab" hidden>
+      <div class="page-head">
+        <h1>À faire</h1>
+        <p class="muted small">Ce que l'un demande à l'autre. Tout se répond ici.</p>
+      </div>
+
+      <!-- Ajout en tête d'écran : sur un téléphone, il doit être sous le
+           pouce dès l'ouverture. Seul l'intitulé est obligatoire. -->
+      <div class="card pad tache-ajout">
+        <input id="tache-titre" type="text" class="search" autocomplete="off"
+               placeholder="Qu'y a-t-il à faire ?" aria-label="Nouvelle tâche">
+        <div class="tache-ajout-bas">
+          <select id="tache-pour" aria-label="Pour qui"></select>
+          <select id="tache-prio" aria-label="Priorité">
+            <option value="normale">Normal</option>
+            <option value="haute">Urgent</option>
+            <option value="basse">Quand tu peux</option>
+          </select>
+          <input id="tache-date" type="date" aria-label="Pour quand">
+          <button type="button" id="tache-ajouter" class="btn btn-primary">Ajouter</button>
+        </div>
+      </div>
+
+      <div id="taches-body"></div>
     </section>
 
     <!-- ========================================================
@@ -526,7 +556,7 @@
     <button type="button" class="tabbar-item" data-tab="review"><span class="ico">◉</span>Contrôle<span id="review-badge-m" class="nav-badge" hidden>0</span></button>
     <button type="button" class="tabbar-item" data-tab="invoices"><span class="ico">▣</span>Factures</button>
     <button type="button" class="tabbar-item" data-tab="suppliers"><span class="ico">◫</span>Fourn.</button>
-    <button type="button" class="tabbar-item manager-only" data-tab="payments" hidden><span class="ico">€</span>Paiem.</button>
+    <button type="button" class="tabbar-item" data-tab="taches"><span class="ico">☑</span>À faire<span id="task-badge-m" class="nav-badge" hidden>0</span></button>
   </nav>
 </div>
 
@@ -907,6 +937,7 @@ import { initCalc, ouvrirCalc } from './js/calc.js';
 import { initHelp } from './js/help.js';
 import { renderCourrier } from './js/courrier.js';
 import { initPlanning, renderPlanning } from './js/planning.js';
+import { initTaches, renderTaches, refreshTaskBadge, remplirDestinataires } from './js/taches.js';
 import { initSettings, renderSettings } from './js/settings.js';
 import { initSearch, openSearch } from './js/search.js';
 import { initPayments, renderPayments } from './js/payments.js';
@@ -922,10 +953,16 @@ let activeTab = 'dashboard';
 /** Affiche un onglet et déclenche son rendu */
 function showTab(name) {
   activeTab = name;
+  // Le bouton flottant crée une FACTURE : il n'a rien à faire sur les
+  // écrans qui n'en parlent pas, et sur téléphone il recouvrait le bouton
+  // « Envoyer » de la liste à faire.
+  const fab = $('#fab-new');
+  if (fab) fab.hidden = !['dashboard', 'invoices', 'suppliers'].includes(name);
   $$('.tab').forEach((s) => { s.hidden = s.id !== `tab-${name}`; });
   $$('[data-tab]').forEach((b) => b.classList.toggle('active', b.dataset.tab === name));
   if (name === 'dashboard') { renderDashboard(); renderCourrier(); }
   if (name === 'planning') renderPlanning();
+  if (name === 'taches') renderTaches();
   if (name === 'review') renderReview();
   if (name === 'payments') renderPayments();
   if (name === 'admin') renderAdmin();
@@ -954,6 +991,8 @@ async function enterApp(user) {
   }
   showTab('dashboard');
   refreshReviewBadge();
+  refreshTaskBadge();
+  remplirDestinataires();
 
   // Visite guidée au tout premier login de cet utilisateur
   maybeStartTour(currentUser?.id, isManager() ? 'manager' : 'secretary', showTab);
@@ -1075,6 +1114,7 @@ initInvoices((id) => openDocument(id, showTab));
 initUpdateCheck();
 initCalc();
 initPlanning();
+initTaches();
 // Le planning montre, le tableau permet d'agir : un jour cliqué y renvoie.
 window.addEventListener('vk:goto', (e) => showTab(e.detail));
 initSuppliers();
