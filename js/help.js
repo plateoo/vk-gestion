@@ -20,6 +20,7 @@ const PAR_ECRAN = {
   dashboard: 'parcours',
   planning: 'planning',
   taches: 'taches',
+  memoire: 'memoire',
   review: 'controler',
   invoices: 'parcours',
   suppliers: 'fournisseurs',

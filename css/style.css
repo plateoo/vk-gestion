@@ -1165,6 +1165,46 @@ kbd {
 }
 
 /* ---------------------------------------------------------------
+   Mémoire — ce qui doit rester
+   --------------------------------------------------------------- */
+.memo-barre { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
+.memo-barre .search { flex: 1 1 200px; min-width: 0; }
+
+.memo {
+  display: block; margin-bottom: 10px; padding: 12px 14px;
+  border: 1px solid var(--border); border-radius: 12px; background: var(--surface);
+}
+.memo.epinglee { border-color: var(--border-warn); background: var(--warn-soft); }
+.memo.en-edition { border-color: var(--primary); }
+.memo-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+.memo-titre { font-size: 15px; margin: 0; }
+.memo-theme {
+  padding: 1px 8px; border-radius: 999px; background: var(--surface-sunken);
+  color: var(--text-muted); font-size: 11px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .02em;
+}
+/* Le texte est rendu tel qu'il a été tapé : c'est une note, pas un document */
+.memo-corps { font-size: 13.5px; line-height: 1.55; white-space: normal; }
+.memo-pied { margin: 8px 0 0; font-size: 11.5px; color: var(--text-muted); }
+
+.memo-form { display: flex; flex-direction: column; gap: 8px; }
+.memo-form textarea {
+  width: 100%; padding: 10px 12px; font: inherit; font-size: 13.5px; line-height: 1.55;
+  border: 1px solid var(--border); border-radius: 8px;
+  background: var(--surface); color: var(--text); resize: vertical;
+}
+.memo-form textarea:focus, .memo-form .search:focus {
+  outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--row-select);
+}
+.memo-form-bas { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.memo-form-bas select {
+  padding: 7px 9px; font-size: 13px; border: 1px solid var(--border);
+  border-radius: 8px; background: var(--surface); color: var(--text);
+}
+
+@media (max-width: 900px) { .memo-form-bas .btn { flex: 1 1 auto; } }
+
+/* ---------------------------------------------------------------
    À faire — la liste partagée
    --------------------------------------------------------------- */
 .tache-ajout { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }

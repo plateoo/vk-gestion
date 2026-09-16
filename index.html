@@ -10,6 +10,17 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css">
 <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+
+<!-- Installation sur l'écran d'accueil d'un téléphone. « standalone » :
+     l'application s'ouvre sans la barre d'adresse, comme une vraie app —
+     c'est ce qui compte quand on note une tâche debout dans un magasin. -->
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#1A1A1A">
+<!-- iOS ignore le manifeste : il lui faut ses propres balises. -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="VK Gestion">
+<link rel="apple-touch-icon" href="assets/icone-192.png">
 </head>
 <body>
 
@@ -69,6 +80,7 @@
     <nav class="nav">
       <button type="button" class="nav-item active" data-tab="dashboard"><span class="ico">▤</span> Tableau de bord</button>
       <button type="button" class="nav-item" data-tab="taches"><span class="ico">☑</span> À faire<span id="task-badge" class="nav-badge" hidden>0</span></button>
+      <button type="button" class="nav-item" data-tab="memoire"><span class="ico">✎</span> Mémoire</button>
       <button type="button" class="nav-item" data-tab="planning"><span class="ico">▦</span> Planning</button>
       <button type="button" class="nav-item" data-tab="review"><span class="ico">◉</span> À contrôler<span id="review-badge" class="nav-badge" hidden>0</span></button>
       <button type="button" class="nav-item" data-tab="invoices"><span class="ico">▣</span> Factures</button>
@@ -197,6 +209,19 @@
         <aside id="review-list" class="review-list"></aside>
         <div id="review-detail" class="review-detail"></div>
       </div>
+    </section>
+
+    <!-- ========================================================
+         1 quater. MÉMOIRE — ce qui doit rester quand quelqu'un s'en va
+         ======================================================== -->
+    <section id="tab-memoire" class="tab" hidden>
+      <div class="page-head">
+        <h1>Mémoire</h1>
+        <p class="muted small">Ce qu'il faut savoir pour tenir le poste. Écrit ici, cela ne
+          part plus avec la personne.</p>
+        <button type="button" class="btn" data-print>Imprimer / PDF</button>
+      </div>
+      <div id="memoire-body"></div>
     </section>
 
     <!-- ========================================================
@@ -938,6 +963,7 @@ import { initHelp } from './js/help.js';
 import { renderCourrier } from './js/courrier.js';
 import { initPlanning, renderPlanning } from './js/planning.js';
 import { initTaches, renderTaches, refreshTaskBadge, remplirDestinataires } from './js/taches.js';
+import { renderMemoire } from './js/memoire.js';
 import { initSettings, renderSettings } from './js/settings.js';
 import { initSearch, openSearch } from './js/search.js';
 import { initPayments, renderPayments } from './js/payments.js';
@@ -963,6 +989,7 @@ function showTab(name) {
   if (name === 'dashboard') { renderDashboard(); renderCourrier(); }
   if (name === 'planning') renderPlanning();
   if (name === 'taches') renderTaches();
+  if (name === 'memoire') renderMemoire();
   if (name === 'review') renderReview();
   if (name === 'payments') renderPayments();
   if (name === 'admin') renderAdmin();
