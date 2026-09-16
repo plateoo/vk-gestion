@@ -18,6 +18,38 @@ import {
 
 const JOURS = ['lun', 'mar', 'mer', 'jeu', 'ven', 'sam', 'dim'];
 
+/**
+ * Numéro de semaine ISO 8601 — la norme en Belgique.
+ *
+ * La semaine commence le lundi, et la semaine 1 est celle qui contient le
+ * premier jeudi de l'année. D'où les cas qui surprennent : le 1er janvier
+ * 2023 appartient encore à la semaine 52 de 2022, et 2026 compte
+ * cinquante-trois semaines. On passe donc par le jeudi de la semaine,
+ * qui seul décide de l'année.
+ */
+export function numeroSemaine(iso) {
+  const [y, m, d] = String(iso).slice(0, 10).split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  const jour = (dt.getUTCDay() + 6) % 7;            // lundi = 0
+  dt.setUTCDate(dt.getUTCDate() - jour + 3);        // jeudi de cette semaine
+  const jeudi1 = new Date(Date.UTC(dt.getUTCFullYear(), 0, 4));
+  jeudi1.setUTCDate(jeudi1.getUTCDate() - ((jeudi1.getUTCDay() + 6) % 7) + 3);
+  return 1 + Math.round((dt - jeudi1) / (7 * 86400000));
+}
+
+/**
+ * Le lundi de la ligne k de la grille, même s'il appartient au mois
+ * précédent. C'est lui qui porte le numéro de semaine : une semaine à
+ * cheval sur deux mois n'en a qu'un seul.
+ */
+function lundiDeLaLigne(mois, k) {
+  const [y, m] = mois.split('-').map(Number);
+  const premier = new Date(Date.UTC(y, m - 1, 1));
+  const decalage = (premier.getUTCDay() + 6) % 7;
+  premier.setUTCDate(premier.getUTCDate() - decalage + k * 7);
+  return premier.toISOString().slice(0, 10);
+}
+
 /** Jours du mois, précédés des cases vides pour caler sur le lundi */
 function grille(mois) {
   const [y, m] = mois.split('-').map(Number);
@@ -105,8 +137,14 @@ export async function renderPlanning() {
     }
   }
 
-  const cases = grille(mois).map((jour) => {
-    if (!jour) return '<div class="pl-case vide"></div>';
+  const cases = grille(mois).map((jour, index) => {
+    // En tête de chaque ligne, le numéro de semaine. Il se calcule sur le
+    // LUNDI de la ligne, pas sur la première case remplie : la semaine
+    // reste la même quand elle déborde sur le mois précédent.
+    const tete = index % 7 === 0
+      ? `<div class="pl-sem" title="Semaine ${numeroSemaine(lundiDeLaLigne(mois, index / 7))}">S${numeroSemaine(lundiDeLaLigne(mois, index / 7))}</div>`
+      : '';
+    if (!jour) return tete + '<div class="pl-case vide"></div>';
     const items = jours.get(jour) || [];
     const num = Number(jour.slice(8));
     const total = items.filter((i) => i.type === 'echeance').reduce((s, i) => s + i.montant, 0);
@@ -118,7 +156,7 @@ export async function renderPlanning() {
       retard ? 'retard' : ''
     ].filter(Boolean).join(' ');
 
-    return `
+    return tete + `
       <div class="${classes}" ${items.length ? `data-jour="${jour}"` : ''}>
         <div class="pl-num">${num}${jour === aujourdhui ? '<span class="pl-today">aujourd&rsquo;hui</span>' : ''}</div>
         ${items.length ? `
@@ -151,7 +189,7 @@ export async function renderPlanning() {
     </div>
 
     <div class="card pad">
-      <div class="pl-entetes">${JOURS.map((j) => `<span>${j}</span>`).join('')}</div>
+      <div class="pl-entetes"><span class="pl-sem-tete">sem.</span>${JOURS.map((j) => `<span>${j}</span>`).join('')}</div>
       <div class="pl-grille">${cases}</div>
       <p class="pl-legende">
         <span class="pl-pastille echeance"></span> échéance de paiement

@@ -1181,13 +1181,23 @@ kbd {
 .pl-chiffre.gain strong { color: var(--ok); }
 
 .pl-entetes {
-  display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px;
+  /* Une colonne étroite en tête pour le numéro de semaine, puis les sept jours */
+  display: grid; grid-template-columns: 38px repeat(7, 1fr); gap: 6px;
   margin-bottom: 6px; font-size: 11px; font-weight: 700;
   text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted);
 }
 .pl-entetes span { padding-left: 4px; }
 
-.pl-grille { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+.pl-grille { display: grid; grid-template-columns: 38px repeat(7, 1fr); gap: 6px; }
+
+/* Le numéro de semaine : présent, jamais concurrent des chiffres du mois */
+.pl-sem {
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 8px; background: var(--surface-sunken);
+  color: var(--text-muted); font-size: 11px; font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.pl-sem-tete { text-align: center; }
 .pl-case {
   min-height: 96px; padding: 6px; border: 1px solid var(--border);
   border-radius: 10px; background: var(--surface); overflow: hidden;
@@ -1226,6 +1236,9 @@ kbd {
 
 @media (max-width: 900px) {
   .pl-resume { grid-template-columns: 1fr; }
+  /* Sur téléphone le mois se lit en liste : une colonne de numéros de
+     semaine n'aurait plus de lignes à numéroter. */
+  .pl-sem, .pl-sem-tete { display: none; }
   /* Sept colonnes sur un téléphone donneraient des cases illisibles :
      le mois se lit alors comme une liste de jours. */
   .pl-entetes { display: none; }
