@@ -164,6 +164,34 @@ export async function ouvrirAide(ecran = null) {
   else $('#help-search').focus();
 }
 
+/**
+ * Ouvre l'aide directement sur un chapitre nommé, sans passer par l'écran
+ * courant. C'est ce qu'appelle le bouton « Comment faire » d'une demande :
+ * la consigne et son mode d'emploi sont à un doigt l'un de l'autre.
+ *
+ * Si le chapitre n'existe plus — un guide remanié, un identifiant qui a
+ * changé — on retombe sur la liste plutôt que sur un écran vide.
+ */
+export async function ouvrirAideSujet(sectionId) {
+  openModal('modal-help');
+  $('#help-search').value = '';
+  const liste = $('#help-list');
+  liste.innerHTML = '<div class="muted small" style="padding:12px">Chargement de l\'aide…</div>';
+  revenirListe();
+
+  try {
+    await charger();
+  } catch (err) {
+    console.error(err);
+    liste.innerHTML = `<div class="empty"><p>L'aide n'a pas pu être chargée.</p></div>`;
+    return;
+  }
+
+  rendreListe('');
+  if (sections.some((s) => s.id === sectionId)) afficherSection(sectionId);
+  else $('#help-search').focus();
+}
+
 export function initHelp(onTour, onShortcuts, ecranActif) {
   const modal = $('#modal-help');
   if (!modal) return;

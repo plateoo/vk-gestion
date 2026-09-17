@@ -435,6 +435,8 @@ async function renderDetail() {
     .map((r) => `<option value="${r}" ${Number(i.vat_rate) === r ? 'selected' : ''}>${(r * 100).toFixed(0)} %</option>`)
     .join('');
   const nonStandard = !LEGAL_RATES.includes(Number(i.vat_rate));
+  // TVA recopiée à la main : la facture porte plusieurs taux.
+  const tvaManuelle = i.vat_amount != null;
 
   box.innerHTML = `
     ${m.comment ? `<div class="review-banner">${ICONS.dash}<span>${escapeHtml(m.comment)}</span></div>` : ''}
@@ -527,17 +529,29 @@ async function renderDetail() {
           <div class="vat-row">
             <select id="rv-rate" data-f="vat_rate">
               ${rateOptions}
-              <option value="autre" ${nonStandard ? 'selected' : ''}>Autre…</option>
+              <option value="autre" ${nonStandard && !tvaManuelle ? 'selected' : ''}>Autre…</option>
+              <option value="manuel" ${tvaManuelle ? 'selected' : ''}>Plusieurs taux — je saisis la TVA</option>
             </select>
             <input id="rv-rate-custom" type="number" step="0.01" min="0" max="100"
-                   value="${nonStandard ? (Number(i.vat_rate) * 100).toFixed(2) : ''}"
-                   placeholder="%" ${nonStandard ? '' : 'hidden'}>
+                   value="${nonStandard && !tvaManuelle ? (Number(i.vat_rate) * 100).toFixed(2) : ''}"
+                   placeholder="%" ${nonStandard && !tvaManuelle ? '' : 'hidden'}>
+            <input id="rv-vat-amount" type="number" step="0.01" min="0"
+                   value="${tvaManuelle ? Number(i.vat_amount) : ''}"
+                   placeholder="TVA en €" ${tvaManuelle ? '' : 'hidden'}>
             <div class="vat-computed">
               <span>TVA calculée <strong id="rv-tva-calc">—</strong></span>
               <span>Total TVAC <strong id="rv-tvac-calc">—</strong></span>
             </div>
           </div>
           <p class="vat-read">Lu sur le document : TVA <strong id="rv-tva-read">—</strong></p>
+          <!-- Une facture de rénovation porte couramment du 6 % sur la
+               main-d'œuvre et du 21 % sur le matériel. Aucun taux unique
+               ne reproduit alors le montant imprimé : on recopie ce
+               montant tel quel, et c'est lui qui fait foi. -->
+          <p class="vat-mixte" id="rv-vat-mixte" ${tvaManuelle ? '' : 'hidden'}>
+            Recopie le total de TVA imprimé sur la facture. Le taux n'est plus utilisé
+            pour le calcul, et cette facture sera comptée à part pour le comptable.
+          </p>
           ${sup?.default_vat_rate != null ? `<p class="memo-hint">Retenu pour ce fournisseur : ${(Number(sup.default_vat_rate) * 100).toFixed(0)} %</p>` : ''}
           <label class="check memo-check" id="rv-memo-rate-wrap" hidden>
             <input type="checkbox" id="rv-memo-rate"> retenir ce taux pour ce fournisseur
@@ -599,9 +613,35 @@ async function renderDetail() {
             ${(i.extraction_attempts ?? 0) >= 3 ? 'disabled title="3 tentatives déjà utilisées"' : ''}>
             Relancer l'extraction (${3 - (i.extraction_attempts ?? 0)})
           </button>
+          <button type="button" class="btn btn-warn" id="rv-force" hidden
+                  aria-expanded="false" aria-controls="rv-force-zone">Forcer l'acceptation</button>
           <button type="button" class="btn btn-primary" id="rv-validate">Valider</button>
         </div>
         <p class="block-reason" id="rv-block-reason" hidden></p>
+
+        <!-- Passer outre un contrôle est permis, mais jamais en silence :
+             le motif est obligatoire, il est signé, et il reste attaché à
+             la facture. C'est le seul contrepoids au forçage. -->
+        <div class="force-zone" id="rv-force-zone" hidden>
+          <p class="force-quoi">Contrôle qui bloque : <strong id="rv-force-quoi"></strong></p>
+          <label for="rv-force-motif">Pourquoi acceptes-tu quand même ?</label>
+          <textarea id="rv-force-motif" rows="2"
+            placeholder="Par exemple : facture à deux taux, montants vérifiés à la main sur le papier.
+Ou : document scanné de travers, chiffres relus un par un avec le fournisseur au téléphone."></textarea>
+          <p class="force-avertissement">Ce motif restera visible sur la facture, avec ton nom et la date.
+            Sans lui, personne ne saura dans six mois pourquoi ce montant a été accepté.</p>
+          <div class="force-actions">
+            <button type="button" class="btn btn-sm" id="rv-force-annuler">Annuler</button>
+            <button type="button" class="btn btn-sm btn-warn" id="rv-force-ok">Accepter en forçant</button>
+          </div>
+        </div>
+
+        ${i.forced_at ? `
+          <div class="review-banner warn">${ICONS.dash}<span>
+            <strong>Acceptée en forçant</strong> par ${escapeHtml(i.forced_name || '—')}
+            le ${escapeHtml(fmtDate(String(i.forced_at).slice(0, 10)))} :
+            « ${escapeHtml(i.forced_reason || '')} »
+          </span></div>` : ''}
       </form>
     </div>`;
 
@@ -673,7 +713,22 @@ function currentRate() {
     const pct = Number($('#rv-rate-custom').value);
     return Number.isFinite(pct) ? pct / 100 : NaN;
   }
+  // En saisie manuelle, le taux ne sert plus à calculer quoi que ce soit.
+  // On garde néanmoins une valeur en base — le taux effectif — pour que
+  // les anciennes requêtes qui lisent vat_rate ne tombent pas sur du vide.
+  if (sel.value === 'manuel') {
+    const htva = Number($('#rv-htva').value);
+    const tva = tvaSaisie();
+    return htva > 0 && Number.isFinite(tva) ? Math.round((tva / htva) * 100) / 100 : 0;
+  }
   return Number(sel.value);
+}
+
+/** Le montant de TVA recopié à la main, ou NaN si l'on n'est pas dans ce mode. */
+function tvaSaisie() {
+  if ($('#rv-rate')?.value !== 'manuel') return NaN;
+  const v = $('#rv-vat-amount')?.value;
+  return String(v || '').trim() === '' ? NaN : Number(v);
 }
 
 /**
@@ -793,9 +848,15 @@ function spellDates() {
 
 function refreshVat() {
   const htva = Number($('#rv-htva').value) || 0;
+  const manuel = $('#rv-rate')?.value === 'manuel';
+  const saisie = tvaSaisie();
   const rate = currentRate();
   const readTva = Number(current?.meta?.brut?.montant_tva);
-  const calcTva = Number.isFinite(rate) ? Math.round(htva * rate * 100) / 100 : NaN;
+  // En saisie manuelle, la TVA affichée EST celle qu'on a recopiée : on ne
+  // remontre pas à l'utilisateur un produit qu'il n'a pas demandé.
+  const calcTva = manuel
+    ? saisie
+    : (Number.isFinite(rate) ? Math.round(htva * rate * 100) / 100 : NaN);
 
   $('#rv-tva-calc').textContent = Number.isFinite(calcTva) ? fmtEUR(calcTva) : '—';
   $('#rv-tvac-calc').textContent = Number.isFinite(calcTva) ? fmtEUR(htva + calcTva) : '—';
@@ -806,6 +867,22 @@ function refreshVat() {
   const verdict = $('#rv-vat-verdict');
   const block = $('#rv-vat-block');
   block.classList.remove('is-warn', 'is-danger', 'is-ok');
+
+  if (manuel) {
+    if (!Number.isFinite(saisie)) {
+      block.classList.add('is-danger');
+      verdict.textContent = 'Recopie le montant de TVA imprimé sur la facture.';
+    } else if (Number.isFinite(readTva) && Math.abs(saisie - readTva) > 0.02) {
+      block.classList.add('is-warn');
+      verdict.textContent = `Tu as saisi ${fmtEUR(saisie)}, le document indique ${fmtEUR(readTva)}. `
+        + 'C\'est ta saisie qui sera enregistrée.';
+    } else {
+      block.classList.add('is-ok');
+      verdict.textContent = `TVA saisie à la main : ${fmtEUR(saisie)}. `
+        + 'Cette facture sera comptée à part, sous « plusieurs taux ».';
+    }
+    return refreshValidateState();
+  }
 
   const mismatch = vatMismatch(htva, readTva, rate);
   if (!Number.isFinite(rate)) {
@@ -824,15 +901,39 @@ function refreshVat() {
   refreshValidateState();
 }
 
-function blockingReason() {
-  const htva = Number($('#rv-htva').value);
-  const rate = currentRate();
+/**
+ * Ce qui ne se force JAMAIS.
+ *
+ * Un fournisseur, un numéro, une date : sans eux la base refuse la ligne,
+ * et la forcer n'aurait aucun sens — il n'y aurait rien à enregistrer.
+ * Ces trois-là restent bloquants pour tout le monde.
+ */
+function structuralReason() {
   if (!$('#rv-supplier').value) return 'Choisis un fournisseur.';
   if (!$('#rv-number').value.trim()) return 'Le numéro de facture est obligatoire.';
   if (!$('#rv-date').value) return 'La date de facture est obligatoire.';
+  if ($('#rv-rate').value === 'manuel' && !Number.isFinite(tvaSaisie())) {
+    return 'Recopie le montant de TVA imprimé sur la facture.';
+  }
+  return null;
+}
+
+/**
+ * Ce qui se force, et pourquoi c'est légitime.
+ *
+ * Un recoupement qui échoue n'est pas une faute : c'est l'application qui
+ * ne sait pas lire ce document-là. Un document illisible, un fournisseur
+ * qui écrit n'importe quoi, un champ qu'on ne recoupera jamais — il faut
+ * pouvoir avancer. Ce qui doit rester, c'est la trace et le motif.
+ */
+function forcableReason() {
+  const htva = Number($('#rv-htva').value);
+  const rate = currentRate();
   if (!Number.isFinite(rate)) return 'Le taux de TVA doit être renseigné.';
-  const mismatch = vatMismatch(htva, Number(current?.meta?.brut?.montant_tva), rate);
-  if (mismatch === true) return 'Le taux de TVA ne correspond pas au montant lu sur le document.';
+  if ($('#rv-rate').value !== 'manuel') {
+    const mismatch = vatMismatch(htva, Number(current?.meta?.brut?.montant_tva), rate);
+    if (mismatch === true) return 'Le taux de TVA ne correspond pas au montant lu sur le document.';
+  }
   const pending = (current?.meta?.uncertain || []).filter((f) => !confirmed.has(f));
   if (pending.length) return `Confirme les champs incertains : ${pending.join(', ')}.`;
   if (current?.meta?.rapprochement?.iban_divergent && !$('input[name="iban-choice"]:checked')) {
@@ -841,13 +942,28 @@ function blockingReason() {
   return null;
 }
 
+function blockingReason() { return structuralReason() || forcableReason(); }
+
 function refreshValidateState() {
-  const reason = blockingReason();
+  const dur = structuralReason();
+  const souple = dur ? null : forcableReason();
+  const reason = dur || souple;
   const btn = $('#rv-validate');
   const note = $('#rv-block-reason');
   btn.disabled = !!reason;
   note.hidden = !reason;
   note.textContent = reason || '';
+
+  // Le forçage n'apparaît que lorsqu'il sert : proposer de passer outre
+  // alors que rien ne bloque n'inviterait qu'à s'en servir par habitude.
+  const forcer = $('#rv-force');
+  if (forcer) {
+    forcer.hidden = !souple;
+    const zone = $('#rv-force-zone');
+    if (!souple && zone) { zone.hidden = true; forcer.setAttribute('aria-expanded', 'false'); }
+    const quoi = $('#rv-force-quoi');
+    if (quoi && souple) quoi.textContent = souple;
+  }
 }
 
 // ---------------------------------------------------------------------
@@ -857,9 +973,25 @@ function wireDetail() {
   $('#rv-form').addEventListener('input', refreshVat);
   wireMemory();
   $('#rv-rate').addEventListener('change', () => {
-    $('#rv-rate-custom').hidden = $('#rv-rate').value !== 'autre';
+    const v = $('#rv-rate').value;
+    $('#rv-rate-custom').hidden = v !== 'autre';
+    $('#rv-vat-amount').hidden = v !== 'manuel';
+    $('#rv-vat-mixte').hidden = v !== 'manuel';
+    if (v === 'manuel') $('#rv-vat-amount').focus();
     refreshVat();
   });
+
+  $('#rv-force').addEventListener('click', () => {
+    const zone = $('#rv-force-zone');
+    zone.hidden = !zone.hidden;
+    $('#rv-force').setAttribute('aria-expanded', String(!zone.hidden));
+    if (!zone.hidden) $('#rv-force-motif').focus();
+  });
+  $('#rv-force-annuler').addEventListener('click', () => {
+    $('#rv-force-zone').hidden = true;
+    $('#rv-force').setAttribute('aria-expanded', 'false');
+  });
+  $('#rv-force-ok').addEventListener('click', () => validateCurrent({ force: true }));
   $$('#rv-form [data-confirm]').forEach((c) => c.addEventListener('change', (e) => {
     if (e.target.checked) confirmed.add(e.target.dataset.confirm);
     else confirmed.delete(e.target.dataset.confirm);
@@ -919,9 +1051,26 @@ function printCurrent() {
   w.addEventListener('load', () => { try { w.print(); } catch { /* le visualiseur gère */ } });
 }
 
-async function validateCurrent() {
-  const reason = blockingReason();
+async function validateCurrent({ force = false } = {}) {
+  // Le forçage lève les contrôles de jugement, jamais les structurels.
+  const reason = force ? structuralReason() : blockingReason();
   if (reason) { toast(reason, 'error'); return; }
+
+  let motif = null;
+  if (force) {
+    motif = $('#rv-force-motif').value.trim();
+    if (motif.length < 10) {
+      toast('Explique en une phrase pourquoi tu acceptes malgré le contrôle.', 'error');
+      return $('#rv-force-motif').focus();
+    }
+    const quoi = $('#rv-force-quoi').textContent;
+    const ok = await confirmDialog(
+      `Accepter cette facture malgré le contrôle en échec ?\n\n${quoi}\n\n`
+      + `Motif enregistré : « ${motif} »\n\n`
+      + 'La facture partira au comptable avec cette mention, signée de ton nom.',
+      'Accepter en forçant');
+    if (!ok) return;
+  }
 
   const rate = currentRate();
   const patch = {
@@ -935,10 +1084,14 @@ async function validateCurrent() {
     due_date: $('#rv-due').value || null,
     amount_htva: Number($('#rv-htva').value) || 0,
     vat_rate: rate,
+    // Null remet la facture en calcul par taux : changer d'avis doit
+    // effacer la saisie, pas la laisser traîner derrière un taux normal.
+    vat_amount: Number.isFinite(tvaSaisie()) ? tvaSaisie() : null,
     expense_type: $('#rv-type').value.trim() || null,
     stock_in: $('#rv-stock').value || null,
     notes: $('#rv-notes').value.trim() || null,
-    review_status: 'valide'
+    review_status: 'valide',
+    ...(force ? { forced_reason: motif } : {})
   };
 
   const btn = $('#rv-validate');
@@ -951,7 +1104,9 @@ async function validateCurrent() {
     await rememberSender(patch.supplier_id, current.sender_email);
     // La facture rejoint la liste normale : son cache doit repartir de la base.
     invalidateInvoices();
-    toast(`Facture ${patch.invoice_number} validée.`);
+    toast(force
+      ? `Facture ${patch.invoice_number} acceptée en forçant. Le motif reste attaché.`
+      : `Facture ${patch.invoice_number} validée.`);
     current = null;
     await renderReview();
     notifyDataChange();

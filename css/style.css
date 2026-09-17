@@ -34,6 +34,9 @@
   --border-strong:  #CBD1D8;
   --border-ok:      #BFE3D0;
   --border-warn:    #EBCB94;
+  /* Hauteur de la barre d'onglets du bas : le panneau « Plus » et la
+     calculette s'y posent, ils doivent parler de la même valeur. */
+  --tabbar-h:       60px;
   --border-danger:  #F0C9C9;
   --border-dashed:  #C7CDD6;
   --line-soft:      #F0F2F5;
@@ -1749,4 +1752,94 @@ kbd {
   .kpi-grid { display: grid; grid-template-columns: repeat(3, 1fr); }
   .kpi-hero, #card-late { grid-column: span 1; }
   .kpi { border: 1px solid var(--print-rule); }
+}
+
+/* =====================================================================
+   Forcer l'acceptation
+   La couleur dit ce que c'est : un geste permis, mais qui n'est pas la
+   marche normale. Ni rouge — ce n'est pas une erreur — ni neutre.
+   ===================================================================== */
+.btn-warn {
+  background: var(--warn); color: var(--vbk-white); border-color: var(--warn);
+}
+.btn-warn:hover { filter: brightness(.94); }
+
+.force-zone {
+  margin-top: 10px; padding: 14px; border-radius: 10px;
+  background: var(--warn-soft); border: 1px solid var(--border-warn);
+}
+.force-zone label { display: block; font-weight: 600; margin-bottom: 6px; }
+.force-zone textarea {
+  width: 100%; font: inherit; padding: 9px 10px; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--surface); color: var(--text);
+  resize: vertical;
+}
+.force-quoi { margin: 0 0 10px; font-size: 13px; color: var(--warn); }
+.force-avertissement { margin: 8px 0 0; font-size: 12px; color: var(--muted); }
+.force-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
+
+/* TVA saisie à la main : le champ euro prend la place du champ pourcent */
+#rv-vat-amount { width: 120px; }
+.vat-mixte { margin: 6px 0 0; font-size: 12px; color: var(--muted); }
+
+/* Marque « forcée » dans les listes */
+.st-forcee {
+  background: var(--warn-soft); color: var(--warn); border-color: var(--border-warn);
+}
+
+/* =====================================================================
+   Téléphone : le panneau « Plus »
+   Cinq onglets en bas ne peuvent pas porter neuf écrans. Le reste vient
+   d'ici — sinon il n'existe tout simplement pas sur un téléphone.
+   ===================================================================== */
+.sheet-backdrop, .plus-sheet { display: none; }
+
+@media (max-width: 900px) {
+  .sheet-backdrop {
+    display: block; position: fixed; inset: 0; z-index: 48;
+    background: rgba(16, 24, 40, .38);
+  }
+  .sheet-backdrop[hidden] { display: none; }
+
+  .plus-sheet {
+    display: block; position: fixed; left: 0; right: 0; z-index: 49;
+    bottom: calc(var(--tabbar-h, 60px) + env(safe-area-inset-bottom));
+    background: var(--surface); border-top: 1px solid var(--border);
+    border-radius: 14px 14px 0 0; padding: 14px 12px 18px;
+    box-shadow: 0 -8px 26px rgba(16, 24, 40, .18);
+    max-height: 70vh; overflow-y: auto;
+  }
+  .plus-sheet[hidden] { display: none; }
+
+  .plus-titre {
+    margin: 0 0 10px; font-size: 12px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .04em; color: var(--muted);
+  }
+  .plus-item {
+    display: flex; align-items: center; gap: 12px; width: 100%;
+    font: inherit; text-align: left; background: none; border: none;
+    border-bottom: 1px solid var(--border); padding: 12px 4px;
+    color: var(--text); cursor: pointer; min-height: 56px;
+  }
+  .plus-item[hidden] { display: none; }
+  .plus-item .ico {
+    flex: none; width: 34px; height: 34px; border-radius: 9px;
+    display: grid; place-items: center; font-size: 16px;
+    background: var(--surface-hover); color: var(--vbk-red);
+  }
+  .plus-item strong { display: block; font-size: 15px; font-weight: 600; }
+  .plus-item small { display: block; font-size: 12px; color: var(--muted); }
+  .plus-fermer { width: 100%; margin-top: 14px; min-height: 44px; }
+}
+
+/* Aide-mémoire attaché à une demande */
+.tache-aide {
+  display: inline-flex; align-items: center; gap: 5px;
+  font: inherit; font-size: 12px; font-weight: 600;
+  background: none; border: none; padding: 2px 0;
+  color: var(--vbk-red); cursor: pointer; text-decoration: underline;
+}
+.tache-details {
+  margin: 6px 0 0; font-size: 13px; color: var(--text);
+  white-space: pre-wrap; line-height: 1.5;
 }

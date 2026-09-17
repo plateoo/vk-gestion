@@ -16,7 +16,8 @@ const HEADERS = [
   'Date encodage', 'Fournisseur', 'N° facture', 'Date facture', 'Échéance',
   'Montant HTVA', 'TVA %', 'Montant TVA', 'Total TVAC',
   'Encodé Smart', 'Réf. Smart', 'Références', 'Envoyé WinAuditor', 'Entrée en stock', 'Sortie / livraison',
-  'Statut paiement', 'Date paiement', 'Mode paiement', 'Type de dépense', 'Remarques'
+  'Statut paiement', 'Date paiement', 'Mode paiement', 'Type de dépense', 'Remarques',
+  'TVA saisie à la main', 'Acceptée en forçant', 'Motif du forçage', 'Contrôlée par'
 ];
 
 const oui = (b) => (b ? 'Oui' : 'Non');
@@ -56,7 +57,11 @@ function lineFor(i) {
     fmtDate(i.payment_date),
     i.payment_method || '',
     i.expense_type || '',
-    i.notes || ''
+    i.notes || '',
+    i.vat_amount != null ? 'Oui — plusieurs taux' : '',
+    i.forced_at ? `${i.forced_name || ''} le ${fmtDate(String(i.forced_at).slice(0, 10))}` : '',
+    i.forced_reason || '',
+    i.validated_name || ''
   ].map(cell).join(';');
 }
 
@@ -111,7 +116,14 @@ const COLONNES = [
   { key: 'mode',        label: 'Mode paiement',     type: 'text',   width: 14 },
   { key: 'depense',     label: 'Type de dépense',   type: 'text',   width: 16 },
   { key: 'fichier',     label: 'Fichier joint',     type: 'text',   width: 30 },
-  { key: 'remarques',   label: 'Remarques',         type: 'text',   width: 30 }
+  { key: 'remarques',   label: 'Remarques',         type: 'text',   width: 30 },
+  // Le comptable doit voir ce qui n'a pas passé le contrôle normal. Une
+  // facture à plusieurs taux et une facture acceptée en forçant ne se
+  // traitent pas comme les autres : elles sont signalées, pas noyées.
+  { key: 'tva_saisie',  label: 'TVA saisie à la main', type: 'text', width: 16 },
+  { key: 'forcee',      label: 'Acceptée en forçant', type: 'text',   width: 18 },
+  { key: 'motif_force', label: 'Motif du forçage',   type: 'text',   width: 40 },
+  { key: 'controle_par', label: 'Contrôlée par',     type: 'text',   width: 14 }
 ];
 
 function ligneXlsx(i) {
@@ -132,6 +144,10 @@ function ligneXlsx(i) {
     // L'escompte réellement obtenu : l'écart entre le facturé et le décaissé.
     // Rien n'est déduit tant que le paiement n'a pas eu lieu.
     escompte: paye !== null && paye < tvac ? Math.round((tvac - paye) * 100) / 100 : null,
+    tva_saisie: i.vat_amount != null ? 'Oui — plusieurs taux' : '',
+    forcee: i.forced_at ? `${i.forced_name || ''} le ${String(i.forced_at).slice(0, 10)}` : '',
+    motif_force: i.forced_reason || '',
+    controle_par: i.validated_name || '',
     smart: oui(i.in_smart),
     smart_ref: i.smart_ref || '',
     refs: (i.external_refs || []).join(' / '),

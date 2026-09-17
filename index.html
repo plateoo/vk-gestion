@@ -582,6 +582,30 @@
     <button type="button" class="tabbar-item" data-tab="invoices"><span class="ico">▣</span>Factures</button>
     <button type="button" class="tabbar-item" data-tab="suppliers"><span class="ico">◫</span>Fourn.</button>
     <button type="button" class="tabbar-item" data-tab="taches"><span class="ico">☑</span>À faire<span id="task-badge-m" class="nav-badge" hidden>0</span></button>
+    <!-- Cinq onglets ne suffisent pas : la Mémoire, le Planning et les
+         Réglages — donc la quarantaine — étaient purement inaccessibles
+         depuis un téléphone. Une barre qui cache des écrans entiers ne les
+         range pas, elle les supprime. -->
+    <button type="button" class="tabbar-item" id="tabbar-plus"><span class="ico">⋯</span>Plus</button>
+  </nav>
+
+  <!-- Le reste des écrans, au doigt, depuis le bas de l'écran -->
+  <div class="sheet-backdrop" id="plus-backdrop" hidden></div>
+  <nav class="plus-sheet" id="plus-sheet" hidden aria-label="Autres écrans">
+    <p class="plus-titre">Aller à</p>
+    <button type="button" class="plus-item" data-tab="memoire"><span class="ico">✎</span>
+      <span><strong>Mémoire</strong><small>Ce qu'il faut savoir pour tenir le poste</small></span></button>
+    <button type="button" class="plus-item" data-tab="planning"><span class="ico">▦</span>
+      <span><strong>Planning</strong><small>Le calendrier et les échéances</small></span></button>
+    <button type="button" class="plus-item manager-only" data-tab="payments" hidden><span class="ico">€</span>
+      <span><strong>Paiements</strong><small>Ce qui est dû et ce qui est en retard</small></span></button>
+    <button type="button" class="plus-item manager-only" data-tab="settings" hidden><span class="ico">⚙</span>
+      <span><strong>Réglages</strong><small>Quarantaine et expéditeurs autorisés</small></span></button>
+    <button type="button" class="plus-item manager-only" data-tab="admin" hidden><span class="ico">◈</span>
+      <span><strong>Administration</strong><small>Sauvegardes, doublons, sécurité</small></span></button>
+    <button type="button" class="plus-item" id="plus-aide"><span class="ico">?</span>
+      <span><strong>Aide</strong><small>Comment faire, écran par écran</small></span></button>
+    <button type="button" class="btn plus-fermer" id="plus-fermer">Fermer</button>
   </nav>
 </div>
 
@@ -959,7 +983,7 @@ import { initDashboard, renderDashboard } from './js/dashboard.js';
 import { initReview, renderReview, refreshReviewBadge, openDocument, resetDocumentView } from './js/review.js';
 import { initUpdateCheck } from './js/maintenance.js';
 import { initCalc, ouvrirCalc } from './js/calc.js';
-import { initHelp } from './js/help.js';
+import { initHelp, ouvrirAide } from './js/help.js';
 import { renderCourrier } from './js/courrier.js';
 import { initPlanning, renderPlanning } from './js/planning.js';
 import { initTaches, renderTaches, refreshTaskBadge, remplirDestinataires } from './js/taches.js';
@@ -1081,8 +1105,36 @@ $('#fab-new').addEventListener('click', () => openInvoiceModal());
 $$('[data-tab]').forEach((b) => b.addEventListener('click', () => {
   if (b.dataset.tab === 'suppliers') resetSupplierView();
   if (b.dataset.tab === 'review') resetDocumentView();
+  fermerPlus();
   showTab(b.dataset.tab);
 }));
+
+// ---------- Téléphone : les écrans qui ne tiennent pas dans la barre ----
+//
+// La barre du bas ne porte que cinq onglets. Tout le reste — la Mémoire,
+// le Planning, les Réglages où vit la quarantaine, l'Administration —
+// n'était atteignable que depuis un ordinateur. Ce panneau les rend
+// accessibles au doigt, et il se ferme comme on s'y attend : par le fond,
+// par Échap, ou en choisissant un écran.
+function ouvrirPlus() {
+  $('#plus-sheet').hidden = false;
+  $('#plus-backdrop').hidden = false;
+  $('#tabbar-plus')?.setAttribute('aria-expanded', 'true');
+}
+function fermerPlus() {
+  const s = $('#plus-sheet');
+  if (!s || s.hidden) return;
+  s.hidden = true;
+  $('#plus-backdrop').hidden = true;
+  $('#tabbar-plus')?.setAttribute('aria-expanded', 'false');
+}
+$('#tabbar-plus')?.addEventListener('click', () => {
+  $('#plus-sheet').hidden ? ouvrirPlus() : fermerPlus();
+});
+$('#plus-backdrop')?.addEventListener('click', fermerPlus);
+$('#plus-fermer')?.addEventListener('click', fermerPlus);
+$('#plus-aide')?.addEventListener('click', () => { fermerPlus(); ouvrirAide(activeTab); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') fermerPlus(); });
 
 // Retour au tableau depuis une pièce ouverte en pleine page
 $('#rv-back').addEventListener('click', () => { resetDocumentView(); showTab('invoices'); });

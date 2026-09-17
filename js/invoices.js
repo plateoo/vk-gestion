@@ -68,6 +68,7 @@ export async function getInvoices(force = false) {
                in_smart, in_winauditor, smart_ref, external_refs,
                stock_in, stock_out, payment_status, payment_date, payment_method,
                expense_type, notes, review_status, doc_type, doc_summary,
+               vat_amount, forced_at, forced_name, forced_reason, validated_name,
                source, file_path, sender_email, message_id, created_at,
                supplier:suppliers(id, name, payment_terms)`)
       .order('invoice_date', { ascending: false });
@@ -328,7 +329,11 @@ function rowHtml(i, manager) {
     </td>
     <td class="td-date" data-label="Date">${fmtDate(i.invoice_date)}</td>
     <td class="td-supplier" data-label="Fournisseur">${escapeHtml(i.supplier_name)}</td>
-    <td class="td-number" data-label="N°">${escapeHtml(i.invoice_number)}<span class="mob-meta">${fmtDate(i.invoice_date)}${i.due_date ? ` · éch. ${fmtDate(i.due_date)}` : ''}</span></td>
+    <td class="td-number" data-label="N°">${escapeHtml(i.invoice_number)}${i.forced_at
+      ? `<span class="badge st-forcee" title="Acceptée en forçant par ${escapeHtml(i.forced_name || '—')} : ${escapeHtml(i.forced_reason || '')}">forcée</span>`
+      : ''}${i.vat_amount != null
+      ? '<span class="badge st-forcee" title="TVA saisie à la main : la facture porte plusieurs taux">TVA saisie</span>'
+      : ''}<span class="mob-meta">${fmtDate(i.invoice_date)}${i.due_date ? ` · éch. ${fmtDate(i.due_date)}` : ''}</span></td>
     <td class="td-smartref" data-label="Réf. Smart">
       <input type="text" class="smartref-input" data-smartref="${i.id}"
         value="${escapeHtml(i.smart_ref || '')}" placeholder="à saisir" autocomplete="off" spellcheck="false"

@@ -12,6 +12,7 @@
 // « tu l'as fait ? ».
 // =====================================================================
 import { supabase } from './supabase.js';
+import { ouvrirAideSujet } from './help.js';
 import { currentUser, isManager, displayName } from './auth.js';
 import {
   $, $$, escapeHtml, toast, errorMessage, confirmDialog,
@@ -78,7 +79,10 @@ function ligneHtml(t) {
           aria-label="${clos ? 'Remettre à faire' : 'Marquer faite'}">${clos ? '↺' : '✓'}</button>
         <div class="tache-corps">
           <span class="tache-titre">${escapeHtml(t.title)}</span>
-          ${t.details ? `<span class="tache-detail">${escapeHtml(t.details)}</span>` : ''}
+          ${t.details ? `<span class="tache-detail tache-details">${escapeHtml(t.details).replace(/\n/g, '<br>')}</span>` : ''}
+          ${t.help_topic ? `
+            <button type="button" class="tache-aide" data-aide="${escapeHtml(t.help_topic)}">
+              ? Comment faire</button>` : ''}
           <span class="tache-meta">
             ${t.priority === 'haute' ? '<span class="tache-prio">Urgent</span>' : ''}
             ${t.due_date ? `<span class="${retard ? 'txt-red strong' : ''}">${escapeHtml(echeanceTexte(t))}</span>` : ''}
@@ -295,8 +299,12 @@ function cabler() {
   boite.dataset.cable = '1';
 
   boite.addEventListener('click', (e) => {
-    const b = e.target.closest('[data-faite],[data-fil],[data-reporter],[data-annuler],[data-envoyer],[data-suppr]');
+    const b = e.target.closest('[data-faite],[data-fil],[data-reporter],[data-annuler],[data-envoyer],[data-suppr],[data-aide]');
     if (!b) return;
+    // Le chapitre du mode d'emploi qui concerne CETTE demande, ouvert
+    // sur place. Une consigne qui oblige à chercher ailleurs est une
+    // consigne qu'on repousse.
+    if (b.dataset.aide) return ouvrirAideSujet(b.dataset.aide);
     if (b.dataset.faite) return basculerFaite(b.dataset.faite);
     if (b.dataset.fil) { ouverte = ouverte === b.dataset.fil ? null : b.dataset.fil; return renderTaches(); }
     if (b.dataset.reporter) return reporter(b.dataset.reporter);
