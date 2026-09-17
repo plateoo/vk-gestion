@@ -1862,3 +1862,38 @@ kbd {
    suffit, une couleur de fond rendrait la liste illisible dès trois
    demandes. */
 .tache.origine-gerant { box-shadow: inset 3px 0 0 var(--vbk-red); }
+
+/* =====================================================================
+   Documents attachés à une fiche mémoire
+   Visibles hors édition : un mode d'emploi qu'il faut d'abord « modifier »
+   pour apercevoir ne serait jamais ouvert.
+   ===================================================================== */
+.memo-fichiers { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.memo-fichier {
+  display: inline-flex; align-items: stretch; border: 1px solid var(--border);
+  border-radius: 8px; overflow: hidden; background: var(--surface-hover);
+  max-width: 100%;
+}
+.memo-fichier-ouvrir {
+  display: inline-flex; align-items: center; gap: 7px; min-width: 0;
+  font: inherit; font-size: 13px; background: none; border: none;
+  padding: 7px 10px; color: var(--text); cursor: pointer; text-align: left;
+  min-height: 38px;
+}
+.memo-fichier-ouvrir:hover { background: var(--surface-sunken); }
+.memo-fichier-ouvrir small { color: var(--text-muted); white-space: nowrap; }
+.memo-fichier-oter {
+  flex: none; font: inherit; font-size: 16px; line-height: 1;
+  background: none; border: none; border-left: 1px solid var(--border);
+  padding: 0 10px; color: var(--text-muted); cursor: pointer;
+}
+.memo-fichier-oter:hover { background: var(--danger-soft); color: var(--danger); }
+
+.memo-joindre {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--border);
+}
+/* Le label fait bouton : le champ « fichier » natif ne se met pas à la
+   charte, et sur téléphone son libellé anglais dépasse. */
+.memo-joindre label.btn { cursor: pointer; }
+.memo-attente { margin: 8px 0 0; font-size: 12.5px; color: var(--warn); }
