@@ -1843,3 +1843,22 @@ kbd {
   margin: 6px 0 0; font-size: 13px; color: var(--text);
   white-space: pre-wrap; line-height: 1.5;
 }
+
+/* =====================================================================
+   D'où vient la demande
+   Le rouge de la marque, réservé à ce que le gérant demande en son nom.
+   Il ne sert nulle part ailleurs dans la liste : là où il apparaît, la
+   demande vient de quelqu'un, pas du travail de fond.
+   ===================================================================== */
+.tache-gerant {
+  padding: 1px 7px; border-radius: 999px;
+  background: var(--vbk-red); color: var(--vbk-white);
+  border: 1px solid var(--vbk-red); font-weight: 700; white-space: nowrap;
+}
+.taches-titre-gerant { color: var(--vbk-red); }
+.taches-titre-gerant .muted { color: var(--text-muted); }
+
+/* La ligne elle-même se distingue sans crier : un filet rouge à gauche
+   suffit, une couleur de fond rendrait la liste illisible dès trois
+   demandes. */
+.tache.origine-gerant { box-shadow: inset 3px 0 0 var(--vbk-red); }

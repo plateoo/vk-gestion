@@ -72,7 +72,8 @@ function ligneHtml(t) {
   const deplie = ouverte === t.id;
 
   return `
-    <li class="tache ${t.priority} ${retard ? 'retard' : ''} ${clos ? 'close' : ''}" data-tache="${t.id}">
+    <li class="tache ${t.priority} ${retard ? 'retard' : ''} ${clos ? 'close' : ''}${
+        t.origine === 'gerant' ? ' origine-gerant' : ''}" data-tache="${t.id}">
       <div class="tache-haut">
         <button type="button" class="tache-coche" data-faite="${t.id}"
           title="${clos ? 'Remettre à faire' : 'Marquer faite'}"
@@ -84,6 +85,9 @@ function ligneHtml(t) {
             <button type="button" class="tache-aide" data-aide="${escapeHtml(t.help_topic)}">
               ? Comment faire</button>` : ''}
           <span class="tache-meta">
+            ${t.origine === 'gerant'
+              ? `<span class="tache-gerant">Demande de ${escapeHtml(t.created_name || 'Jordan')}</span>`
+              : ''}
             ${t.priority === 'haute' ? '<span class="tache-prio">Urgent</span>' : ''}
             ${t.due_date ? `<span class="${retard ? 'txt-red strong' : ''}">${escapeHtml(echeanceTexte(t))}</span>` : ''}
             ${t.postponed ? `<span class="tache-reports">reportée ${t.postponed} fois</span>` : ''}
@@ -125,6 +129,38 @@ function ligneHtml(t) {
     </li>`;
 }
 
+/**
+ * Deux blocs, et dans cet ordre.
+ *
+ * Ce que le gérant demande en son nom passe devant le travail courant :
+ * c'est ce qu'il a demandé, et c'est ce qui change d'un jour à l'autre.
+ * Le travail de fond, lui, est là tous les matins — il n'a pas besoin
+ * d'être en haut de l'écran pour qu'on s'en souvienne.
+ *
+ * Tant qu'il n'y a qu'un seul groupe, aucun titre n'est affiché : deux
+ * en-têtes pour une liste de trois lignes, c'est du bruit.
+ */
+/** Le nom à afficher, pris sur les demandes elles-mêmes plutôt que codé en dur. */
+function nomGerant(liste) {
+  return liste.find((t) => t.origine === 'gerant')?.created_name || 'Jordan';
+}
+
+function groupesHtml(liste) {
+  const duGerant = liste.filter((t) => t.origine === 'gerant');
+  const courant = liste.filter((t) => t.origine !== 'gerant');
+  if (!duGerant.length || !courant.length) {
+    return `<ul class="taches">${liste.map(ligneHtml).join('')}</ul>`;
+  }
+  return `
+    <p class="taches-titre taches-titre-gerant">
+      Demandes de ${escapeHtml(duGerant[0].created_name || 'Jordan')}
+      <span class="muted small">— à traiter en premier</span>
+    </p>
+    <ul class="taches">${duGerant.map(ligneHtml).join('')}</ul>
+    <p class="taches-titre">Travail courant <span class="muted small">— le fond, tous les jours</span></p>
+    <ul class="taches">${courant.map(ligneHtml).join('')}</ul>`;
+}
+
 export async function renderTaches() {
   const boite = $('#taches-body');
   if (!boite) return;
@@ -140,10 +176,12 @@ export async function renderTaches() {
   const ouvertes = taches.filter((t) => t.status === 'a_faire');
   const closes = taches.filter((t) => t.status !== 'a_faire');
   const retard = ouvertes.filter((t) => t.due_date && t.due_date < todayISO()).length;
+  const duGerant = ouvertes.filter((t) => t.origine === 'gerant').length;
 
   boite.innerHTML = `
     <div class="card pad taches-resume">
       <strong>${ouvertes.length || 'Aucune'} chose${ouvertes.length > 1 ? 's' : ''} à faire</strong>
+      ${duGerant ? `<span class="tache-gerant">${duGerant} de ${escapeHtml(nomGerant(ouvertes))}</span>` : ''}
       ${retard ? `<span class="txt-red strong">${retard} en retard</span>` : ''}
       <span class="spacer"></span>
       <label class="check"><input type="checkbox" id="taches-closes" ${montrerClos ? 'checked' : ''}>
@@ -151,7 +189,7 @@ export async function renderTaches() {
     </div>
 
     ${ouvertes.length
-      ? `<ul class="taches">${ouvertes.map(ligneHtml).join('')}</ul>`
+      ? groupesHtml(ouvertes)
       : `<div class="card pad"><p class="muted">Rien à faire pour l'instant. Ajoute quelque chose ci-dessus.</p></div>`}
 
     ${montrerClos && closes.length ? `
