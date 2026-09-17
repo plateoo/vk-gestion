@@ -164,6 +164,11 @@
         <button type="button" id="alert-stock" class="alert"><span class="alert-text">—</span><span class="alert-go">Voir ›</span></button>
       </div>
 
+      <!-- Ce qui vient d'entrer. Premier bloc regardé le matin : « qu'est-ce
+           qui est arrivé depuis hier ? ». Muet quand rien n'est arrivé. -->
+      <button type="button" id="alert-arrivees" class="alert alert-arrivees" hidden>
+        <span class="alert-text">—</span><span class="alert-go">Voir ›</span></button>
+
       <!-- Courrier : ce qui est arrivé, résumé. Rien n'est déplacé, et
            ce bloc reste muet tant que le flux n'est pas branché. -->
       <div id="courrier" class="card courrier" hidden></div>
@@ -298,11 +303,16 @@
       <div class="view-chips no-print" role="tablist" aria-label="Vue du tableau">
         <button type="button" class="chip active" data-view="factures" role="tab" aria-selected="true">Factures</button>
         <button type="button" class="chip" data-view="a_controler" role="tab" aria-selected="false">
-          À contrôler <span class="chip-count" id="chip-count-review">0</span></button>
+          À contrôler <span class="chip-count" id="chip-count-review" hidden>0</span></button>
         <button type="button" class="chip" data-view="documents" role="tab" aria-selected="false">
-          Documents <span class="chip-count" id="chip-count-docs">0</span></button>
+          Documents <span class="chip-count" id="chip-count-docs" hidden>0</span></button>
+        <!-- Un fournisseur envoie six ans d'arriéré aujourd'hui : rangées
+             par date de facture, ses pièces se dispersent dans toute la
+             liste. Cette vue les montre par date d'ARRIVÉE. -->
+        <button type="button" class="chip" data-view="arrivees" role="tab" aria-selected="false">
+          Arrivées <span class="chip-count" id="chip-count-new" hidden>0</span></button>
         <button type="button" class="chip" data-view="doublons" role="tab" aria-selected="false">
-          Doublons <span class="chip-count" id="chip-count-dup">0</span></button>
+          Doublons <span class="chip-count" id="chip-count-dup" hidden>0</span></button>
       </div>
 
       <div class="toolbar no-print">

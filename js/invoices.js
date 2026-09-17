@@ -10,7 +10,7 @@ import {
   confirmDialog, skeletonRows, getMonth, setMonth, monthLabel, shiftMonth,
   currentMonthKey, inMonth, inPeriod, getPeriod, setPeriod, periodLabel, estDue,
   statusLabel, statusClass, isOverdue, isDueSoon, isComplete,
-  todayISO, addDays, notifyDataChange, ICONS, openPopover, closePopover
+  todayISO, addDays, longDate, notifyDataChange, ICONS, openPopover, closePopover
 } from './ui.js';
 import { currentUser, isManager } from './auth.js';
 
@@ -36,7 +36,7 @@ const filters = {
   // Vue du tableau. Par défaut on ne montre que les factures : les pièces
   // classées « document » — conditions générales, bons de commande — ont
   // leur propre vue et ne doivent jamais polluer la liste à encoder.
-  view: 'factures'     // 'factures' | 'a_controler' | 'documents' | 'doublons'
+  view: 'factures'     // 'factures' | 'a_controler' | 'arrivees' | 'documents' | 'doublons'
 };
 
 // Valeurs d'ensemble du filtre fournisseur. Préfixées pour ne jamais
@@ -91,6 +91,11 @@ export function getFilters() { return { ...filters }; }
 /** Applique des filtres depuis l'extérieur (blocs d'alerte du tableau de bord) */
 export function setInvoiceFilters(patch) {
   Object.assign(filters, patch);
+  // Même règle que par la pastille : ces deux vues ne se bornent pas à une
+  // période, et la période réelle doit le refléter à l'écran.
+  if (patch.period === 'all' || filters.view === 'documents' || filters.view === 'arrivees') {
+    setPeriod({ kind: 'all' });
+  }
   syncFilterInputs();
   renderInvoices();
 }
@@ -103,17 +108,73 @@ export function resetFilters() {
 // ---------------------------------------------------------------------
 // Filtrage / tri
 // ---------------------------------------------------------------------
+/**
+ * Coupe une liste par journée d'arrivée, la plus récente d'abord.
+ *
+ * L'en-tête dit ce qu'on a besoin de savoir d'un coup d'œil : combien de
+ * pièces, de quel fournisseur, pour quel montant. Quand tout vient du
+ * même fournisseur — le cas de la facturation groupée — on le nomme ;
+ * au-delà de trois, on compte.
+ */
+/** Nombre de pièces entrées depuis hier — ce que la pastille annonce. */
+export function compterArrivees(rows, jours = 2) {
+  const depuis = addDays(todayISO(), -(jours - 1));
+  return (rows || []).filter((i) => String(i.created_at || '').slice(0, 10) >= depuis).length;
+}
+
+/** Le détail de ce qui vient d'arriver, pour le tableau de bord. */
+export function resumeArrivees(rows, jours = 2) {
+  const depuis = addDays(todayISO(), -(jours - 1));
+  const recentes = (rows || []).filter((i) => String(i.created_at || '').slice(0, 10) >= depuis);
+  const noms = [...new Set(recentes.map((i) => i.supplier_name).filter(Boolean))];
+  return { nombre: recentes.length, fournisseurs: noms };
+}
+
+function groupesParJour(pieces) {
+  const auj = todayISO();
+  const hier = addDays(auj, -1);
+  const groupes = new Map();
+
+  for (const i of pieces) {
+    const jour = String(i.created_at || '').slice(0, 10) || '—';
+    if (!groupes.has(jour)) groupes.set(jour, []);
+    groupes.get(jour).push(i);
+  }
+
+  return [...groupes.entries()].map(([jour, liste]) => {
+    const noms = [...new Set(liste.map((i) => i.supplier_name).filter(Boolean))];
+    const aControler = liste.filter((i) => i.review_status === 'a_controler').length;
+    return {
+      jour,
+      libelle: jour === auj ? "Aujourd'hui" : jour === hier ? 'Hier' : longDate(jour),
+      resume: `${liste.length} pièce${liste.length > 1 ? 's' : ''}`
+        + (noms.length && noms.length <= 3 ? ` · ${noms.join(', ')}` : ` · ${noms.length} fournisseurs`)
+        + (aControler ? ` · ${aControler} à contrôler` : ''),
+      total: liste.reduce((s2, i) => s2 + (Number(i.amount_tvac) || 0), 0),
+      pieces: liste
+    };
+  });
+}
+
 function applyFilters(rows) {
   const month = getMonth();
   const q = filters.q.trim().toLowerCase();
   return rows.filter((i) => {
     const estDocument = i.review_status === 'document';
-    if (filters.view === 'documents') { if (!estDocument) return false; }
+    // Les arrivées montrent TOUT ce qui est entré, pièces classées
+    // « document » comprises : quand un fournisseur envoie dix fichiers,
+    // en cacher trois ferait chercher ce qui n'a jamais disparu.
+    if (filters.view === 'arrivees') { /* rien n'est écarté */ }
+    else if (filters.view === 'documents') { if (!estDocument) return false; }
     else if (estDocument) return false;
     if (filters.view === 'a_controler' && i.review_status !== 'a_controler') return false;
     // « month » veut dire : restreindre à la période affichée, quelle qu'elle
     // soit — mois, trimestre, année ou dates libres.
-    if (filters.period !== 'all' && !inPeriod(i.invoice_date)) return false;
+    //
+    // Sauf dans les arrivées : un fournisseur qui envoie aujourd'hui six ans
+    // d'arriéré doit les voir apparaître, et aucun d'eux n'est du mois
+    // affiché. C'est précisément le cas que Jordan décrit.
+    if (filters.view !== 'arrivees' && filters.period !== 'all' && !inPeriod(i.invoice_date)) return false;
     if (filters.supplier) {
       const pays = supplierById(i.supplier_id)?.country || null;
       if (filters.supplier === PAYS_BE) { if (pays !== 'BE') return false; }
@@ -183,9 +244,15 @@ export async function renderInvoices() {
   const cReview = $('#chip-count-review');
   const cDocs = $('#chip-count-docs');
   const cDup = $('#chip-count-dup');
+  // La pastille des arrivées compte CE QUI VIENT D'ENTRER, pas tout
+  // l'historique : un chiffre à 254 ne dirait rien. Les deux derniers
+  // jours — assez pour couvrir un lundi matin après un envoi du vendredi.
+  const nbNouvelles = compterArrivees(rows);
+  const cNew = $('#chip-count-new');
   if (cReview) { cReview.textContent = nbReview; cReview.hidden = nbReview === 0; }
   if (cDocs) { cDocs.textContent = nbDocs; cDocs.hidden = nbDocs === 0; }
   if (cDup) { cDup.textContent = nbDup; cDup.hidden = nbDup === 0; }
+  if (cNew) { cNew.textContent = nbNouvelles; cNew.hidden = nbNouvelles === 0; }
 
   // La vue des doublons ne se filtre pas comme les autres : elle montre des
   // groupes, et un groupe n'a de sens que complet. Le restreindre au mois
@@ -215,6 +282,41 @@ export async function renderInvoices() {
     return;
   }
 
+  // Les arrivées : triées par entrée dans l'application, pas par date de
+  // facture, et coupées par journée. C'est la réponse à « qu'est-ce qui
+  // vient d'arriver ? », une question que le tri par date de facture ne
+  // peut pas répondre.
+  if (filters.view === 'arrivees') {
+    const arrivees = applyFilters(rows).slice()
+      .sort((x, y) => String(y.created_at || '').localeCompare(String(x.created_at || '')));
+    lastRows = arrivees;
+
+    const totalTvac = arrivees.reduce((s2, i) => s2 + (Number(i.amount_tvac) || 0), 0);
+    $('#inv-foot-count').textContent = `${arrivees.length} pièce${arrivees.length > 1 ? 's' : ''}`;
+    $('#inv-foot-htva').textContent = '';
+    $('#inv-foot-total').textContent = fmtEUR(totalTvac);
+
+    if (!arrivees.length) {
+      emptyState(tbody, 'Rien n\'est encore arrivé dans l\'application.', false);
+      updateSortIndicators();
+      updateBulkBar();
+      return;
+    }
+
+    const manager = isManager();
+    tbody.innerHTML = groupesParJour(arrivees)
+      .map((g) => `
+        <tr class="jour-head"><td colspan="13">
+          <span class="jour-label">${escapeHtml(g.libelle)}</span>
+          <span class="jour-detail">${escapeHtml(g.resume)}</span>
+          <span class="jour-total">${fmtEUR(g.total)}</span>
+        </td></tr>
+        ${g.pieces.map((i) => rowHtml(i, manager)).join('')}`).join('');
+    updateSortIndicators();
+    updateBulkBar();
+    return;
+  }
+
   const filtered = applySort(applyFilters(rows));
   lastRows = filtered;
 
@@ -226,7 +328,9 @@ export async function renderInvoices() {
   $('#inv-foot-total').textContent = fmtEUR(totalTvac);
 
   if (!filtered.length) {
-    const vide = filters.view === 'documents'
+    const vide = filters.view === 'arrivees'
+      ? 'Rien n\'est arrivé récemment.'
+      : filters.view === 'documents'
       ? 'Aucune pièce classée « document ». Les conditions générales et bons de commande reçus par e-mail apparaîtront ici.'
       : filters.view === 'a_controler'
         ? 'Rien à contrôler : toutes les factures reçues ont été vérifiées.'
@@ -1177,6 +1281,14 @@ function syncPeriodInputs() {
 function syncFilterInputs() {
   $('#f-search').value = filters.q;
   syncPeriodInputs();
+  // La vue peut être imposée de l'extérieur — un bloc du tableau de bord.
+  // Sans cela, la pastille active resterait sur « Factures » alors que le
+  // tableau montre autre chose.
+  $$('.view-chips [data-view]').forEach((c) => {
+    const actif = c.dataset.view === filters.view;
+    c.classList.toggle('active', actif);
+    c.setAttribute('aria-selected', actif ? 'true' : 'false');
+  });
   $('#f-supplier').value = filters.supplier;
   $('#f-status').value = filters.status;
   $('#f-smart').value = filters.smart;
@@ -1197,9 +1309,18 @@ export function initInvoices(onOpenDocument = null) {
         c.classList.toggle('active', actif);
         c.setAttribute('aria-selected', actif ? 'true' : 'false');
       });
-      // Les documents ne sont pas datés comme des factures : les enfermer
-      // dans le mois affiché les rendrait invisibles.
-      if (filters.view === 'documents') { filters.period = 'all'; syncFilterInputs(); }
+      // Les documents ne sont pas datés comme des factures, et les arrivées
+      // se moquent du mois affiché : les enfermer dans la période les
+      // rendrait invisibles.
+      //
+      // Il faut passer par setPeriod : écrire filters.period directement ne
+      // tenait pas, syncPeriodInputs le relit de la période réelle et le
+      // remettait aussitôt sur « mois ». La vue Documents en souffrait
+      // depuis sa mise en service sans que cela se voie.
+      if (filters.view === 'documents' || filters.view === 'arrivees') {
+        setPeriod({ kind: 'all' });
+      }
+      syncFilterInputs();
       renderInvoices();
     });
   });

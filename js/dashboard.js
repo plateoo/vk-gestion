@@ -1,7 +1,7 @@
 // =====================================================================
 // dashboard.js — KPI du mois sélectionné, alertes, top fournisseurs
 // =====================================================================
-import { getInvoices, setInvoiceFilters } from './invoices.js';
+import { getInvoices, setInvoiceFilters, resumeArrivees } from './invoices.js';
 import {
   $, fmtEUR, escapeHtml, toast, errorMessage, getMonth, setMonth, shiftMonth,
   currentMonthKey, monthLabel, inMonth, isOverdue, ICONS,
@@ -79,6 +79,28 @@ export async function renderDashboard() {
   setAlert('#alert-smart', noSmart, 'facture', 'pas encore encodée dans Smart', 'pas encore encodées dans Smart', 'Tout est encodé dans Smart');
   setAlert('#alert-win', noWin, 'facture', 'pas encore envoyée à WinAuditor', 'pas encore envoyées à WinAuditor', 'Tout est envoyé à WinAuditor');
   setAlert('#alert-stock', noStock, 'facture', 'sans entrée en stock', 'sans entrée en stock', 'Tout est entré en stock');
+
+  // ---------- Ce qui vient d'arriver ----------
+  //
+  // Calculé sur TOUTES les pièces, pas sur la période affichée : un
+  // fournisseur qui envoie aujourd'hui son arriéré de 2024 doit être
+  // signalé même si l'on regarde le mois en cours. C'est précisément le
+  // cas qui rendait ces factures introuvables.
+  const arrivees = resumeArrivees(invoices);
+  const blocArrivees = $('#alert-arrivees');
+  if (blocArrivees) {
+    blocArrivees.hidden = arrivees.nombre === 0;
+    const qui = arrivees.fournisseurs.length === 1
+      ? ` de ${arrivees.fournisseurs[0]}`
+      : arrivees.fournisseurs.length <= 3 && arrivees.fournisseurs.length
+        ? ` de ${arrivees.fournisseurs.join(', ')}`
+        : arrivees.fournisseurs.length
+          ? ` de ${arrivees.fournisseurs.length} fournisseurs`
+          : '';
+    blocArrivees.querySelector('.alert-text').textContent =
+      `${arrivees.nombre} pièce${arrivees.nombre > 1 ? 's' : ''} arrivée${arrivees.nombre > 1 ? 's' : ''}`
+      + ` depuis hier${qui}`;
+  }
 
   // ---------- Barres de progression du mois ----------
   setProgress('smart', rows.length - noSmart, rows.length, 'encodée dans Smart', 'encodées dans Smart');
@@ -169,6 +191,9 @@ export function initDashboard() {
   $('#alert-smart').addEventListener('click', () => gotoInvoices({ smart: 'non' }));
   $('#alert-win').addEventListener('click', () => gotoInvoices({ winauditor: 'non' }));
   $('#alert-stock').addEventListener('click', () => gotoInvoices({ stock: 'sans' }));
+  // Les arrivées ignorent la période : c'est tout l'intérêt. Un fournisseur
+  // qui envoie aujourd'hui des factures de 2024 doit apparaître ici.
+  $('#alert-arrivees').addEventListener('click', () => gotoInvoices({ view: 'arrivees', period: 'all' }));
   $('#card-late').addEventListener('click', () => gotoInvoices({}));
 
   window.addEventListener('vk:month', () => renderDashboard());
@@ -178,7 +203,8 @@ export function initDashboard() {
 function gotoInvoices(patch) {
   window.dispatchEvent(new CustomEvent('vk:goto-invoices'));
   setInvoiceFilters(Object.assign(
-    { q: '', period: 'month', supplier: '', status: '', smart: '', winauditor: '', stock: '' },
+    { q: '', period: 'month', supplier: '', status: '', smart: '', winauditor: '', stock: '',
+      view: 'factures' },
     patch
   ));
 }

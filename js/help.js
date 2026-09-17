@@ -22,7 +22,7 @@ const PAR_ECRAN = {
   taches: 'taches',
   memoire: 'memoire',
   review: 'controler',
-  invoices: 'parcours',
+  invoices: 'arrivees',
   suppliers: 'fournisseurs',
   payments: 'paiement',
   settings: 'email',
