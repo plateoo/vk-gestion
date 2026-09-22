@@ -384,6 +384,34 @@
          facture, après une confirmation qui la nomme en entier — fournisseur, numéro, date,
          montant — car entre deux lignes jumelles, « supprimer cette facture ? » ne suffit pas.
          <span class="tag">gérant</span></p>
+
+      <h3>Deux fiches pour le même fournisseur</h3>
+      <p>Quand un fournisseur écrit son nom de deux façons, deux fiches se créent et
+         <strong>tous ses totaux deviennent faux</strong>. L'écran Fournisseurs signale les
+         fiches qui se ressemblent et propose de les <strong>réunir</strong>.</p>
+      <p>Le rapprochement automatique ne voit que les noms qui se ressemblent. « VDBK » et
+         « Vanden Borre Kitchen » désignent la même société sans se ressembler du tout, et
+         aucune machine ne le devinera. Pour ces cas-là : ouvre la fiche à faire disparaître,
+         bouton <strong>« Réunir avec… »</strong>, et choisis celle à conserver.
+         <span class="tag">gérant</span></p>
+      <p>Avant d'agir, l'écran annonce <strong>exactement ce qui va se passer</strong> :</p>
+      <ul>
+        <li>combien de factures seront rattachées à la fiche conservée ;</li>
+        <li>si les deux fiches portent des <strong>numéros de TVA différents</strong> — ce sont
+            peut-être deux sociétés distinctes, et il ne faut surtout pas les confondre ;</li>
+        <li>quelles factures <strong>ne pourront pas être déplacées</strong>, numéro par numéro.</li>
+      </ul>
+      <p>Ce dernier point mérite une explication, parce qu'il a longtemps bloqué sans rien dire.
+         Une facture ne peut pas porter deux fois le même numéro chez le même fournisseur. Si
+         le même numéro existe des <em>deux</em> côtés, c'est un <strong>vrai doublon de
+         facture</strong> : elle reste en place, et la fiche absorbée ne disparaît pas. Il faut
+         alors supprimer la facture en trop dans la vue Doublons, puis relancer la réunion pour
+         la terminer. Les autres factures, elles, ont bien été déplacées : une collision isolée
+         ne retient plus les vingt-cinq autres.</p>
+      <p>La fiche conservée reprend au passage ce qu'elle n'avait pas — IBAN, e-mail, adresse,
+         numéro de TVA, pays — mais <strong>n'écrase jamais</strong> une valeur qu'elle portait
+         déjà. Les adresses e-mail connues des deux fiches sont réunies, pour que la
+         reconnaissance automatique continue de fonctionner.</p>
     </section>
 
     <!-- 9 -->

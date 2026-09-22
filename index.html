@@ -447,6 +447,11 @@
           </div>
           <div class="page-actions">
             <button type="button" id="sd-edit" class="btn">Modifier</button>
+            <!-- Réunir deux fiches sans attendre que le rapprochement
+                 automatique les repère : deux orthographes trop éloignées
+                 ne se ressemblent pas pour une machine, mais le gérant,
+                 lui, sait que c'est le même fournisseur. -->
+            <button type="button" id="sd-merge" class="btn manager-only" hidden>Réunir avec…</button>
             <button type="button" id="sd-export" class="btn">Exporter la fiche</button>
             <button type="button" class="btn" data-print>Imprimer / PDF</button>
           </div>
@@ -760,6 +765,18 @@
 <!-- ============================================================
      MODALE FOURNISSEUR
      ============================================================ -->
+<!-- Réunir deux fiches fournisseur, choisies à la main -->
+<div id="modal-fusion" class="modal modal-top" hidden>
+  <div class="modal-backdrop" data-close="modal-fusion"></div>
+  <div class="modal-box narrow" role="dialog" aria-modal="true" aria-labelledby="modal-fusion-title">
+    <div class="modal-head">
+      <h2 id="modal-fusion-title">Réunir deux fiches</h2>
+      <button type="button" class="icon-btn" data-close="modal-fusion" aria-label="Fermer">✕</button>
+    </div>
+    <div id="modal-fusion-body" class="modal-body"></div>
+  </div>
+</div>
+
 <div id="modal-supplier" class="modal modal-top" hidden>
   <div class="modal-backdrop" data-close="modal-supplier"></div>
   <div class="modal-box narrow" role="dialog" aria-modal="true" aria-labelledby="modal-supplier-title">

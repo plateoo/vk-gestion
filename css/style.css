@@ -1966,3 +1966,20 @@ kbd {
   padding: 3px 8px; border-radius: 6px;
   background: var(--warn-soft); color: var(--warn); border: 1px dashed var(--border-warn);
 }
+
+/* =====================================================================
+   Réunir deux fiches fournisseur
+   Ce qui va se passer est dit avant d'agir : combien de factures bougent,
+   lesquelles se heurtent, et si les numéros de TVA diffèrent.
+   ===================================================================== */
+.fusion-intro { margin: 0 0 12px; font-size: 15px; }
+#modal-fusion label { display: block; font-weight: 600; font-size: 13px; margin-bottom: 6px; }
+#modal-fusion select { width: 100%; }
+.fusion-apercu {
+  margin-top: 12px; padding: 12px; border-radius: 8px;
+  background: var(--surface-alt); border: 1px solid var(--border);
+}
+.fusion-apercu p { margin: 0 0 6px; }
+.fusion-apercu p:last-child { margin-bottom: 0; }
+.fusion-alerte { color: var(--warn); font-weight: 600; }
+.fusion-collisions { margin: 4px 0 8px; padding-left: 20px; font-size: 12.5px; }

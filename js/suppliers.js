@@ -184,6 +184,98 @@ export async function renderSupplierDetail(id) {
     downloadInvoicesCSV(shown, `VK_fournisseur_${slugify(s.name)}_${suffix}.csv`);
   };
   $('#sd-edit').onclick = () => openSupplierModal(s, () => renderSupplierDetail(id));
+  const boutonFusion = $('#sd-merge');
+  if (boutonFusion) {
+    boutonFusion.hidden = !isManager();
+    boutonFusion.onclick = () => ouvrirChoixFusion(s);
+  }
+}
+
+/**
+ * Réunir cette fiche avec une autre, choisie à la main.
+ *
+ * Le rapprochement automatique ne repère que les noms qui se ressemblent.
+ * « VDBK » et « Vanden Borre Kitchen » désignent la même société sans se
+ * ressembler du tout, et aucune machine ne le devinera. Le gérant, lui,
+ * le sait : il faut donc pouvoir le lui dire.
+ *
+ * La fiche ouverte est celle qui DISPARAÎT — c'est elle qu'on regarde, et
+ * c'est le sens de « la réunir avec une autre ». Le libellé le répète, car
+ * se tromper de sens ici déplace les factures à l'envers.
+ */
+async function ouvrirChoixFusion(fiche) {
+  const autres = suppliersCache()
+    .filter((x) => x.id !== fiche.id && !x.merged_into && !x.archived)
+    .sort((a, b) => a.name.localeCompare(b.name, 'fr'));
+  if (!autres.length) return toast('Il n\'y a aucune autre fiche avec laquelle la réunir.', 'error');
+
+  $('#modal-fusion-body').innerHTML = `
+    <p class="fusion-intro">Réunir « <strong>${escapeHtml(fiche.name)}</strong> » avec une autre fiche</p>
+    <p class="muted small">Les factures de <strong>${escapeHtml(fiche.name)}</strong> seront
+      rattachées à la fiche choisie, et cette fiche-ci disparaîtra.</p>
+    <label for="fusion-cible">Fiche à conserver</label>
+    <select id="fusion-cible" class="search">
+      ${autres.map((x) => `<option value="${x.id}">${escapeHtml(x.name)}${
+        x.vat_number ? ` — ${escapeHtml(x.vat_number)}` : ''}</option>`).join('')}
+    </select>
+    <div id="fusion-apercu" class="fusion-apercu muted small">Choisis une fiche pour voir ce qui se passera.</div>
+    <div class="modal-actions">
+      <button type="button" class="btn" data-close="modal-fusion">Annuler</button>
+      <button type="button" class="btn btn-primary" id="fusion-ok" disabled>Réunir</button>
+    </div>`;
+  openModal('modal-fusion');
+
+  const select = $('#fusion-cible');
+  const apercu = $('#fusion-apercu');
+  const valider = $('#fusion-ok');
+
+  async function montrer() {
+    valider.disabled = true;
+    apercu.textContent = 'Vérification…';
+    try {
+      const { data, error } = await supabase.rpc('merge_preview', {
+        p_keep: select.value, p_drop: fiche.id
+      });
+      if (error) throw error;
+      const p = typeof data === 'string' ? JSON.parse(data) : data;
+      apercu.innerHTML = apercuFusionHtml(p);
+      valider.disabled = false;
+    } catch (err) {
+      console.error(err);
+      apercu.textContent = errorMessage(err, 'Vérification impossible.');
+    }
+  }
+  select.addEventListener('change', montrer);
+  await montrer();
+
+  valider.onclick = async () => {
+    const cible = select.value;
+    closeModal('modal-fusion');
+    await executerFusion(cible, fiche.id);
+  };
+}
+
+/** Ce qui va se passer, dit avant d'agir. */
+function apercuFusionHtml(p) {
+  const collisions = p.collisions || [];
+  return `
+    <p><strong>${p.a_deplacer}</strong> facture${p.a_deplacer > 1 ? 's' : ''}
+       ${p.a_deplacer > 1 ? 'seront rattachées' : 'sera rattachée'} à
+       « ${escapeHtml(p.nom_conserve)} ».</p>
+    ${p.tva_differentes ? `
+      <p class="fusion-alerte">Les deux fiches portent des numéros de TVA <strong>différents</strong> :
+        ${escapeHtml(p.tva_conserve || '—')} et ${escapeHtml(p.tva_absorbe || '—')}.
+        Ce sont peut-être deux sociétés distinctes — vérifie avant de continuer.</p>` : ''}
+    ${collisions.length ? `
+      <p class="fusion-alerte"><strong>${collisions.length} facture${collisions.length > 1 ? 's' : ''}
+        ${collisions.length > 1 ? 'portent' : 'porte'} un numéro déjà présent</strong> sur la fiche
+        conservée, et ${collisions.length > 1 ? 'resteront' : 'restera'} en place :</p>
+      <ul class="fusion-collisions">
+        ${collisions.map((c) => `<li>n° ${escapeHtml(c.invoice_number)} —
+          ${escapeHtml(fmtDate(c.invoice_date))} — ${fmtEUR(c.amount_tvac)}</li>`).join('')}
+      </ul>
+      <p class="muted small">C'est un vrai doublon de facture : supprime celle qui est en trop,
+        puis relance la réunion pour terminer.</p>` : ''}`;
 }
 
 // ---------------------------------------------------------------------
@@ -500,30 +592,90 @@ function renderSupplierDuplicates(suppliers, invoices) {
 }
 
 async function fusionner(btn) {
-  const { mergeKeep, mergeDrop, mergeLabel, mergeInto, mergeCount } = btn.dataset;
-  const n = Number(mergeCount) || 0;
-  const ok = await confirmDialog(
-    `Réunir « ${mergeLabel} » dans « ${mergeInto} » ?\n`
-    + `${n} facture${n > 1 ? 's' : ''} ${n > 1 ? 'seront rattachées' : 'sera rattachée'} à la fiche conservée, `
-    + 'et les adresses e-mail connues seront reprises pour que la reconnaissance automatique continue de fonctionner.\n'
-    + 'La fiche absorbée disparaît. Cette action ne peut pas être annulée.',
-    'Réunir les fiches');
-  if (!ok) return;
-
   btn.disabled = true;
   try {
-    const { data, error } = await supabase.rpc('merge_suppliers', { p_keep: mergeKeep, p_drop: mergeDrop });
+    await executerFusion(btn.dataset.mergeKeep, btn.dataset.mergeDrop);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+/**
+ * Réunir deux fiches, en disant la vérité avant et après.
+ *
+ * Avant : on demande à la base ce qui va bouger et ce qui va se heurter.
+ * Une facture dont le numéro existe des deux côtés est un vrai doublon —
+ * elle ne peut pas être déplacée, et il faut le dire AVANT, pas découvrir
+ * après coup que la fiche n'a pas disparu.
+ *
+ * Après : on rapporte ce qui s'est réellement passé, y compris quand le
+ * travail est incomplet. C'est ce qui manquait : une fusion partielle
+ * s'annonçait comme un succès, et le gérant retrouvait ses deux fiches
+ * sans comprendre pourquoi.
+ */
+async function executerFusion(keep, drop) {
+  let p;
+  try {
+    const { data, error } = await supabase.rpc('merge_preview', { p_keep: keep, p_drop: drop });
+    if (error) throw error;
+    p = typeof data === 'string' ? JSON.parse(data) : data;
+  } catch (err) {
+    console.error(err);
+    return toast(errorMessage(err, 'Vérification impossible.'), 'error');
+  }
+
+  const collisions = p.collisions || [];
+  const message = [
+    `Réunir « ${p.nom_absorbe} » dans « ${p.nom_conserve} » ?`,
+    '',
+    `${p.a_deplacer} facture(s) seront rattachées à la fiche conservée, avec les adresses `
+      + 'e-mail connues pour que la reconnaissance automatique continue de fonctionner.',
+    p.tva_differentes
+      ? `\nATTENTION : les deux fiches portent des numéros de TVA différents — `
+        + `${p.tva_conserve || '—'} et ${p.tva_absorbe || '—'}. Ce sont peut-être deux sociétés `
+        + 'distinctes. Vérifie avant de continuer.'
+      : '',
+    collisions.length
+      ? `\n${collisions.length} facture(s) ne pourront PAS être déplacées : leur numéro existe `
+        + `déjà sur la fiche conservée.\n`
+        + collisions.slice(0, 5).map((c) => `  • n° ${c.invoice_number} — ${fmtDate(c.invoice_date)} — ${fmtEUR(c.amount_tvac)}`).join('\n')
+        + (collisions.length > 5 ? `\n  … et ${collisions.length - 5} autre(s)` : '')
+        + '\nCe sont de vrais doublons de facture : la fiche restera en place tant qu\'ils '
+        + 'n\'auront pas été supprimés.'
+      : '\nLa fiche absorbée disparaîtra. Cette action ne peut pas être annulée.'
+  ].filter(Boolean).join('\n');
+
+  const ok = await confirmDialog(message, 'Réunir les fiches');
+  if (!ok) return;
+
+  try {
+    const { data, error } = await supabase.rpc('merge_suppliers', { p_keep: keep, p_drop: drop });
     if (error) throw error;
     const r = typeof data === 'string' ? JSON.parse(data) : data;
-    toast(`Fiches réunies — ${r.moved_invoices} facture(s) rattachée(s) à « ${mergeInto} ».`);
+
     invalidateInvoices();
     await getSuppliers(true);
     notifyDataChange();
+    detailId = null;
     renderSuppliers();
+
+    if (r.supprimee) {
+      toast(`Fiches réunies — ${r.moved_invoices} facture(s) rattachée(s) à « ${r.nom_conserve} ».`);
+    } else {
+      // Le travail est incomplet et l'utilisateur doit le savoir tout de
+      // suite, avec le geste précis qui débloque la situation.
+      const nums = (r.collisions || []).slice(0, 3).join(', ');
+      await confirmDialog(
+        `${r.moved_invoices} facture(s) rattachée(s) à « ${r.nom_conserve} ».\n\n`
+        + `Mais « ${r.nom_absorbe} » n'a pas pu disparaître : ${r.restantes} facture(s) y restent, `
+        + `parce que leur numéro existe déjà sur la fiche conservée`
+        + (nums ? ` (${nums}${(r.collisions || []).length > 3 ? '…' : ''})` : '')
+        + '.\n\nOuvre la vue Doublons, supprime la facture en trop, puis relance la réunion.',
+        'Compris');
+    }
   } catch (err) {
     console.error(err);
-    btn.disabled = false;
-    toast(errorMessage(err, 'Fusion impossible.'), 'error');
+    toast(errorMessage(err, 'Impossible de réunir les fiches.'), 'error');
   }
 }
 
