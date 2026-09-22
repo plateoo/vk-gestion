@@ -1955,9 +1955,14 @@ kbd {
 /* Une facture pas encore regardée, repérée dans la liste normale. Elle
    n'est pas bloquée pour autant : on la paie, on l'exporte, on l'encode.
    La mention dit « personne ne l'a vérifiée », pas « interdit d'y toucher ». */
-.st-acontroler {
-  background: var(--surface-sunken); color: var(--text-muted);
-  border: 1px solid var(--border-strong); font-weight: 600;
+/* Un point d'exclamation, pas une phrase : la colonne du numéro de
+   facture n'a pas la place d'accueillir « à contrôler », et le repère
+   doit se voir sans se lire. */
+.marque-verif {
+  display: inline-grid; place-items: center; margin-left: 6px;
+  width: 17px; height: 17px; border-radius: 50%;
+  font-size: 11px; font-weight: 800; line-height: 1; cursor: help;
+  background: var(--warn-soft); color: var(--warn); border: 1px solid var(--border-warn);
 }
 
 /* Réf. Smart absente mais encodage réputé fait par l'ancien franchisé */

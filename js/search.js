@@ -108,8 +108,8 @@ function openHit(el) {
     return;
   }
   if (invoice) {
-    // Une facture encore à contrôler vit dans l'autre écran
-    if (el.dataset.review) { goToTab('review'); return; }
+    // Tout vit désormais dans le même listing, y compris ce qui n'a pas
+    // encore été vérifié. On n'envoie plus l'utilisateur ailleurs.
     goToTab('invoices');
     setInvoiceFilters({ q: invoice, period: 'all', supplier: '', status: '', smart: '', winauditor: '', stock: '' });
   }

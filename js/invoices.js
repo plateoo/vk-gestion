@@ -347,7 +347,7 @@ export async function renderInvoices() {
       : filters.view === 'documents'
       ? 'Aucune pièce classée « document ». Les conditions générales et bons de commande reçus par e-mail apparaîtront ici.'
       : filters.view === 'a_controler'
-        ? 'Rien à contrôler : toutes les factures reçues ont été vérifiées.'
+        ? 'Rien à vérifier : toutes les factures reçues ont été regardées.'
         : filters.period !== 'all'
           ? `Aucune facture sur la période : ${periodLabel().toLowerCase()}`
           : 'Aucune facture ne correspond aux filtres';
@@ -448,7 +448,7 @@ function rowHtml(i, manager) {
     <td class="td-date" data-label="Date">${fmtDate(i.invoice_date)}</td>
     <td class="td-supplier" data-label="Fournisseur">${escapeHtml(i.supplier_name)}</td>
     <td class="td-number" data-label="N°">${escapeHtml(i.invoice_number)}${i.review_status === 'a_controler'
-      ? '<span class="badge st-acontroler" title="Pas encore contrôlée. Clique sur la ligne pour l\'ouvrir et la vérifier.">à contrôler</span>'
+      ? '<span class="marque-verif" title="Personne ne l\'a encore vérifiée. Clique sur la ligne pour l\'ouvrir. Rien ne t\'empêche de la payer ou de l\'encoder en attendant." aria-label="à vérifier">!</span>'
       : ''}${i.forced_at
       ? `<span class="badge st-forcee" title="Acceptée en forçant par ${escapeHtml(i.forced_name || '—')} : ${escapeHtml(i.forced_reason || '')}">forcée</span>`
       : ''}${i.vat_amount != null

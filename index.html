@@ -82,7 +82,6 @@
       <button type="button" class="nav-item" data-tab="taches"><span class="ico">☑</span> À faire<span id="task-badge" class="nav-badge" hidden>0</span></button>
       <button type="button" class="nav-item" data-tab="memoire"><span class="ico">✎</span> Mémoire</button>
       <button type="button" class="nav-item" data-tab="planning"><span class="ico">▦</span> Planning</button>
-      <button type="button" class="nav-item" data-tab="review"><span class="ico">◉</span> À contrôler<span id="review-badge" class="nav-badge" hidden>0</span></button>
       <button type="button" class="nav-item" data-tab="invoices"><span class="ico">▣</span> Factures</button>
       <button type="button" class="nav-item" data-tab="suppliers"><span class="ico">◫</span> Fournisseurs</button>
       <button type="button" class="nav-item manager-only" data-tab="payments" hidden><span class="ico">€</span> Paiements</button>
@@ -302,8 +301,11 @@
            ne se mêlent jamais aux factures à encoder. -->
       <div class="view-chips no-print" role="tablist" aria-label="Vue du tableau">
         <button type="button" class="chip active" data-view="factures" role="tab" aria-selected="true">Factures</button>
+        <!-- Un filtre du MÊME tableau, pas un autre écran : on reste dans
+             la liste des factures et l'on n'y voit que celles qui
+             attendent un coup d'œil. -->
         <button type="button" class="chip" data-view="a_controler" role="tab" aria-selected="false">
-          À contrôler <span class="chip-count" id="chip-count-review" hidden>0</span></button>
+          À vérifier <span class="chip-count" id="chip-count-review" hidden>0</span></button>
         <button type="button" class="chip" data-view="documents" role="tab" aria-selected="false">
           Documents <span class="chip-count" id="chip-count-docs" hidden>0</span></button>
         <!-- Un fournisseur envoie six ans d'arriéré aujourd'hui : rangées
@@ -597,9 +599,16 @@
   <button type="button" id="fab-new" class="fab no-print" aria-label="Nouvelle facture">+</button>
 
   <!-- Onglets bas (mobile) -->
+  <!-- Anciennes pastilles de l'écran « À contrôler », qui n'existe plus
+       comme destination. Conservées vides : le code qui les alimente ne
+       doit pas tomber sur du vide, et un écran de moins ne vaut pas une
+       chasse aux références dans cinq fichiers. -->
+  <span id="review-badge" hidden></span>
+  <span id="review-badge-m" hidden></span>
+
   <nav class="tabbar">
     <button type="button" class="tabbar-item active" data-tab="dashboard"><span class="ico">▤</span>Bord</button>
-    <button type="button" class="tabbar-item" data-tab="review"><span class="ico">◉</span>Contrôle<span id="review-badge-m" class="nav-badge" hidden>0</span></button>
+    <button type="button" class="tabbar-item" data-tab="memoire"><span class="ico">✎</span>Mémoire</button>
     <button type="button" class="tabbar-item" data-tab="invoices"><span class="ico">▣</span>Factures</button>
     <button type="button" class="tabbar-item" data-tab="suppliers"><span class="ico">◫</span>Fourn.</button>
     <button type="button" class="tabbar-item" data-tab="taches"><span class="ico">☑</span>À faire<span id="task-badge-m" class="nav-badge" hidden>0</span></button>
@@ -614,8 +623,6 @@
   <div class="sheet-backdrop" id="plus-backdrop" hidden></div>
   <nav class="plus-sheet" id="plus-sheet" hidden aria-label="Autres écrans">
     <p class="plus-titre">Aller à</p>
-    <button type="button" class="plus-item" data-tab="memoire"><span class="ico">✎</span>
-      <span><strong>Mémoire</strong><small>Ce qu'il faut savoir pour tenir le poste</small></span></button>
     <button type="button" class="plus-item" data-tab="planning"><span class="ico">▦</span>
       <span><strong>Planning</strong><small>Le calendrier et les échéances</small></span></button>
     <button type="button" class="plus-item manager-only" data-tab="payments" hidden><span class="ico">€</span>
@@ -1137,7 +1144,9 @@ $('#fab-new').addEventListener('click', () => openInvoiceModal());
 // ---------- Navigation ----------
 $$('[data-tab]').forEach((b) => b.addEventListener('click', () => {
   if (b.dataset.tab === 'suppliers') resetSupplierView();
-  if (b.dataset.tab === 'review') resetDocumentView();
+  // « Factures » revient toujours au tableau, jamais sur une pièce
+  // restée ouverte en plein écran depuis la fois d'avant.
+  if (b.dataset.tab === 'invoices') resetDocumentView();
   fermerPlus();
   showTab(b.dataset.tab);
 }));
