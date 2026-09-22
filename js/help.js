@@ -10,14 +10,14 @@
 // « comment je fais » quand on est déjà au bon endroit est une perte de
 // temps.
 // =====================================================================
-import { $, $$, escapeHtml, openModal, closeModal, toast } from './ui.js';
+import { $, $$, escapeHtml, openModal, closeModal, toast, imprimerEcran } from './ui.js';
 
 let sections = null;      // [{ id, titre, texte, html, gerant }]
 let chargement = null;
 
 /** Écran affiché -> section d'aide la plus utile */
 const PAR_ECRAN = {
-  dashboard: 'parcours',
+  dashboard: 'periode',
   planning: 'planning',
   taches: 'taches',
   memoire: 'memoire',
@@ -192,6 +192,41 @@ export async function ouvrirAideSujet(sectionId) {
   else $('#help-search').focus();
 }
 
+/**
+ * Affiche une page du site à l'intérieur de l'application.
+ *
+ * On lit le fichier, on en extrait le contenu utile, et on le pose dans
+ * l'aide en plein écran. Aucun onglet, aucune fenêtre : rien que le
+ * navigateur puisse refuser.
+ */
+async function afficherPage(fichier, titre) {
+  const vue = $('#help-article');
+  const liste = $('#help-browse');
+  $('#help-title').textContent = titre;
+  liste.hidden = true;
+  vue.hidden = false;
+  $('#help-back').hidden = false;
+  vue.innerHTML = '<p class="muted">Chargement…</p>';
+  vue.scrollTop = 0;
+
+  try {
+    const r = await fetch(fichier, { cache: 'no-cache' });
+    if (!r.ok) throw new Error(`page indisponible (${r.status})`);
+    const doc = new DOMParser().parseFromString(await r.text(), 'text/html');
+    const contenu = doc.querySelector('.guide-content') || doc.querySelector('main') || doc.body;
+    // Les liens internes de la page ne mènent nulle part une fois le
+    // document extrait de son contexte : on les neutralise plutôt que de
+    // laisser l'utilisateur cliquer dans le vide.
+    contenu.querySelectorAll('a[href^="#"]').forEach((a) => a.removeAttribute('href'));
+    vue.innerHTML = contenu.innerHTML;
+    vue.scrollTop = 0;
+  } catch (err) {
+    console.error(err);
+    vue.innerHTML = `<p>Cette page n'a pas pu être chargée.</p>
+      <p class="muted small">${escapeHtml(err.message || '')}</p>`;
+  }
+}
+
 export function initHelp(onTour, onShortcuts, ecranActif) {
   const modal = $('#modal-help');
   if (!modal) return;
@@ -212,37 +247,22 @@ export function initHelp(onTour, onShortcuts, ecranActif) {
 
     const act = e.target.closest('[data-help-act]')?.dataset.helpAct;
     if (act === 'back') return revenirListe();
-    if (act === 'guide') {
-      window.open('guide.html', '_blank', 'noopener');
-      return;
-    }
-    // Deux pages à imprimer et à poser près du clavier, pour les premiers
-    // jours. Le mode d'emploi complet reste à côté, pour le reste.
-    if (act === 'demarrage') {
-      window.open('demarrage.html', '_blank', 'noopener');
-      return;
-    }
-    // Ce qui n'appartient qu'au gérant : autoriser un expéditeur, réunir
-    // des fiches, payer, sauvegarder. Le bouton lui est réservé.
-    if (act === 'gerant') {
-      window.open('gerant.html', '_blank', 'noopener');
-      return;
-    }
+    // Ces trois pages s'affichent DANS l'application.
+    //
+    // Elles s'ouvraient dans un nouvel onglet. Sur un téléphone où
+    // l'application est installée sur l'écran d'accueil, iOS ignore
+    // purement et simplement l'ouverture d'onglet : les boutons ne
+    // faisaient rien, sans le moindre message. Affichées ici, elles
+    // fonctionnent partout et se lisent en plein écran.
+    if (act === 'guide') return afficherPage('guide.html', 'Mode d\'emploi');
+    if (act === 'demarrage') return afficherPage('demarrage.html', 'Fiche de démarrage');
+    if (act === 'gerant') return afficherPage('gerant.html', 'Guide du gérant');
     if (act === 'tour') { closeModal('modal-help'); return onTour?.(); }
     if (act === 'keys') { closeModal('modal-help'); return onShortcuts?.(); }
     if (act === 'print') {
-      // Imprimer la seule section lue, plutôt que les seize.
-      const s = sections?.find((x) => x.titre === $('#help-title').textContent);
-      if (!s) return toast('Ouvre d\'abord un sujet.', 'error');
-      const w = window.open('', '_blank', 'noopener,width=800,height=900');
-      if (!w) return toast('La fenêtre d\'impression a été bloquée.', 'error');
-      w.document.write(`<!doctype html><html lang="fr"><head><meta charset="utf-8">
-        <title>${escapeHtml(s.titre)} — VK Gestion</title>
-        <link rel="stylesheet" href="css/style.css"></head>
-        <body class="guide-body"><div class="guide"><main class="guide-content">
-        <h1 class="guide-title">${escapeHtml(s.titre)}</h1>${s.html}</main></div></body></html>`);
-      w.document.close();
-      w.addEventListener('load', () => w.print());
+      const sec = sections?.find((x) => x.titre === $('#help-title').textContent);
+      if (!sec) return toast('Ouvre d\'abord un sujet.', 'error');
+      imprimerEcran();
     }
   });
 }

@@ -1480,6 +1480,14 @@ function syncPeriodInputs() {
   }
   selTrim.value = p.quarter;
 
+  const selSem = $('#f-semester');
+  selSem.innerHTML = annees.flatMap((y) => [2, 1].map((n) =>
+    `<option value="${y}-S${n}">${periodLabel({ kind: 'semester', semester: `${y}-S${n}` })}</option>`)).join('');
+  if (!selSem.querySelector(`[value="${p.semester}"]`)) {
+    selSem.insertAdjacentHTML('afterbegin', `<option value="${p.semester}">${periodLabel({ ...p, kind: 'semester' })}</option>`);
+  }
+  selSem.value = p.semester;
+
   const selAn = $('#f-year');
   selAn.innerHTML = annees.map((y) => `<option value="${y}">${y}</option>`).join('');
   selAn.value = p.year;
@@ -1488,6 +1496,7 @@ function syncPeriodInputs() {
   $('#f-to').value = p.to || '';
 
   selTrim.hidden = p.kind !== 'quarter';
+  selSem.hidden = p.kind !== 'semester';
   selAn.hidden = p.kind !== 'year';
   $('#f-range').hidden = p.kind !== 'range';
 }
@@ -1544,6 +1553,7 @@ export function initInvoices(onOpenDocument = null) {
   // Période : un seul réglage pour le tableau, les totaux et les exports.
   $('#f-period').addEventListener('change', (e) => { setPeriod({ kind: e.target.value }); syncFilterInputs(); renderInvoices(); });
   $('#f-quarter').addEventListener('change', (e) => { setPeriod({ kind: 'quarter', quarter: e.target.value }); renderInvoices(); });
+  $('#f-semester').addEventListener('change', (e) => { setPeriod({ kind: 'semester', semester: e.target.value }); renderInvoices(); });
   $('#f-year').addEventListener('change', (e) => { setPeriod({ kind: 'year', year: e.target.value }); renderInvoices(); });
   $('#f-from').addEventListener('change', (e) => { setPeriod({ kind: 'range', from: e.target.value }); renderInvoices(); });
   $('#f-to').addEventListener('change', (e) => { setPeriod({ kind: 'range', to: e.target.value }); renderInvoices(); });

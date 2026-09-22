@@ -1420,7 +1420,9 @@ kbd {
 /* ---------------------------------------------------------------
    Aide dans l'application
    --------------------------------------------------------------- */
-.help-card { width: min(94vw, 720px); max-height: 86vh; display: flex; flex-direction: column; }
+/* L'aide contient désormais le mode d'emploi entier, pas seulement un
+   extrait : elle a besoin de la place d'une page, pas d'une bulle. */
+.help-card { width: min(96vw, 900px); max-height: 92vh; display: flex; flex-direction: column; }
 .help-body { display: flex; flex-direction: column; gap: 10px; min-height: 0; overflow: hidden; }
 .help-body .search { width: 100%; }
 
@@ -1434,18 +1436,54 @@ kbd {
 .help-item-title { font-weight: 600; font-size: 14px; }
 .help-item-snippet { font-size: 12.5px; color: var(--text-muted); line-height: 1.45; }
 
-/* Le contenu vient du guide : on lui rend sa mise en forme, en plus serré */
-.help-article { overflow-y: auto; padding-right: 4px; }
+/* Le contenu vient du guide. On lui rend sa taille de lecture : ce texte
+   se lit vraiment, parfois debout dans un magasin, et 13,5 px sur un
+   téléphone ne se lit pas — c'était le reproche. */
+.help-article { overflow-y: auto; padding: 0 6px 4px 2px; max-width: 68ch; }
 .help-article h2 { display: none; }          /* le titre est déjà dans l'en-tête */
-.help-article h3 { font-size: 14px; margin: 14px 0 6px; }
-.help-article p, .help-article li { font-size: 13.5px; line-height: 1.55; }
-.help-article ul, .help-article ol { margin: 6px 0 10px; padding-left: 20px; }
+.help-article h3 {
+  font-size: 17px; font-weight: 700; margin: 22px 0 8px;
+  padding-top: 14px; border-top: 1px solid var(--line-soft); color: var(--text);
+}
+.help-article h3:first-child { border-top: none; padding-top: 0; margin-top: 4px; }
+.help-article p, .help-article li { font-size: 15.5px; line-height: 1.65; color: var(--text); }
+.help-article p { margin: 0 0 12px; }
+.help-article ul, .help-article ol { margin: 8px 0 16px; padding-left: 22px; }
+.help-article li { margin-bottom: 7px; }
+.help-article strong { font-weight: 700; }
+.help-article code {
+  font-size: 14px; padding: 1px 5px; border-radius: 4px;
+  background: var(--surface-sunken);
+}
+/* Les encarts du guide gardent leur relief dans l'aide */
+.help-article .guide-note {
+  margin: 14px 0; padding: 12px 14px; border-radius: 8px;
+  background: var(--surface-alt); border-left: 3px solid var(--border-strong);
+  font-size: 15px;
+}
+.help-article .guide-note.warn {
+  background: var(--warn-soft); border-left-color: var(--warn);
+}
+.help-article .guide-note p:last-child { margin-bottom: 0; }
+.help-article .guide-steps li { margin-bottom: 10px; }
+.help-article .tag {
+  font-size: 12px; padding: 2px 7px; border-radius: 999px;
+  background: var(--surface-sunken); color: var(--text-muted); font-weight: 600;
+}
+
+.help-item-title { font-size: 15px; }
+.help-list { gap: 6px; }
 
 .help-foot { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
 
 @media (max-width: 900px) {
-  .help-card { width: 100%; max-height: 92vh; }
+  /* Sur téléphone, l'aide prend tout l'écran : c'est un document qu'on
+     lit, pas une info-bulle qu'on consulte du coin de l'œil. */
+  .help-card { width: 100%; max-width: 100%; max-height: 100vh; height: 100vh; border-radius: 0; }
   .help-foot .btn { flex: 1 1 auto; }
+  .help-article { max-width: none; }
+  .help-article p, .help-article li { font-size: 16px; }
+  .help-article h3 { font-size: 18px; }
 }
 
 /* ---------------------------------------------------------------
@@ -1988,3 +2026,34 @@ kbd {
 .fusion-apercu p:last-child { margin-bottom: 0; }
 .fusion-alerte { color: var(--warn); font-weight: 600; }
 .fusion-collisions { margin: 4px 0 8px; padding-left: 20px; font-size: 12.5px; }
+
+/* =====================================================================
+   Choix de la période, depuis le bandeau supérieur
+   Elle commande tous les écrans. Le libellé est cliquable : c'est lui
+   qu'on regarde, c'est donc par lui qu'on doit pouvoir la changer.
+   ===================================================================== */
+.month-label {
+  font: inherit; font-weight: 600; cursor: pointer;
+  background: none; border: 1px solid transparent; border-radius: 8px;
+  padding: 5px 10px; color: inherit; min-width: 120px; text-align: center;
+}
+.month-label:hover { background: rgba(255, 255, 255, .12); border-color: rgba(255, 255, 255, .25); }
+.month-picker .btn-icon:disabled { opacity: .35; cursor: default; }
+
+.periode-choix { display: flex; flex-wrap: wrap; gap: 7px; margin: 14px 0 12px; }
+.periode-choix .chip { cursor: pointer; }
+.periode-reglage { margin-bottom: 10px; }
+.periode-reglage select, .periode-reglage input { width: 100%; }
+.periode-dates { display: flex; align-items: center; gap: 8px; }
+.periode-dates label { font-size: 13px; color: var(--text-muted); font-weight: 600; }
+.periode-dates input { flex: 1 1 auto; }
+.periode-apercu {
+  margin: 0; padding: 9px 11px; border-radius: 8px; font-size: 13px;
+  background: var(--surface-alt); border: 1px solid var(--border); color: var(--text-muted);
+}
+
+@media (max-width: 900px) {
+  /* Sur téléphone le bandeau est étroit : le libellé prend ce qu'il
+     reste, les flèches gardent leur cible au doigt. */
+  .month-label { min-width: 0; font-size: 13px; padding: 5px 6px; }
+}

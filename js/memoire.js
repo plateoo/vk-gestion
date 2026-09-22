@@ -14,7 +14,7 @@
 import { supabase } from './supabase.js';
 import { isManager } from './auth.js';
 import {
-  $, $$, escapeHtml, toast, errorMessage, confirmDialog, longDate
+  $, $$, escapeHtml, toast, errorMessage, confirmDialog, longDate, ouvrirLien
 } from './ui.js';
 
 let fiches = [];
@@ -275,7 +275,7 @@ async function ouvrirDocument(chemin) {
   try {
     const { data, error } = await supabase.storage.from('memoire').createSignedUrl(chemin, 3600);
     if (error) throw error;
-    window.open(data.signedUrl, '_blank', 'noopener');
+    ouvrirLien(data.signedUrl);
   } catch (err) {
     console.error(err);
     toast(errorMessage(err, 'Document introuvable.'), 'error');

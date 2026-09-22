@@ -83,7 +83,13 @@ export function quarterOf(month) {
   return `${y}-Q${Math.floor((mo - 1) / 3) + 1}`;
 }
 
-const PERIOD_DEFAUT = { kind: 'month', month: null, quarter: null, year: null, from: '', to: '' };
+/** '2026-09' -> '2026-S2'. Le semestre manquait, et il sert au comptable. */
+export function semesterOf(month) {
+  const [y, mo] = month.split('-').map(Number);
+  return `${y}-S${mo <= 6 ? 1 : 2}`;
+}
+
+const PERIOD_DEFAUT = { kind: 'month', month: null, quarter: null, semester: null, year: null, from: '', to: '' };
 
 export function getPeriod() {
   let p = {};
@@ -93,8 +99,9 @@ export function getPeriod() {
     : (/^\d{4}-\d{2}$/.test(localStorage.getItem(MONTH_STORAGE_KEY) || '')
         ? localStorage.getItem(MONTH_STORAGE_KEY) : currentMonthKey());
   const out = { ...PERIOD_DEFAUT, ...p, month: mois };
-  if (!['month', 'quarter', 'year', 'range', 'all'].includes(out.kind)) out.kind = 'month';
+  if (!['month', 'quarter', 'semester', 'year', 'range', 'all'].includes(out.kind)) out.kind = 'month';
   if (!/^\d{4}-Q[1-4]$/.test(out.quarter || '')) out.quarter = quarterOf(mois);
+  if (!/^\d{4}-S[12]$/.test(out.semester || '')) out.semester = semesterOf(mois);
   if (!/^\d{4}$/.test(String(out.year || ''))) out.year = mois.slice(0, 4);
   return out;
 }
@@ -115,7 +122,9 @@ export function setPeriod(patch) {
 export function getMonth() { return getPeriod().month; }
 
 /** Choisir un mois ramène la période au mois : c'est le geste du sélecteur du bandeau. */
-export function setMonth(m) { setPeriod({ kind: 'month', month: m, quarter: quarterOf(m), year: m.slice(0, 4) }); }
+export function setMonth(m) {
+  setPeriod({ kind: 'month', month: m, quarter: quarterOf(m), semester: semesterOf(m), year: m.slice(0, 4) });
+}
 
 /** Bornes de la période, incluses. null pour « toutes périodes ». */
 export function periodRange(p = getPeriod()) {
@@ -129,6 +138,12 @@ export function periodRange(p = getPeriod()) {
     const [y, q] = p.quarter.split('-Q').map(Number);
     const debut = (q - 1) * 3 + 1;
     return { from: `${y}-${pad(debut)}-01`, to: dernierJour(y, debut + 2) };
+  }
+  if (p.kind === 'semester') {
+    const [y, sem] = p.semester.split('-S').map(Number);
+    return sem === 1
+      ? { from: `${y}-01-01`, to: `${y}-06-30` }
+      : { from: `${y}-07-01`, to: `${y}-12-31` };
   }
   if (p.kind === 'year') return { from: `${p.year}-01-01`, to: `${p.year}-12-31` };
   // Dates libres : une borne manquante n'enferme rien de ce côté.
@@ -151,6 +166,10 @@ export function periodLabel(p = getPeriod()) {
   if (p.kind === 'quarter') {
     const [y, q] = p.quarter.split('-Q');
     return `${q}${q === '1' ? 'ᵉʳ' : 'ᵉ'} trimestre ${y}`;
+  }
+  if (p.kind === 'semester') {
+    const [y, sem] = p.semester.split('-S');
+    return `${sem}${sem === '1' ? 'ᵉʳ' : 'ᵉ'} semestre ${y}`;
   }
   if (p.kind === 'year') return `Année ${p.year}`;
   const r = periodRange(p);
@@ -177,6 +196,11 @@ export function previousRange(p = getPeriod()) {
     const prec = q === 1 ? `${y - 1}-Q4` : `${y}-Q${q - 1}`;
     return periodRange({ ...PERIOD_DEFAUT, kind: 'quarter', quarter: prec });
   }
+  if (p.kind === 'semester') {
+    const [y, sem] = p.semester.split('-S').map(Number);
+    const prec = sem === 1 ? `${y - 1}-S2` : `${y}-S1`;
+    return periodRange({ ...PERIOD_DEFAUT, kind: 'semester', semester: prec });
+  }
   if (p.kind === 'year') {
     return periodRange({ ...PERIOD_DEFAUT, kind: 'year', year: String(Number(p.year) - 1) });
   }
@@ -188,6 +212,107 @@ export function previousRange(p = getPeriod()) {
   const duree = fin - debut + jour;
   const iso = (ms) => new Date(ms).toISOString().slice(0, 10);
   return { from: iso(debut - duree), to: iso(debut - jour) };
+}
+
+/**
+ * Avance ou recule d'UNE période, quelle que soit sa nature.
+ *
+ * Les flèches du bandeau reculaient toujours d'un mois, même quand
+ * l'écran affichait une année : on cliquait douze fois pour voir l'année
+ * précédente. Elles suivent maintenant ce qui est affiché.
+ *
+ * « Toutes périodes » et les dates libres ne se décalent pas : la
+ * première n'a pas de voisine, les secondes ont été choisies à la main.
+ */
+export function shiftPeriod(pas, p = getPeriod()) {
+  if (p.kind === 'all' || p.kind === 'range') return p;
+  if (p.kind === 'month') {
+    const m = shiftMonth(p.month, pas);
+    return { ...p, month: m, quarter: quarterOf(m), semester: semesterOf(m), year: m.slice(0, 4) };
+  }
+  if (p.kind === 'quarter') {
+    const [y, q] = p.quarter.split('-Q').map(Number);
+    const total = y * 4 + (q - 1) + pas;
+    const ny = Math.floor(total / 4);
+    const nq = (total % 4 + 4) % 4 + 1;
+    // Le mois suit le trimestre : les écrans qui ne raisonnent qu'en mois
+    // ne doivent pas rester sur une date étrangère à la période.
+    const m = `${ny}-${pad((nq - 1) * 3 + 1)}`;
+    return { ...p, quarter: `${ny}-Q${nq}`, month: m, semester: semesterOf(m), year: String(ny) };
+  }
+  if (p.kind === 'semester') {
+    const [y, sem] = p.semester.split('-S').map(Number);
+    const total = y * 2 + (sem - 1) + pas;
+    const ny = Math.floor(total / 2);
+    const ns = (total % 2 + 2) % 2 + 1;
+    const m = `${ny}-${ns === 1 ? '01' : '07'}`;
+    return { ...p, semester: `${ny}-S${ns}`, month: m, quarter: quarterOf(m), year: String(ny) };
+  }
+  const ny = String(Number(p.year) + pas);
+  const m = `${ny}-01`;
+  return { ...p, year: ny, month: m, quarter: quarterOf(m), semester: semesterOf(m) };
+}
+
+// ---------------------------------------------------------------------
+// Ouvrir et imprimer quand l'application est installée sur un téléphone
+//
+// Une fois posée sur l'écran d'accueil, l'application tourne en mode
+// « standalone » : plus de barre d'adresse, plus d'onglets. Dans ce mode,
+// iOS ampute deux choses sans rien dire :
+//
+//   • window.open('…', '_blank') n'ouvre rien du tout ;
+//   • window.print() ne fait rien non plus.
+//
+// D'où les boutons « qui ne fonctionnent pas » : ils fonctionnaient, mais
+// le système les ignorait. Un bouton muet est pire qu'un bouton absent —
+// on le presse deux fois, puis on cesse de croire l'application.
+// ---------------------------------------------------------------------
+
+/** L'application tourne-t-elle depuis l'écran d'accueil ? */
+export function estInstallee() {
+  return window.matchMedia?.('(display-mode: standalone)').matches
+    || window.navigator.standalone === true;
+}
+
+/**
+ * Ouvre une adresse et dit la vérité quand ce n'est pas possible.
+ *
+ * On tente d'abord l'ouverture normale. Si elle échoue — bloquée, ou
+ * ignorée par iOS — on ne laisse pas l'utilisateur devant un bouton mort :
+ * on navigue dans la fenêtre courante, ce qui marche toujours, en le
+ * prévenant qu'il devra revenir en arrière.
+ */
+export function ouvrirLien(url, { memeFenetre = false } = {}) {
+  if (!url) return false;
+  if (!memeFenetre) {
+    let f = null;
+    try { f = window.open(url, '_blank', 'noopener'); } catch { f = null; }
+    if (f) return true;
+  }
+  // Dernier recours : on quitte l'écran courant. L'application est une
+  // page unique, le retour du navigateur ramène exactement où l'on était.
+  toast('Ouverture du document… utilise le retour pour revenir.', 'ok', 4000);
+  setTimeout(() => { window.location.href = url; }, 250);
+  return true;
+}
+
+/**
+ * Imprime l'écran, ou explique pourquoi c'est impossible ici.
+ *
+ * Sur un téléphone où l'application est installée, l'impression n'existe
+ * pas. Plutôt qu'un bouton qui ne répond pas, on dit où aller — et l'on
+ * propose la sortie qui, elle, fonctionne partout.
+ */
+export function imprimerEcran(avant = null) {
+  if (estInstallee()) {
+    toast('L\'impression n\'est pas possible depuis l\'application installée. '
+      + 'Ouvre plateoo.github.io/vk-gestion dans Safari ou Chrome pour imprimer, '
+      + 'ou utilise l\'export Excel.', 'error', 8000);
+    return false;
+  }
+  try { avant?.(); } catch { /* l'en-tête d'impression n'est pas vital */ }
+  window.print();
+  return true;
 }
 
 /** true si la date ISO tombe dans une tranche {from, to} */

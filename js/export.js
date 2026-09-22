@@ -7,7 +7,7 @@ import { supabase } from './supabase.js';
 import { buildXlsx } from './xlsx.js';
 import { buildZip, nomSur } from './zip.js';
 import {
-  $, $$, csvNum, fmtDate, statusLabel, getMonth, monthLabel, inMonth,
+  $, $$, csvNum, fmtDate, statusLabel, getMonth, monthLabel, inMonth, imprimerEcran,
   toast, errorMessage, confirmDialog, inPeriod, periodLabel, periodSlug, getPeriod
 } from './ui.js';
 
@@ -357,6 +357,29 @@ async function exportAll() {
   } catch (err) { toast(errorMessage(err, 'Export impossible.'), 'error'); }
 }
 
+/**
+ * Le classeur complet : toutes les factures, toutes périodes.
+ *
+ * On ne pouvait exporter en Excel que ce qui était affiché. Pour tout
+ * avoir, il fallait se rabattre sur le CSV — que le comptable devra
+ * reformater. Un vrai classeur, avec des dates qui sont des dates et des
+ * montants qui sont des nombres, doit pouvoir sortir d'un clic.
+ *
+ * Les pièces classées « document » en sont exclues : ce ne sont pas des
+ * factures, et leurs montants à zéro fausseraient chaque total.
+ */
+async function exportXlsxTout() {
+  try {
+    const toutes = (await getInvoices()).filter((i) => i.review_status !== 'document');
+    if (!toutes.length) return toast('Aucune facture à exporter.', 'error');
+    downloadInvoicesXLSX(toutes, 'VK_factures_complet.xlsx', 'Toutes périodes');
+    toast(`${toutes.length} factures exportées vers Excel.`);
+  } catch (err) {
+    console.error(err);
+    toast(errorMessage(err, 'Export impossible.'), 'error');
+  }
+}
+
 export function initExport() {
   const menu = $('#export-menu');
   const toggle = $('#btn-export');
@@ -369,14 +392,17 @@ export function initExport() {
   menu.addEventListener('click', (e) => e.stopPropagation());
 
   $('#export-xlsx').addEventListener('click', () => { menu.hidden = true; exportXlsx(); });
+  $('#export-xlsx-all').addEventListener('click', () => { menu.hidden = true; exportXlsxTout(); });
   $('#export-accountant').addEventListener('click', () => { menu.hidden = true; exportAccountant(); });
   $('#export-month').addEventListener('click', () => { menu.hidden = true; exportMonth(); });
   $('#export-selection').addEventListener('click', () => { menu.hidden = true; exportSelection(); });
   $('#export-all').addEventListener('click', () => { menu.hidden = true; exportAll(); });
 
   // Impression / PDF
+  //
+  // Sur un téléphone où l'application est installée, l'impression n'existe
+  // pas : le bouton restait muet. Il explique désormais où aller.
   $$('[data-print]').forEach((b) => b.addEventListener('click', () => {
-    $('#print-month').textContent = periodLabel();
-    window.print();
+    imprimerEcran(() => { $('#print-month').textContent = periodLabel(); });
   }));
 }

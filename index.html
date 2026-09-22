@@ -55,11 +55,15 @@
     </button>
 
     <div class="appbar-center">
+      <!-- La période commande TOUS les écrans : tableau de bord, factures,
+           paiements, exports. Elle était jusqu'ici réglable depuis la
+           seule barre d'outils des factures, ce qui rendait le tableau de
+           bord impossible à passer en trimestre ou en année. -->
       <div class="month-picker">
-        <button type="button" id="app-month-prev" class="btn btn-icon" title="Mois précédent" aria-label="Mois précédent">‹</button>
-        <span id="app-month-label" class="month-label">—</span>
-        <button type="button" id="app-month-next" class="btn btn-icon" title="Mois suivant" aria-label="Mois suivant">›</button>
-        <button type="button" id="app-month-now" class="btn btn-sm">Mois en cours</button>
+        <button type="button" id="app-month-prev" class="btn btn-icon" title="Période précédente" aria-label="Période précédente">‹</button>
+        <button type="button" id="app-period-open" class="month-label" aria-haspopup="dialog" title="Choisir la période">—</button>
+        <button type="button" id="app-month-next" class="btn btn-icon" title="Période suivante" aria-label="Période suivante">›</button>
+        <button type="button" id="app-month-now" class="btn btn-sm">Aujourd'hui</button>
       </div>
     </div>
 
@@ -285,6 +289,9 @@
             <button type="button" id="btn-export" class="btn">Exporter ▾</button>
             <div id="export-menu" class="dd-menu" hidden>
               <button type="button" id="export-xlsx">Excel (.xlsx) — ce qui est affiché</button>
+              <!-- Le classeur complet manquait : on ne pouvait sortir que la
+                   période affichée, ou du CSV pour le reste. -->
+              <button type="button" id="export-xlsx-all">Excel (.xlsx) — TOUT, toutes périodes</button>
               <button type="button" id="export-accountant">Dossier pour le comptable (ZIP)</button>
               <div class="dd-sep" role="separator"></div>
               <button type="button" id="export-month">CSV de ce qui est affiché</button>
@@ -325,11 +332,13 @@
         <select id="f-period" aria-label="Période">
           <option value="month">Mois</option>
           <option value="quarter">Trimestre</option>
+          <option value="semester">Semestre</option>
           <option value="year">Année</option>
           <option value="range">Dates au choix</option>
           <option value="all">Toutes périodes</option>
         </select>
         <select id="f-quarter" aria-label="Trimestre" hidden></select>
+        <select id="f-semester" aria-label="Semestre" hidden></select>
         <select id="f-year" aria-label="Année" hidden></select>
         <span id="f-range" class="range-fields" hidden>
           <label class="sr-only" for="f-from">Du</label>
@@ -772,6 +781,34 @@
 <!-- ============================================================
      MODALE FOURNISSEUR
      ============================================================ -->
+<!-- Choix de la période, depuis le bandeau : elle vaut pour toute l'app -->
+<div id="modal-periode" class="modal modal-top" hidden>
+  <div class="modal-backdrop" data-close="modal-periode"></div>
+  <div class="modal-box narrow" role="dialog" aria-modal="true" aria-labelledby="modal-periode-title">
+    <div class="modal-head">
+      <h2 id="modal-periode-title">Période affichée</h2>
+      <button type="button" class="icon-btn" data-close="modal-periode" aria-label="Fermer">✕</button>
+    </div>
+    <div class="modal-body">
+      <p class="muted small">Elle vaut pour le tableau de bord, la liste des factures,
+        les paiements et les exports. Le chiffre affiché correspond toujours à ce qui est listé.</p>
+      <div class="periode-choix" role="group" aria-label="Nature de la période">
+        <button type="button" class="chip" data-periode="month">Mois</button>
+        <button type="button" class="chip" data-periode="quarter">Trimestre</button>
+        <button type="button" class="chip" data-periode="semester">Semestre</button>
+        <button type="button" class="chip" data-periode="year">Année</button>
+        <button type="button" class="chip" data-periode="range">Dates au choix</button>
+        <button type="button" class="chip" data-periode="all">Tout</button>
+      </div>
+      <div id="periode-reglage" class="periode-reglage"></div>
+      <p id="periode-apercu" class="periode-apercu">—</p>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-primary" data-close="modal-periode">Terminé</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Réunir deux fiches fournisseur, choisies à la main -->
 <div id="modal-fusion" class="modal modal-top" hidden>
   <div class="modal-backdrop" data-close="modal-fusion"></div>
@@ -919,9 +956,9 @@
       <button type="button" class="btn btn-sm" data-help-act="keys">Raccourcis clavier</button>
       <button type="button" class="btn btn-sm" data-help-act="print">Imprimer ce sujet</button>
       <span class="spacer"></span>
-      <button type="button" class="btn btn-sm btn-primary" data-help-act="demarrage">Fiche de démarrage ↗</button>
-      <button type="button" class="btn btn-sm manager-only" data-help-act="gerant" hidden>Guide du gérant ↗</button>
-      <button type="button" class="btn btn-sm" data-help-act="guide">Mode d'emploi complet ↗</button>
+      <button type="button" class="btn btn-sm btn-primary" data-help-act="demarrage">Fiche de démarrage</button>
+      <button type="button" class="btn btn-sm manager-only" data-help-act="gerant" hidden>Guide du gérant</button>
+      <button type="button" class="btn btn-sm" data-help-act="guide">Mode d'emploi complet</button>
     </div>
   </div>
 </div>
@@ -1017,7 +1054,7 @@
 import { supabase, CONFIG_OK } from './js/supabase.js';
 import { getSession, loadProfile, signIn, signOut, displayName, roleLabel, isManager, currentUser } from './js/auth.js';
 import { startTour, maybeStartTour } from './js/tour.js';
-import { initInvoices, renderInvoices, refreshInvoices, openInvoiceModal, focusSearch } from './js/invoices.js';
+import { initInvoices, renderInvoices, refreshInvoices, openInvoiceModal, focusSearch, invoicesCache } from './js/invoices.js';
 import { initSuppliers, renderSuppliers, resetSupplierView } from './js/suppliers.js';
 import { initDashboard, renderDashboard } from './js/dashboard.js';
 import { initReview, renderReview, refreshReviewBadge, openDocument, resetDocumentView } from './js/review.js';
@@ -1035,7 +1072,8 @@ import { initAdmin, renderAdmin } from './js/admin.js';
 import { initExport } from './js/export.js';
 import {
   $, $$, toast, errorMessage, openModal, closeModal, openPopover, closePopover,
-  getMonth, setMonth, shiftMonth, currentMonthKey, monthLabel
+  getMonth, setMonth, shiftMonth, currentMonthKey, monthLabel,
+  getPeriod, setPeriod, shiftPeriod, periodLabel, inPeriod, quarterOf, semesterOf
 } from './js/ui.js';
 
 let activeTab = 'dashboard';
@@ -1118,12 +1156,103 @@ async function doLogout() { await signOut(); leaveApp(); }
 $('#btn-logout').addEventListener('click', doLogout);
 
 // ---------- Sélecteur de mois unique (bandeau) ----------
-function paintMonth() { $('#app-month-label').textContent = monthLabel(getMonth()); }
-$('#app-month-prev').addEventListener('click', () => setMonth(shiftMonth(getMonth(), -1)));
-$('#app-month-next').addEventListener('click', () => setMonth(shiftMonth(getMonth(), 1)));
-$('#app-month-now').addEventListener('click', () => setMonth(currentMonthKey()));
-window.addEventListener('vk:month', paintMonth);
-paintMonth();
+// ---------- Période, dans le bandeau supérieur ----------
+//
+// Une seule période commande toute l'application. Les flèches avancent
+// d'UNE période — d'un mois quand on affiche un mois, d'une année quand
+// on affiche une année. Avant, elles reculaient toujours d'un mois : il
+// fallait douze clics pour changer d'année.
+function paintPeriode() {
+  const p = getPeriod();
+  $('#app-period-open').textContent = periodLabel(p);
+  // Rien à décaler quand la période n'a pas de voisine.
+  const fige = p.kind === 'all' || p.kind === 'range';
+  $('#app-month-prev').disabled = fige;
+  $('#app-month-next').disabled = fige;
+  $('#app-month-now').hidden = p.kind === 'all';
+}
+$('#app-month-prev').addEventListener('click', () => setPeriod(shiftPeriod(-1)));
+$('#app-month-next').addEventListener('click', () => setPeriod(shiftPeriod(1)));
+$('#app-month-now').addEventListener('click', () => {
+  // « Aujourd'hui » ramène à la période EN COURS de même nature : le
+  // trimestre en cours si l'on regardait un trimestre, et ainsi de suite.
+  const m = currentMonthKey();
+  setPeriod({ month: m, quarter: quarterOf(m), semester: semesterOf(m), year: m.slice(0, 4) });
+});
+window.addEventListener('vk:period', paintPeriode);
+window.addEventListener('vk:month', paintPeriode);
+paintPeriode();
+
+// ---------- Choix de la période ----------
+$('#app-period-open').addEventListener('click', () => {
+  peindreChoixPeriode();
+  openModal('modal-periode');
+});
+
+function peindreChoixPeriode() {
+  const p = getPeriod();
+  $$('#modal-periode [data-periode]').forEach((b) =>
+    b.classList.toggle('active', b.dataset.periode === p.kind));
+
+  const annees = anneesDisponibles(p);
+  const zone = $('#periode-reglage');
+  if (p.kind === 'month') {
+    zone.innerHTML = `<input type="month" id="periode-mois" value="${p.month}">`;
+  } else if (p.kind === 'quarter') {
+    zone.innerHTML = `<select id="periode-trim">${annees.flatMap((y) => [4, 3, 2, 1]
+      .map((q) => `<option value="${y}-Q${q}" ${p.quarter === `${y}-Q${q}` ? 'selected' : ''}>${
+        periodLabel({ kind: 'quarter', quarter: `${y}-Q${q}` })}</option>`)).join('')}</select>`;
+  } else if (p.kind === 'semester') {
+    zone.innerHTML = `<select id="periode-sem">${annees.flatMap((y) => [2, 1]
+      .map((n) => `<option value="${y}-S${n}" ${p.semester === `${y}-S${n}` ? 'selected' : ''}>${
+        periodLabel({ kind: 'semester', semester: `${y}-S${n}` })}</option>`)).join('')}</select>`;
+  } else if (p.kind === 'year') {
+    zone.innerHTML = `<select id="periode-an">${annees
+      .map((y) => `<option value="${y}" ${String(p.year) === y ? 'selected' : ''}>${y}</option>`).join('')}</select>`;
+  } else if (p.kind === 'range') {
+    zone.innerHTML = `<div class="periode-dates">
+      <label for="periode-du">Du</label><input type="date" id="periode-du" value="${p.from || ''}">
+      <label for="periode-au">au</label><input type="date" id="periode-au" value="${p.to || ''}">
+    </div>`;
+  } else {
+    zone.innerHTML = '<p class="muted small">Aucune borne : toutes les factures, depuis le début.</p>';
+  }
+
+  zone.querySelectorAll('input, select').forEach((c) => c.addEventListener('change', () => {
+    const v = c.value;
+    if (c.id === 'periode-mois' && v) setPeriod({ month: v, quarter: quarterOf(v), semester: semesterOf(v), year: v.slice(0, 4) });
+    if (c.id === 'periode-trim') setPeriod({ quarter: v });
+    if (c.id === 'periode-sem') setPeriod({ semester: v });
+    if (c.id === 'periode-an') setPeriod({ year: v });
+    if (c.id === 'periode-du') setPeriod({ from: v });
+    if (c.id === 'periode-au') setPeriod({ to: v });
+    peindreChoixPeriode();
+  }));
+
+  $('#periode-apercu').textContent = apercuPeriode();
+}
+
+/** Les années réellement présentes en base, plus celle affichée. */
+function anneesDisponibles(p) {
+  const vues = new Set(invoicesCache().map((i) => String(i.invoice_date || '').slice(0, 4)).filter(Boolean));
+  vues.add(String(p.year));
+  vues.add(currentMonthKey().slice(0, 4));
+  return [...vues].sort().reverse();
+}
+
+/** Combien de factures la période retiendra : on le dit avant de fermer. */
+function apercuPeriode() {
+  const lot = invoicesCache().filter((i) => i.review_status !== 'document');
+  const n = lot.filter((i) => inPeriod(i.invoice_date)).length;
+  return n
+    ? `${n} facture${n > 1 ? 's' : ''} dans cette période.`
+    : 'Aucune facture dans cette période.';
+}
+
+$$('#modal-periode [data-periode]').forEach((b) => b.addEventListener('click', () => {
+  setPeriod({ kind: b.dataset.periode });
+  peindreChoixPeriode();
+}));
 
 // ---------- Logo → tableau de bord ----------
 $('#btn-home').addEventListener('click', () => showTab('dashboard'));

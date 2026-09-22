@@ -12,7 +12,7 @@ import { getSuppliers, suppliersCache } from './suppliers.js';
 import { invalidateInvoices } from './invoices.js';
 import {
   $, $$, fmtEUR, fmtDate, escapeHtml, toast, errorMessage, confirmDialog,
-  todayISO, notifyDataChange, ICONS, LEGAL_RATES, vatMismatch, longDate
+  todayISO, notifyDataChange, ICONS, LEGAL_RATES, vatMismatch, longDate, ouvrirLien
 } from './ui.js';
 import { isManager, displayName } from './auth.js';
 
@@ -998,7 +998,9 @@ function wireDetail() {
     refreshValidateState();
   }));
 
-  $('#rv-open').addEventListener('click', () => signedUrl && window.open(signedUrl, '_blank', 'noopener'));
+  // Passe par l'aide d'ouverture : sur un téléphone où l'application est
+  // installée, un nouvel onglet est purement ignoré par iOS.
+  $('#rv-open').addEventListener('click', () => signedUrl && ouvrirLien(signedUrl));
   $('#rv-print').addEventListener('click', printCurrent);
   $('#rv-validate').addEventListener('click', validateCurrent);
   $('#rv-reject').addEventListener('click', rejectCurrent);
@@ -1043,12 +1045,17 @@ function wireMemory() {
   suivre('#rv-disc-days', '#rv-memo-disc-wrap', String(current?.discount_days ?? ''));
 }
 
-/** Ouvre le document dans une fenêtre et lance l'impression */
+/**
+ * Ouvre le document, l'impression restant au visualiseur.
+ *
+ * On n'essaie plus de piloter l'impression d'une fenêtre qu'on ne
+ * contrôle pas : selon le navigateur, le PDF s'affiche dans un lecteur
+ * intégré qui refuse tout ordre extérieur. Le document s'ouvre, et
+ * l'utilisateur imprime depuis son lecteur — ce qui marche partout.
+ */
 function printCurrent() {
   if (!signedUrl) { toast('Aucun document à imprimer.', 'error'); return; }
-  const w = window.open(signedUrl, '_blank', 'noopener');
-  if (!w) { toast('Le navigateur a bloqué la fenêtre d\'impression.', 'error'); return; }
-  w.addEventListener('load', () => { try { w.print(); } catch { /* le visualiseur gère */ } });
+  ouvrirLien(signedUrl);
 }
 
 async function validateCurrent({ force = false } = {}) {
