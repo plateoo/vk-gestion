@@ -380,6 +380,7 @@
                 <th>WinAuditor <button type="button" class="help-dot" data-help-text="Facture transmise à WinAuditor, la comptabilité.">?</button></th>
                 <th class="th-stock">Stock <button type="button" class="help-dot" data-help-text="Date à laquelle la marchandise est arrivée au magasin.">?</button></th>
                 <th data-sort="payment_status">Paiement</th>
+                <th class="th-suivi">Suivi <button type="button" class="help-dot" data-help-text="Ce que Marie signale sur la facture : un problème, des documents manquants, une relance. Un clic pour poser l'état et écrire pourquoi.">?</button></th>
                 <th class="no-print"></th>
               </tr>
             </thead>
@@ -577,6 +578,11 @@
       <!-- Reprise d'historique : sort les factures de l'ancienne franchise
            du reste à payer, sans les effacer. Gérant uniquement. -->
       <button type="button" id="bulk-takeover" class="btn btn-sm manager-only" hidden>Réglées avant reprise</button>
+      <!-- Le contrôle n'est pas un péage : on peut solder d'un geste ce qui
+           n'appelle aucun examen, et ouvrir seulement ce qui le mérite. -->
+      <button type="button" id="bulk-controlees" class="btn btn-sm">Marquer contrôlées</button>
+      <!-- Encodées avant la reprise : le numéro manque, pas le travail. -->
+      <button type="button" id="bulk-ancien" class="btn btn-sm">Encodées par l'ancien franchisé</button>
       <button type="button" id="bulk-export" class="btn btn-sm">Exporter la sélection</button>
       <button type="button" id="bulk-clear" class="btn btn-ghost btn-sm">Désélectionner</button>
     </div>

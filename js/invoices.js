@@ -41,6 +41,19 @@ const filters = {
 
 // Valeurs d'ensemble du filtre fournisseur. Préfixées pour ne jamais
 // entrer en collision avec un identifiant de fiche.
+// Les états de suivi, tels que Marie les pose.
+//
+// Cinq, pas davantage : une liste qui s'allonge cesse d'être lue, et deux
+// états voisins finissent par être employés au hasard. L'état se repère
+// en balayant le tableau ; la remarque dit pourquoi.
+export const SUIVIS = {
+  probleme:            { label: 'Problème',            court: 'Problème',   classe: 'suivi-rouge' },
+  documents_manquants: { label: 'Documents manquants', court: 'Doc. manq.', classe: 'suivi-orange' },
+  a_relancer:          { label: 'À relancer',          court: 'Relancer',   classe: 'suivi-orange' },
+  a_voir:              { label: 'À voir avec Jordan',  court: 'À voir',     classe: 'suivi-bleu' },
+  encode:              { label: 'Encodée',             court: 'Encodée',    classe: 'suivi-vert' }
+};
+
 const PAYS_BE = '__pays_be';
 const PAYS_ETRANGER = '__pays_etranger';
 const PAYS_INCONNU = '__pays_inconnu';
@@ -69,6 +82,7 @@ export async function getInvoices(force = false) {
                stock_in, stock_out, payment_status, payment_date, payment_method,
                expense_type, notes, review_status, doc_type, doc_summary,
                vat_amount, forced_at, forced_name, forced_reason, validated_name,
+               suivi, suivi_note, suivi_name, suivi_at, smart_ancien,
                source, file_path, sender_email, message_id, created_at,
                supplier:suppliers(id, name, payment_terms)`)
       .order('invoice_date', { ascending: false });
@@ -272,7 +286,7 @@ export async function renderInvoices() {
       return;
     }
     tbody.innerHTML = groupes.map((g) => `
-      <tr class="dup-head"><td colspan="13">
+      <tr class="dup-head"><td colspan="14">
         <span class="dup-level dup-${g.niveau}">${escapeHtml(NIVEAU_LABELS[g.niveau])}</span>
         <span class="dup-reason">${escapeHtml(g.motif)}</span>
       </td></tr>
@@ -306,7 +320,7 @@ export async function renderInvoices() {
     const manager = isManager();
     tbody.innerHTML = groupesParJour(arrivees)
       .map((g) => `
-        <tr class="jour-head"><td colspan="13">
+        <tr class="jour-head"><td colspan="14">
           <span class="jour-label">${escapeHtml(g.libelle)}</span>
           <span class="jour-detail">${escapeHtml(g.resume)}</span>
           <span class="jour-total">${fmtEUR(g.total)}</span>
@@ -433,15 +447,18 @@ function rowHtml(i, manager) {
     </td>
     <td class="td-date" data-label="Date">${fmtDate(i.invoice_date)}</td>
     <td class="td-supplier" data-label="Fournisseur">${escapeHtml(i.supplier_name)}</td>
-    <td class="td-number" data-label="N°">${escapeHtml(i.invoice_number)}${i.forced_at
+    <td class="td-number" data-label="N°">${escapeHtml(i.invoice_number)}${i.review_status === 'a_controler'
+      ? '<span class="badge st-acontroler" title="Pas encore contrôlée. Clique sur la ligne pour l\'ouvrir et la vérifier.">à contrôler</span>'
+      : ''}${i.forced_at
       ? `<span class="badge st-forcee" title="Acceptée en forçant par ${escapeHtml(i.forced_name || '—')} : ${escapeHtml(i.forced_reason || '')}">forcée</span>`
       : ''}${i.vat_amount != null
       ? '<span class="badge st-forcee" title="TVA saisie à la main : la facture porte plusieurs taux">TVA saisie</span>'
       : ''}<span class="mob-meta">${fmtDate(i.invoice_date)}${i.due_date ? ` · éch. ${fmtDate(i.due_date)}` : ''}</span></td>
-    <td class="td-smartref" data-label="Réf. Smart">
-      <input type="text" class="smartref-input" data-smartref="${i.id}"
+    <td class="td-smartref" data-label="Réf. Smart">${i.smart_ancien
+      ? `<span class="ref-ancien" title="Encodée dans Smart par l'ancien franchisé. La référence n'a pas pu être retrouvée — ce qui manque, c'est le numéro, pas le travail.">Ancien franchisé</span>`
+      : `<input type="text" class="smartref-input" data-smartref="${i.id}"
         value="${escapeHtml(i.smart_ref || '')}" placeholder="à saisir" autocomplete="off" spellcheck="false"
-        aria-label="Référence Smart de la facture ${escapeHtml(i.invoice_number)}"></td>
+        aria-label="Référence Smart de la facture ${escapeHtml(i.invoice_number)}">`}</td>
     <td class="td-refs" data-label="Références">${(i.external_refs || []).length
       ? i.external_refs.map((r) => `<span class="ref-chip">${escapeHtml(r)}</span>`).join('')
       : '<span class="muted">—</span>'}</td>
@@ -453,6 +470,7 @@ function rowHtml(i, manager) {
     <td class="td-win" data-label="WinAuditor">${pillHtml(i, 'in_winauditor', !!i.in_winauditor, 'WinAuditor')}</td>
     <td class="td-stock" data-label="Stock">${stockHtml(i)}</td>
     <td class="td-status" data-label="Paiement">${paymentHtml(i, manager)}</td>
+    <td class="td-suivi" data-label="Suivi">${suiviHtml(i)}</td>
     <td class="td-actions no-print">
       <button type="button" class="icon-btn row-action" data-edit="${i.id}" title="Modifier">${ICONS.pencil}</button>
       ${manager ? `<button type="button" class="icon-btn row-action danger" data-delete="${i.id}"
@@ -568,6 +586,30 @@ function stockHtml(i) {
     title="Marquer la marchandise reçue aujourd'hui">${ICONS.box}<span class="pill-txt">Reçu</span></button>`;
 }
 
+/**
+ * Cellule de suivi : ce que Marie signale sur la facture.
+ *
+ * Rien à signaler, rien à afficher qu'un bouton discret — une colonne
+ * remplie de « RAS » n'aide personne à repérer les trois lignes qui posent
+ * problème. Quand un état est posé, il est coloré et la remarque s'ouvre
+ * au survol.
+ */
+function suiviHtml(i) {
+  const e = SUIVIS[i.suivi];
+  if (!e) {
+    return `<button type="button" class="suivi-vide" data-suivi="${i.id}"
+      title="Signaler quelque chose sur cette facture">+</button>`;
+  }
+  const infobulle = [
+    e.label,
+    i.suivi_note ? `« ${i.suivi_note} »` : '',
+    i.suivi_name ? `— ${i.suivi_name}${i.suivi_at ? ' le ' + fmtDate(String(i.suivi_at).slice(0, 10)) : ''}` : ''
+  ].filter(Boolean).join('\n');
+  return `<button type="button" class="badge suivi-chip ${e.classe}" data-suivi="${i.id}"
+      title="${escapeHtml(infobulle)}">${escapeHtml(e.court)}${
+      i.suivi_note ? '<span class="suivi-mot" aria-hidden="true">✎</span>' : ''}</button>`;
+}
+
 /** Cellule de paiement : bouton « Marquer payé » ou pastille verte « Payé le … » */
 function paymentHtml(i, manager) {
   if (i.payment_status === 'paye') {
@@ -590,7 +632,7 @@ function paymentHtml(i, manager) {
 
 /** État vide soigné : petit dessin + phrase + action */
 function emptyState(tbody, message, withAction) {
-  tbody.innerHTML = `<tr class="empty-row"><td colspan="13">
+  tbody.innerHTML = `<tr class="empty-row"><td colspan="14">
       <div class="empty">
         ${ICONS.empty}
         <p>${escapeHtml(message)}</p>
@@ -824,6 +866,79 @@ function askPaymentDate(anchor, id) {
   });
 }
 
+/**
+ * Panneau de suivi : l'état, et pourquoi.
+ *
+ * Ouvert depuis la ligne, sans quitter le tableau. Poser un état est le
+ * geste courant ; écrire un mot est facultatif — exiger les deux
+ * reviendrait à n'en obtenir aucun.
+ */
+function openSuiviPopover(anchor, id) {
+  const inv = findInvoice(id);
+  if (!inv) return;
+  const p = openPopover(anchor, `
+    <div class="pop-suivi">
+      <p class="pop-titre">Signaler quelque chose</p>
+      <div class="suivi-choix">
+        ${Object.entries(SUIVIS).map(([cle, e]) => `
+          <button type="button" class="badge ${e.classe} ${inv.suivi === cle ? 'choisi' : ''}"
+                  data-etat="${cle}">${escapeHtml(e.label)}</button>`).join('')}
+      </div>
+      <textarea id="pop-suivi-note" rows="3"
+        placeholder="Pourquoi ? Par exemple : bon de livraison manquant, ou montant à vérifier avec le fournisseur.">${escapeHtml(inv.suivi_note || '')}</textarea>
+      ${inv.suivi_name ? `<p class="pop-signe">Dernier mot de ${escapeHtml(inv.suivi_name)}${
+        inv.suivi_at ? ' le ' + escapeHtml(fmtDate(String(inv.suivi_at).slice(0, 10))) : ''}</p>` : ''}
+      <div class="pop-actions">
+        ${inv.suivi || inv.suivi_note
+          ? '<button type="button" class="btn btn-sm btn-ghost" data-pop-effacer>Effacer</button>' : ''}
+        <span class="spacer"></span>
+        <button type="button" class="btn btn-sm btn-ghost" data-pop-no>Annuler</button>
+        <button type="button" class="btn btn-sm btn-primary" data-pop-ok>Enregistrer</button>
+      </div>
+    </div>`);
+
+  let etat = inv.suivi || null;
+  p.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-etat]');
+    if (!b) return;
+    // Recliquer l'état actif le retire : c'est ainsi qu'on lève un
+    // signalement sans avoir à chercher un bouton « aucun ».
+    etat = etat === b.dataset.etat ? null : b.dataset.etat;
+    p.querySelectorAll('[data-etat]').forEach((x) =>
+      x.classList.toggle('choisi', x.dataset.etat === etat));
+  });
+  p.querySelector('#pop-suivi-note').focus();
+  p.querySelector('[data-pop-no]').onclick = () => closePopover();
+  const effacer = p.querySelector('[data-pop-effacer]');
+  if (effacer) effacer.onclick = () => { closePopover(); enregistrerSuivi(id, null, ''); };
+  p.querySelector('[data-pop-ok]').onclick = () => {
+    const note = p.querySelector('#pop-suivi-note').value;
+    closePopover();
+    enregistrerSuivi(id, etat, note);
+  };
+}
+
+async function enregistrerSuivi(id, etat, note) {
+  try {
+    const { error } = await supabase.rpc('invoice_suivi', {
+      p_id: id, p_suivi: etat, p_note: note || null
+    });
+    if (error) throw error;
+    const inv = findInvoice(id);
+    if (inv) {
+      inv.suivi = etat;
+      inv.suivi_note = (note || '').trim() || null;
+      inv.suivi_name = etat || inv.suivi_note ? (currentUser?.user_metadata?.full_name || inv.suivi_name) : null;
+    }
+    toast(etat ? `Signalé : ${SUIVIS[etat].label}.` : 'Signalement retiré.');
+    renderInvoices();
+    notifyDataChange();
+  } catch (err) {
+    console.error(err);
+    toast(errorMessage(err, 'Enregistrement impossible.'), 'error');
+  }
+}
+
 /** Menu « ⋯ » de fin de ligne : statuts secondaires, duplication, suppression */
 function openRowMenu(anchor, id) {
   const inv = findInvoice(id);
@@ -831,6 +946,13 @@ function openRowMenu(anchor, id) {
   const manager = isManager();
   const p = openPopover(anchor, `
     <div class="pop-menu">
+      ${inv.review_status === 'a_controler' ? `
+        <button type="button" data-act="controlee">${ICONS.check}<span>Marquer contrôlée</span></button>` : ''}
+      <button type="button" data-act="suivi">${ICONS.dash}<span>Signaler un problème…</span></button>
+      ${!inv.smart_ref ? `
+        <button type="button" data-act="ancien">${ICONS.dash}<span>${
+          inv.smart_ancien ? 'Retirer « ancien franchisé »' : 'Encodée par l\'ancien franchisé'}</span></button>` : ''}
+      <hr>
       <button type="button" data-act="edit">${ICONS.pencil}<span>Modifier</span></button>
       <button type="button" data-act="duplicate">${ICONS.copy}<span>Dupliquer</span></button>
       ${manager ? `
@@ -850,6 +972,9 @@ function openRowMenu(anchor, id) {
     if (act === 'edit') return openInvoiceModal(inv);
     if (act === 'duplicate') return duplicateInvoice(id);
     if (act === 'delete') return deleteInvoice(id);
+    if (act === 'controlee') return marquerControlees([id]);
+    if (act === 'suivi') return openSuiviPopover(anchor, id);
+    if (act === 'ancien') return marquerAncienFranchise([id], !!inv.smart_ancien);
     return applyStatus(id, act);
   });
 }
@@ -972,6 +1097,95 @@ async function bulkPay() {
  * Réversible : le filtre « Avant reprise » les retrouve, et le même
  * bouton les remet dans le circuit.
  */
+/**
+ * Marquer des factures contrôlées sans les ouvrir.
+ *
+ * Jordan : « je n'ai pas besoin de forcément tout contrôler, je préfère
+ * contrôler quand je clique dessus pour le traiter. » Le contrôle n'est
+ * donc pas un péage : c'est un état qu'on pose quand on a regardé la
+ * pièce. Ce geste existe pour solder ce qui n'appelle aucun examen.
+ *
+ * Les montants restent modifiables ensuite, comme pour n'importe quelle
+ * facture : marquer contrôlée ne fige rien.
+ */
+async function marquerControlees(ids) {
+  const cibles = (ids || []).map(findInvoice).filter((i) => i && i.review_status === 'a_controler');
+  if (!cibles.length) return toast('Ces pièces sont déjà contrôlées.', 'error');
+
+  const total = cibles.reduce((s2, i) => s2 + (Number(i.amount_tvac) || 0), 0);
+  if (cibles.length > 1) {
+    const ok = await confirmDialog(
+      `Marquer ${cibles.length} facture(s) comme contrôlées, sans les ouvrir ?\n`
+      + `${fmtEUR(total)} au total.\n\n`
+      + 'Elles sortent de la liste « à contrôler ». Rien n\'est figé : les montants '
+      + 'restent modifiables, et tu peux toujours ouvrir une facture pour la corriger.',
+      `Marquer les ${cibles.length}`);
+    if (!ok) return;
+  }
+
+  try {
+    const { error } = await supabase.from('invoices')
+      .update({ review_status: 'valide' })
+      .in('id', cibles.map((i) => i.id));
+    if (error) throw error;
+    cibles.forEach((i) => { i.review_status = 'valide'; });
+    toast(cibles.length > 1
+      ? `${cibles.length} factures marquées contrôlées.`
+      : 'Facture marquée contrôlée.');
+    clearSelection();
+    renderInvoices();
+    notifyDataChange();
+  } catch (err) {
+    console.error(err);
+    toast(errorMessage(err, 'Impossible de marquer contrôlées.'), 'error');
+  }
+}
+
+/**
+ * « Encodée par l'ancien franchisé. »
+ *
+ * Sans référence Smart, une facture restait éternellement à encoder et
+ * faussait tous les compteurs — alors que le travail avait bel et bien été
+ * fait, avant la reprise. Ce qui manque, c'est le numéro, pas le travail.
+ */
+async function marquerAncienFranchise(ids, annuler = false) {
+  const choisies = (ids || []).map(findInvoice).filter(Boolean);
+  const cibles = annuler ? choisies : choisies.filter((i) => !i.smart_ref);
+  if (!cibles.length) {
+    return toast('Ces factures portent déjà une référence Smart : elles sont encodées pour de bon.', 'error');
+  }
+
+  if (cibles.length > 1 || !annuler) {
+    const ok = await confirmDialog(
+      annuler
+        ? `Retirer la mention « ancien franchisé » sur ${cibles.length} facture(s) ?\n`
+          + 'Elles repasseront en « à encoder dans Smart ».'
+        : `Déclarer ${cibles.length} facture(s) encodée(s) dans Smart par l'ancien franchisé ?\n\n`
+          + 'Elles compteront comme encodées et sortiront des alertes, mais resteront '
+          + 'repérables : la colonne Réf. Smart affichera « Ancien franchisé » au lieu '
+          + 'd\'un numéro. La preuve manque, et cela doit rester visible.\n\n'
+          + 'Les factures qui portent déjà une référence ne sont pas touchées.',
+      annuler ? 'Retirer la mention' : 'Encodées par l\'ancien franchisé');
+    if (!ok) return;
+  }
+
+  try {
+    const { data, error } = await supabase.rpc('mark_smart_ancien', {
+      p_ids: cibles.map((i) => i.id), p_undo: annuler
+    });
+    if (error) throw error;
+    const n = (typeof data === 'string' ? JSON.parse(data) : data)?.touchees ?? cibles.length;
+    cibles.forEach((i) => { i.smart_ancien = !annuler; i.in_smart = !annuler; });
+    toast(annuler ? `Mention retirée sur ${n} facture(s).` : `${n} facture(s) marquées « ancien franchisé ».`);
+    clearSelection();
+    renderInvoices();
+    notifyDataChange();
+  } catch (err) {
+    console.error(err);
+    toast(errorMessage(err, 'Enregistrement impossible.'), 'error');
+  }
+}
+
 async function bulkTakeover() {
   const choisies = selectedInvoices();
   if (!choisies.length) return;
@@ -1380,6 +1594,9 @@ export function initInvoices(onOpenDocument = null) {
     const menu = e.target.closest('[data-menu]');
     if (menu) { e.stopPropagation(); return openRowMenu(menu, menu.dataset.menu); }
 
+    const suivi = e.target.closest('[data-suivi]');
+    if (suivi) { e.stopPropagation(); return openSuiviPopover(suivi, suivi.dataset.suivi); }
+
     const edit = e.target.closest('[data-edit]');
     if (edit) return openInvoiceModal(findInvoice(edit.dataset.edit));
 
@@ -1427,6 +1644,13 @@ export function initInvoices(onOpenDocument = null) {
   $('#bulk-pay').addEventListener('click', bulkPay);
   $('#bulk-winauditor').addEventListener('click', bulkWinauditor);
   $('#bulk-takeover').addEventListener('click', bulkTakeover);
+  $('#bulk-controlees').addEventListener('click', () => marquerControlees(selectedInvoices().map((i) => i.id)));
+  $('#bulk-ancien').addEventListener('click', () => {
+    const choisies = selectedInvoices();
+    // Tout le lot déjà marqué : le même bouton retire la mention.
+    const toutes = choisies.length > 0 && choisies.every((i) => i.smart_ancien);
+    marquerAncienFranchise(choisies.map((i) => i.id), toutes);
+  });
   $('#bulk-export').addEventListener('click', () => {
     downloadInvoicesCSV(selectedInvoices(), `VK_factures_selection_${getMonth()}.csv`);
   });

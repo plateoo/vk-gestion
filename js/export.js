@@ -17,10 +17,22 @@ const HEADERS = [
   'Montant HTVA', 'TVA %', 'Montant TVA', 'Total TVAC',
   'Encodé Smart', 'Réf. Smart', 'Références', 'Envoyé WinAuditor', 'Entrée en stock', 'Sortie / livraison',
   'Statut paiement', 'Date paiement', 'Mode paiement', 'Type de dépense', 'Remarques',
-  'TVA saisie à la main', 'Acceptée en forçant', 'Motif du forçage', 'Contrôlée par'
+  'TVA saisie à la main', 'Acceptée en forçant', 'Motif du forçage', 'Contrôlée par',
+  'Suivi', 'Remarque de suivi'
 ];
 
 const oui = (b) => (b ? 'Oui' : 'Non');
+
+// Les états de suivi en toutes lettres. Recopiés ici plutôt qu'importés :
+// l'export doit pouvoir nommer un état retiré du tableau depuis, sinon une
+// vieille facture sortirait avec une case vide.
+const SUIVIS_LABEL = {
+  probleme: 'Problème',
+  documents_manquants: 'Documents manquants',
+  a_relancer: 'À relancer',
+  a_voir: 'À voir avec le gérant',
+  encode: 'Encodée'
+};
 
 /** Échappe une valeur pour le CSV (séparateur point-virgule) */
 function cell(v) {
@@ -47,7 +59,7 @@ function lineFor(i) {
     ratePct(i.vat_rate),
     csvNum(tvac - htva),
     csvNum(tvac),
-    oui(i.in_smart),
+    i.smart_ancien ? 'Ancien franchisé' : oui(i.in_smart),
     i.smart_ref || '',
     (i.external_refs || []).join(' / '),
     oui(i.in_winauditor),
@@ -61,7 +73,9 @@ function lineFor(i) {
     i.vat_amount != null ? 'Oui — plusieurs taux' : '',
     i.forced_at ? `${i.forced_name || ''} le ${fmtDate(String(i.forced_at).slice(0, 10))}` : '',
     i.forced_reason || '',
-    i.validated_name || ''
+    i.validated_name || '',
+    SUIVIS_LABEL[i.suivi] || '',
+    i.suivi_note || ''
   ].map(cell).join(';');
 }
 
@@ -123,7 +137,9 @@ const COLONNES = [
   { key: 'tva_saisie',  label: 'TVA saisie à la main', type: 'text', width: 16 },
   { key: 'forcee',      label: 'Acceptée en forçant', type: 'text',   width: 18 },
   { key: 'motif_force', label: 'Motif du forçage',   type: 'text',   width: 40 },
-  { key: 'controle_par', label: 'Contrôlée par',     type: 'text',   width: 14 }
+  { key: 'controle_par', label: 'Contrôlée par',     type: 'text',   width: 14 },
+  { key: 'suivi',       label: 'Suivi',              type: 'text',   width: 18 },
+  { key: 'suivi_note',  label: 'Remarque de suivi',  type: 'text',   width: 40 }
 ];
 
 function ligneXlsx(i) {
@@ -144,11 +160,13 @@ function ligneXlsx(i) {
     // L'escompte réellement obtenu : l'écart entre le facturé et le décaissé.
     // Rien n'est déduit tant que le paiement n'a pas eu lieu.
     escompte: paye !== null && paye < tvac ? Math.round((tvac - paye) * 100) / 100 : null,
+    suivi: SUIVIS_LABEL[i.suivi] || '',
+    suivi_note: i.suivi_note || '',
     tva_saisie: i.vat_amount != null ? 'Oui — plusieurs taux' : '',
     forcee: i.forced_at ? `${i.forced_name || ''} le ${String(i.forced_at).slice(0, 10)}` : '',
     motif_force: i.forced_reason || '',
     controle_par: i.validated_name || '',
-    smart: oui(i.in_smart),
+    smart: i.smart_ancien ? 'Ancien franchisé' : oui(i.in_smart),
     smart_ref: i.smart_ref || '',
     refs: (i.external_refs || []).join(' / '),
     winauditor: oui(i.in_winauditor),
