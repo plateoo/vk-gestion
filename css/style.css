@@ -2096,3 +2096,13 @@ kbd {
 .trace-vide p { margin: 0 0 6px; }
 .trace-vide p:last-child { margin-bottom: 0; }
 .st-grey { background: var(--surface-sunken); color: var(--text-muted); border-color: var(--border); }
+
+/* Menu d'une pièce classée « document » : la nature, puis la suppression.
+   Le coche marque la nature actuelle — sans quoi on ne sait pas ce qu'on
+   est en train de changer. */
+.pop-menu .pop-titre {
+  margin: 2px 8px 6px; font-size: 11.5px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted);
+}
+.pop-menu button.choisi { font-weight: 700; color: var(--text); }
+.pop-menu .pop-note { margin: 6px 8px 2px; font-size: 11.5px; color: var(--text-muted); }

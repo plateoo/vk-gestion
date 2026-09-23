@@ -427,8 +427,114 @@ function docRowHtml(i) {
     <td class="td-actions no-print">
       <button type="button" class="btn btn-sm" data-requalify="${i.id}"
         title="Cette pièce est en réalité une facture : la remettre dans la liste à contrôler">C'est une facture</button>
+      <!-- Il manquait l'inverse. Une pièce qui n'est ni une facture ni un
+           document utile — un logo, une signature, une publicité — ne
+           pouvait ni être reclassée, ni être supprimée : elle restait là
+           pour toujours. -->
+      <button type="button" class="icon-btn row-menu" data-menu-doc="${i.id}"
+        title="Autres actions" aria-haspopup="menu">${ICONS.dots}</button>
     </td>
   </tr>`;
+}
+
+/**
+ * Menu d'une pièce classée « document ».
+ *
+ * Le seul geste possible était « c'est une facture ». Tout le reste — se
+ * tromper de nature, ou constater qu'il s'agit d'un logo d'e-mail sans
+ * aucun intérêt — n'avait aucune issue. Une liste dont on ne peut rien
+ * retirer finit par n'être plus regardée.
+ */
+function openDocMenu(anchor, id) {
+  const inv = findInvoice(id);
+  if (!inv) return;
+  const manager = isManager();
+  const p = openPopover(anchor, `
+    <div class="pop-menu">
+      <p class="pop-titre">Nature de cette pièce</p>
+      ${Object.entries(DOC_LABELS).filter(([k]) => k !== 'facture' && k !== 'note_credit')
+        .map(([k, v]) => `
+          <button type="button" data-nature="${k}" ${inv.doc_type === k ? 'class="choisi"' : ''}>
+            ${inv.doc_type === k ? '✓ ' : ''}${escapeHtml(v)}</button>`).join('')}
+      ${manager ? `
+        <hr>
+        <button type="button" class="danger" data-act="delete">${ICONS.trash}<span>Supprimer cette pièce</span></button>`
+        : '<hr><p class="pop-note">Seul le gérant peut supprimer une pièce.</p>'}
+    </div>`, 'pop-right');
+
+  p.addEventListener('click', (e) => {
+    const nature = e.target.closest('[data-nature]');
+    if (nature) { closePopover(); return changerNature(id, nature.dataset.nature); }
+    const act = e.target.closest('[data-act]');
+    if (act?.dataset.act === 'delete') { closePopover(); return deleteInvoice(id); }
+  });
+}
+
+/** Ranger une pièce sous une autre nature, sans en faire une facture. */
+async function changerNature(id, nature) {
+  const inv = findInvoice(id);
+  if (!inv || inv.doc_type === nature) return;
+  try {
+    const { error } = await supabase.rpc('set_document_kind', { p_invoice: id, p_kind: nature });
+    if (error) throw error;
+    inv.doc_type = nature;
+    toast(`Classée « ${DOC_LABELS[nature]} ».`);
+    await getInvoices(true);
+    renderInvoices();
+    notifyDataChange();
+  } catch (err) {
+    console.error(err);
+    toast(errorMessage(err, 'Changement impossible.'), 'error');
+  }
+}
+
+/**
+ * L'inverse de « c'est une facture » : cette ligne n'en est pas une.
+ *
+ * Elle sort des totaux et rejoint les documents, sans être détruite — se
+ * tromper doit rester réparable, et la pièce reste consultable.
+ */
+async function pasUneFacture(id) {
+  const inv = findInvoice(id);
+  if (!inv) return;
+  const p = await new Promise((resolve) => {
+    const anchor = document.querySelector(`#inv-tbody tr[data-id="${id}"] [data-menu]`)
+      || document.querySelector('#inv-tbody');
+    const pop = openPopover(anchor, `
+      <div class="pop-menu">
+        <p class="pop-titre">Qu'est-ce que c'est ?</p>
+        ${Object.entries(DOC_LABELS).filter(([k]) => k !== 'facture' && k !== 'note_credit')
+          .map(([k, v]) => `<button type="button" data-nature="${k}">${escapeHtml(v)}</button>`).join('')}
+      </div>`, 'pop-right');
+    pop.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-nature]');
+      if (b) { closePopover(); resolve(b.dataset.nature); }
+    });
+  });
+  if (!p) return;
+
+  const ok = await confirmDialog(
+    `Sortir « ${inv.invoice_number} » des factures ?\n\n`
+    + `Elle sera classée « ${DOC_LABELS[p]} », disparaîtra des totaux et des exports `
+    + 'comptables, et ne comptera plus comme une facture à payer.\n\n'
+    + 'Rien n\'est détruit : elle reste consultable dans les documents, et peut revenir '
+    + 'dans les factures d\'un clic.',
+    'Ce n\'est pas une facture');
+  if (!ok) return;
+
+  try {
+    const { error } = await supabase.rpc('set_document_kind', { p_invoice: id, p_kind: p });
+    if (error) throw error;
+    inv.review_status = 'document';
+    inv.doc_type = p;
+    toast(`Sortie des factures et classée « ${DOC_LABELS[p]} ».`);
+    await getInvoices(true);
+    renderInvoices();
+    notifyDataChange();
+  } catch (err) {
+    console.error(err);
+    toast(errorMessage(err, 'Changement impossible.'), 'error');
+  }
 }
 
 function rowHtml(i, manager) {
@@ -949,6 +1055,10 @@ function openRowMenu(anchor, id) {
       ${inv.review_status === 'a_controler' ? `
         <button type="button" data-act="controlee">${ICONS.check}<span>Marquer contrôlée</span></button>` : ''}
       <button type="button" data-act="suivi">${ICONS.dash}<span>Signaler un problème…</span></button>
+      <!-- L'inverse de « c'est une facture », qui n'existait que dans un
+           sens : une pièce mal classée en facture restait dans les totaux
+           sans aucun moyen de l'en sortir. -->
+      <button type="button" data-act="pas-facture">${ICONS.dash}<span>Ce n'est pas une facture…</span></button>
       ${!inv.smart_ref ? `
         <button type="button" data-act="ancien">${ICONS.dash}<span>${
           inv.smart_ancien ? 'Retirer « ancien franchisé »' : 'Encodée par l\'ancien franchisé'}</span></button>` : ''}
@@ -973,6 +1083,7 @@ function openRowMenu(anchor, id) {
     if (act === 'duplicate') return duplicateInvoice(id);
     if (act === 'delete') return deleteInvoice(id);
     if (act === 'controlee') return marquerControlees([id]);
+    if (act === 'pas-facture') return pasUneFacture(id);
     if (act === 'suivi') return openSuiviPopover(anchor, id);
     if (act === 'ancien') return marquerAncienFranchise([id], !!inv.smart_ancien);
     return applyStatus(id, act);
@@ -1615,6 +1726,9 @@ export function initInvoices(onOpenDocument = null) {
 
     const requalify = e.target.closest('[data-requalify]');
     if (requalify) { e.stopPropagation(); return requalifier(requalify.dataset.requalify); }
+
+    const menuDoc = e.target.closest('[data-menu-doc]');
+    if (menuDoc) { e.stopPropagation(); return openDocMenu(menuDoc, menuDoc.dataset.menuDoc); }
 
     if (e.target.closest('[data-empty-new]')) return openInvoiceModal();
 
