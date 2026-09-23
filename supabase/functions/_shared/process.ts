@@ -25,7 +25,26 @@ export function parseUbl(xml: string) {
   const supplierBlock = xml.match(
     /<(?:[a-zA-Z0-9]+:)?AccountingSupplierParty[\s\S]*?<\/(?:[a-zA-Z0-9]+:)?AccountingSupplierParty>/i
   )?.[0] ?? '';
-  const percent = num(tagValue(xml, 'Percent'));
+
+  // La ventilation de TVA, taux par taux. C'est ce que le format apporte
+  // et que la lecture d'un PDF ne peut pas donner : une facture porte
+  // couramment du 21 % sur la marchandise et du 0 % sur un Recupel ou un
+  // transport. Ne retenir que le premier taux — ce que faisait cette
+  // fonction — suffit à fausser le total de quelques euros, sur CHAQUE
+  // facture, sans que rien ne le signale.
+  const sousTotaux = [...xml.matchAll(
+    /<(?:[a-zA-Z0-9]+:)?TaxSubtotal>([\s\S]*?)<\/(?:[a-zA-Z0-9]+:)?TaxSubtotal>/gi
+  )].map((m) => ({
+    base: num(tagValue(m[1], 'TaxableAmount')),
+    tva: num(tagValue(m[1], 'TaxAmount')),
+    taux: num(tagValue(m[1], 'Percent'))
+  })).filter((t) => t.taux !== null);
+
+  // Un seul taux réellement appliqué : on le retient tel quel. Plusieurs :
+  // aucun taux unique ne décrit la facture, et c'est le MONTANT de TVA qui
+  // fait foi.
+  const tauxAppliques = [...new Set(sousTotaux.filter((t) => (t.base ?? 0) > 0).map((t) => t.taux))];
+  const percent = tauxAppliques.length === 1 ? tauxAppliques[0] : num(tagValue(xml, 'Percent'));
   const adresse = [
     tagValue(supplierBlock, 'StreetName'),
     tagValue(supplierBlock, 'BuildingNumber'),
@@ -35,6 +54,15 @@ export function parseUbl(xml: string) {
   const payeeBlock = xml.match(
     /<(?:[a-zA-Z0-9]+:)?PayeeFinancialAccount[\s\S]*?<\/(?:[a-zA-Z0-9]+:)?PayeeFinancialAccount>/i
   )?.[0] ?? '';
+  // Le document dit lui-même ce qu'il est : 380 facture, 381 note de
+  // crédit, 384 facture rectificative. Inutile de le deviner — et surtout,
+  // une pièce ainsi identifiée ne doit plus jamais être reclassée en
+  // « document » par un examen ultérieur. C'est ce qui était arrivé à une
+  // facture de 1 167,97 € : rangée en « autre », comptée nulle part.
+  const code = (tagValue(xml, 'InvoiceTypeCode') ?? '').trim();
+  const estAvoir = code === '381'
+    || /<(?:[a-zA-Z0-9]+:)?CreditNote\b/i.test(xml);
+
   return {
     fournisseur_nom: tagValue(supplierBlock, 'RegistrationName') || tagValue(supplierBlock, 'Name'),
     fournisseur_tva: tagValue(supplierBlock, 'CompanyID'),
@@ -47,8 +75,14 @@ export function parseUbl(xml: string) {
     montant_tvac: num(tagValue(xml, 'TaxInclusiveAmount')),
     montant_tva: num(tagValue(xml, 'TaxAmount')),
     taux_tva: percent == null ? null : percent / 100,
+    // Plusieurs taux sur la même facture : le taux ne suffit pas à la
+    // décrire, on enregistrera le montant de TVA tel qu'il est écrit.
+    tva_multiple: tauxAppliques.length > 1,
+    ventilation: sousTotaux,
+    type_document: estAvoir ? 'note_credit' : 'facture',
+    synthese: null as string | null,
     devise: tagValue(xml, 'DocumentCurrencyCode') || 'EUR',
-    est_avoir: false,
+    est_avoir: estAvoir,
     champs_incertains: [] as string[],
     commentaire: null as string | null,
     _source: 'ubl'
@@ -454,6 +488,28 @@ export async function processQueueRow(queueId: string): Promise<void> {
  * Traite une pièce jointe et renvoie l'identifiant de la facture créée,
  * ou null si c'est un doublon déjà connu.
  */
+/**
+ * Le montant de TVA à enregistrer tel quel, ou null pour laisser la base
+ * le recalculer.
+ *
+ * On ne s'en sert que lorsque la source est une facture structurée ET que
+ * le taux unique ne reproduit pas le montant écrit. Dans tous les autres
+ * cas, le calcul de la base est aussi bon et plus simple à relire.
+ */
+function tvaExacte(
+  extracted: Record<string, unknown>,
+  htva: number,
+  rate: number | null
+): number | null {
+  if (extracted._source !== 'ubl') return null;
+  const tva = Number(extracted.montant_tva);
+  if (!Number.isFinite(tva) || !Number.isFinite(htva)) return null;
+  const calcule = rate === null ? NaN : Math.round(htva * rate * 100) / 100;
+  // Un écart inférieur au centime ne vaut pas qu'on s'écarte du calcul.
+  if (Number.isFinite(calcule) && Math.abs(calcule - tva) < 0.005) return null;
+  return Math.round(tva * 100) / 100;
+}
+
 async function traiterFichier(
   sb: SupabaseClient,
   row: Record<string, unknown>,
@@ -561,6 +617,18 @@ async function traiterFichier(
       ? extracted.date_echeance : null,
     amount_htva: Number.isFinite(htva) ? htva : 0,
     vat_rate: rate !== null && LEGAL_RATES.includes(rate) ? rate : 0.21,
+    // Le montant de TVA écrit sur une facture structurée fait foi.
+    //
+    // Le TVAC est une colonne calculée : HTVA × taux. Tant qu'un seul taux
+    // s'applique, cela revient au même. Dès qu'il y en a deux — du 21 % sur
+    // la marchandise et du 0 % sur un Recupel, cas ordinaire — le calcul
+    // s'écarte de la facture réelle, de quelques euros à chaque fois. On
+    // enregistre donc le montant tel quel, et le TVAC en découle.
+    //
+    // Réservé aux pièces LUES, jamais devinées : sur un PDF, la TVA repérée
+    // par l'extraction est une hypothèse, et l'imposer serait pire que de
+    // la recalculer.
+    vat_amount: tvaExacte(extracted, htva, rate),
     source: 'email',
     review_status: estFacture ? 'a_controler' : 'document',
     doc_type: kind,

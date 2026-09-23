@@ -2057,3 +2057,42 @@ kbd {
      reste, les flèches gardent leur cible au doigt. */
   .month-label { min-width: 0; font-size: 13px; padding: 5px 6px; }
 }
+
+/* =====================================================================
+   Quarantaine : voir avant de décider
+   On demandait de trancher « est-ce un fournisseur ? » en cachant ce qui
+   permet de répondre. Les messages et leurs pièces s'ouvrent maintenant
+   sur place.
+   ===================================================================== */
+.q-row.deplie { background: var(--surface-alt); }
+.q-detail {
+  grid-column: 1 / -1; margin-top: 10px; padding-top: 10px;
+  border-top: 1px dashed var(--border-dashed);
+}
+.q-msg { padding: 8px 0; border-bottom: 1px solid var(--line-soft); }
+.q-msg:last-child { border-bottom: none; }
+.q-msg-head { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+.q-msg-head strong { font-size: 13.5px; }
+.q-fichiers { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 7px; }
+.q-fichier {
+  display: inline-flex; align-items: center; gap: 6px;
+  font: inherit; font-size: 12.5px; cursor: pointer; min-height: 34px;
+  padding: 5px 10px; border-radius: 7px;
+  background: var(--surface); border: 1px solid var(--border); color: var(--text);
+}
+.q-fichier:hover { border-color: var(--vbk-red); color: var(--vbk-red); }
+.q-fichier small { color: var(--text-muted); }
+
+/* Retrouver un courrier */
+.trace-resultats { padding: 10px 12px 14px; }
+.trace-resume { margin: 0 0 10px; font-size: 13.5px; }
+.trace-table { font-size: 13px; }
+.trace-pj { display: block; font-size: 11.5px; color: var(--text-muted); margin-top: 2px; }
+.trace-err { margin-left: 6px; font-size: 11.5px; color: var(--danger); cursor: help; text-decoration: underline dotted; }
+.trace-vide {
+  padding: 14px; border-radius: 8px;
+  background: var(--warn-soft); border: 1px solid var(--border-warn);
+}
+.trace-vide p { margin: 0 0 6px; }
+.trace-vide p:last-child { margin-bottom: 0; }
+.st-grey { background: var(--surface-sunken); color: var(--text-muted); border-color: var(--border); }

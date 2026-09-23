@@ -547,6 +547,24 @@
         <div id="quarantine-list" class="q-list"></div>
       </div>
 
+      <!-- « Le fournisseur me réclame une facture dont je ne trouve pas
+           trace. » La question n'est pas quelle facture on a, mais ce qui
+           est ARRIVÉ : un message peut être en quarantaine, avoir échoué
+           à la lecture, ou n'avoir contenu aucune facture. -->
+      <div class="card">
+        <div class="card-head">
+          <h2>Retrouver un courrier</h2>
+          <p class="muted small">Tout ce qui est arrivé dans la boîte, facture ou non.
+            Cherche un fournisseur, un domaine, un numéro.</p>
+        </div>
+        <div class="toolbar" style="padding: 10px 12px 0">
+          <input id="trace-q" type="search" class="search"
+                 placeholder="franke, @electrolux.be, 3080607668…" aria-label="Rechercher dans le courrier reçu">
+          <button type="button" id="trace-btn" class="btn btn-primary">Chercher</button>
+        </div>
+        <div id="trace-resultats" class="trace-resultats"></div>
+      </div>
+
       <div class="card">
         <div class="card-head"><h2>Expéditeurs autorisés</h2></div>
         <div class="toolbar" style="padding: 10px 12px 0">

@@ -9,12 +9,13 @@ import { supabase } from './supabase.js';
 import { invalidateInvoices } from './invoices.js';
 import {
   $, $$, escapeHtml, toast, errorMessage, confirmDialog, fmtDate,
-  longDate, notifyDataChange, ICONS
+  longDate, notifyDataChange, ICONS, ouvrirLien
 } from './ui.js';
 import { isManager } from './auth.js';
 
 let senders = [];   // quarantaine groupée par expéditeur
 let allowed = [];   // liste blanche
+let ouvert = null;  // expéditeur dont on regarde les messages
 
 // ---------------------------------------------------------------------
 // Chargement
@@ -58,7 +59,7 @@ export async function renderSettings() {
     : 'Aucun message en quarantaine.';
 
   list.innerHTML = senders.length ? senders.map((s) => `
-    <div class="q-row" data-sender="${escapeHtml(s.sender_email)}">
+    <div class="q-row ${ouvert === s.sender_email ? 'deplie' : ''}" data-sender="${escapeHtml(s.sender_email)}">
       <div class="q-main">
         <span class="q-email">${escapeHtml(s.sender_email)}</span>
         <span class="q-meta">${s.messages} message${Number(s.messages) > 1 ? 's' : ''}
@@ -67,15 +68,29 @@ export async function renderSettings() {
         ${s.dernier_sujet ? `<span class="q-subject">« ${escapeHtml(s.dernier_sujet)} »</span>` : ''}
       </div>
       <div class="q-actions">
+        <!-- Voir avant de décider. Sans cela, on demandait de trancher
+             « est-ce un fournisseur ? » en cachant ce qui permet de
+             répondre : le sujet des messages et les pièces jointes. -->
+        <button type="button" class="btn btn-sm" data-voir="${escapeHtml(s.sender_email)}"
+                aria-expanded="${ouvert === s.sender_email}">
+          ${ouvert === s.sender_email ? 'Masquer' : 'Voir les messages'}
+        </button>
         <label class="check" title="Cocher si cette adresse retransmet les factures d'AUTRES fournisseurs : ancien franchisé, comptable, boîte interne. Son adresse ne servira alors jamais à identifier un fournisseur.">
           <input type="checkbox" data-forwarder="${escapeHtml(s.sender_email)}"> transitaire
         </label>
+        <button type="button" class="btn btn-danger btn-sm" data-reject="${escapeHtml(s.sender_email)}">
+          Refuser
+        </button>
         <button type="button" class="btn btn-primary btn-sm" data-allow="${escapeHtml(s.sender_email)}">
           Autoriser et rejouer
         </button>
       </div>
+      ${ouvert === s.sender_email ? `<div class="q-detail" data-detail="${escapeHtml(s.sender_email)}">
+        <p class="muted small">Chargement des messages…</p></div>` : ''}
     </div>`).join('')
     : `<div class="empty">${ICONS.empty}<p>Rien en quarantaine</p></div>`;
+
+  if (ouvert) chargerDetail(ouvert);
 
   $('#allowed-list').innerHTML = allowed.length ? allowed.map((a) => `
     <div class="q-row">
@@ -87,6 +102,121 @@ export async function renderSettings() {
       <button type="button" class="icon-btn danger" data-revoke="${a.id}" title="Retirer de la liste blanche">${ICONS.trash}</button>
     </div>`).join('')
     : '<p class="muted small" style="padding:10px 12px">Liste blanche vide : tout message entrant part en quarantaine.</p>';
+}
+
+// ---------------------------------------------------------------------
+// Voir ce qu'un expéditeur a envoyé
+//
+// Sujet, date, pièces jointes. Chaque pièce s'ouvre par un lien signé
+// d'une heure : les fichiers restent dans un espace privé, rien ne
+// devient lisible sans connexion.
+// ---------------------------------------------------------------------
+async function chargerDetail(email) {
+  const boite = $(`[data-detail="${CSS.escape(email)}"]`);
+  if (!boite) return;
+  try {
+    const { data, error } = await supabase.rpc('quarantine_detail', { p_email: email });
+    if (error) throw error;
+    const messages = (typeof data === 'string' ? JSON.parse(data) : data) || [];
+    if (!messages.length) {
+      boite.innerHTML = '<p class="muted small">Aucun message à afficher.</p>';
+      return;
+    }
+    boite.innerHTML = messages.map((m) => `
+      <div class="q-msg">
+        <div class="q-msg-head">
+          <strong>${escapeHtml(m.subject || '(sans sujet)')}</strong>
+          <span class="muted small">${escapeHtml(longDate(String(m.received_at || m.created_at).slice(0, 10)) || '—')}</span>
+        </div>
+        ${(m.files || []).length ? `
+          <div class="q-fichiers">
+            ${(m.files || []).map((f) => `
+              <button type="button" class="q-fichier" data-piece="${escapeHtml(f.path || '')}"
+                      title="Ouvrir ${escapeHtml(f.name || '')}">
+                ${icone(f)} ${escapeHtml(f.name || 'pièce jointe')}
+                <small>${poids(f.size)}</small>
+              </button>`).join('')}
+          </div>`
+          : '<p class="muted small">Aucune pièce jointe.</p>'}
+      </div>`).join('');
+  } catch (err) {
+    console.error(err);
+    boite.innerHTML = `<p class="muted small">${escapeHtml(errorMessage(err, 'Messages illisibles.'))}</p>`;
+  }
+}
+
+const icone = (f) => {
+  const n = String(f?.name || '').toLowerCase();
+  if (n.endsWith('.pdf')) return '📄';
+  if (/\.(png|jpe?g|gif|webp|heic)$/.test(n)) return '🖼';
+  if (/\.(xlsx?|csv)$/.test(n)) return '▦';
+  if (/\.(docx?)$/.test(n)) return '✎';
+  return '📎';
+};
+
+function poids(n) {
+  const o = Number(n) || 0;
+  if (!o) return '';
+  if (o < 1024) return `${o} o`;
+  if (o < 1024 * 1024) return `${Math.round(o / 1024)} ko`;
+  return `${(o / (1024 * 1024)).toFixed(1)} Mo`.replace('.', ',');
+}
+
+/** Ouvre une pièce jointe encore en quarantaine, par lien signé. */
+async function ouvrirPiece(chemin) {
+  if (!chemin) return toast('Cette pièce n\'a pas de fichier associé.', 'error');
+  try {
+    const { data, error } = await supabase.storage.from('factures').createSignedUrl(chemin, 3600);
+    if (error) throw error;
+    ouvrirLien(data.signedUrl);
+  } catch (err) {
+    console.error(err);
+    toast(errorMessage(err, 'Document introuvable.'), 'error');
+  }
+}
+
+/**
+ * Refuser un expéditeur.
+ *
+ * Ses messages quittent la quarantaine sans devenir des factures, et
+ * leurs fichiers sont effacés du stockage. L'adresse n'est PAS mise sur
+ * une liste noire : un expéditeur refusé aujourd'hui peut écrire demain
+ * une facture légitime, et une liste noire silencieuse serait la
+ * meilleure façon de perdre une facture sans jamais savoir pourquoi.
+ */
+async function refuser(email, btn) {
+  const entry = senders.find((s) => s.sender_email === email);
+  const n = entry ? Number(entry.messages) : 0;
+  const ok = await confirmDialog(
+    `Refuser ${email} ?\n\n`
+    + `${n} message${n > 1 ? 's' : ''} ${n > 1 ? 'seront supprimés' : 'sera supprimé'} de la quarantaine, `
+    + 'avec leurs pièces jointes. Aucune facture n\'en sortira.\n\n'
+    + 'L\'adresse n\'est pas bloquée : si elle écrit à nouveau, le message '
+    + 'repassera en quarantaine et tu pourras revoir ta décision.',
+    'Refuser');
+  if (!ok) return;
+
+  btn.disabled = true;
+  try {
+    const { data, error } = await supabase.rpc('quarantine_reject', { p_email: email });
+    if (error) throw error;
+    const r = typeof data === 'string' ? JSON.parse(data) : data;
+    const chemins = r?.chemins || [];
+    if (chemins.length) {
+      const { error: errStock } = await supabase.storage.from('factures').remove(chemins);
+      // Un objet resté en trop ne justifie pas d'alarmer : la ligne est
+      // partie, c'est elle qui compte. On le note pour la console.
+      if (errStock) console.warn('pièces non effacées', errStock);
+    }
+    toast(`${r?.messages ?? n} message(s) refusé(s).`);
+    ouvert = null;
+    await renderSettings();
+    notifyDataChange();
+  } catch (err) {
+    console.error(err);
+    btn.disabled = false;
+    toast(errorMessage(err, 'Refus impossible.'), 'error');
+  }
 }
 
 // ---------------------------------------------------------------------
@@ -222,12 +352,101 @@ async function runPurge() {
 }
 
 // ---------------------------------------------------------------------
+// Retrouver la trace d'un courrier
+//
+// Jordan : « il me réclame des factures mais je ne trouve pas de traces
+// dans le logiciel ». La question n'est pas « quelle facture ai-je ? »
+// mais « qu'est-ce qui est ARRIVÉ ? ». Un message peut être en
+// quarantaine, avoir échoué à l'extraction, ou n'avoir contenu aucune
+// facture lisible : dans les trois cas il n'existe aucune facture, et
+// pourtant le fournisseur a bien écrit. Sans cette vue, l'absence de
+// facture ne se distingue pas de l'absence d'envoi.
+// ---------------------------------------------------------------------
+const ETATS_COURRIER = {
+  done: { label: 'Traité', classe: 'st-green' },
+  quarantine: { label: 'En quarantaine', classe: 'st-orange' },
+  pending: { label: 'En attente', classe: 'st-orange' },
+  processing: { label: 'En cours', classe: 'st-orange' },
+  error: { label: 'Échec de lecture', classe: 'st-red' },
+  sans_facture: { label: 'Sans facture lisible', classe: 'st-grey' },
+  ignored: { label: 'Ignoré', classe: 'st-grey' }
+};
+
+async function chercherTrace() {
+  const q = $('#trace-q').value.trim();
+  const boite = $('#trace-resultats');
+  if (q.length < 3) {
+    boite.innerHTML = '<p class="muted small">Tape au moins trois lettres : un nom de fournisseur, un domaine, un numéro de facture.</p>';
+    return;
+  }
+  boite.innerHTML = '<p class="muted small">Recherche…</p>';
+  try {
+    const { data, error } = await supabase.rpc('courrier_trace', { p_q: q, p_limit: 100 });
+    if (error) throw error;
+    const lignes = (typeof data === 'string' ? JSON.parse(data) : data) || [];
+    if (!lignes.length) {
+      boite.innerHTML = `<div class="trace-vide">
+        <p><strong>Aucun message reçu</strong> ne correspond à « ${escapeHtml(q)} ».</p>
+        <p class="muted small">Si le fournisseur affirme avoir envoyé, c'est que le message
+          n'est jamais arrivé dans la boîte, ou qu'il n'a pas été déplacé dans le dossier
+          Factures d'Outlook. Cherche dans Outlook avant de le rappeler.</p></div>`;
+      return;
+    }
+    const sansFacture = lignes.filter((l) => !Number(l.factures)).length;
+    boite.innerHTML = `
+      <p class="trace-resume">${lignes.length} message${lignes.length > 1 ? 's' : ''} reçu${lignes.length > 1 ? 's' : ''}${
+        sansFacture ? ` — dont <strong>${sansFacture} sans facture dans l'application</strong>` : ''}.</p>
+      <table class="table trace-table">
+        <thead><tr><th>Date</th><th>Expéditeur</th><th>Sujet</th><th>État</th><th>Facture</th></tr></thead>
+        <tbody>${lignes.map((l) => {
+          const e = ETATS_COURRIER[l.status] || { label: l.status, classe: 'st-grey' };
+          return `<tr>
+            <td data-label="Date">${escapeHtml(fmtDate(String(l.quand || '').slice(0, 10)) || '—')}</td>
+            <td data-label="Expéditeur">${escapeHtml(l.sender_email)}</td>
+            <td data-label="Sujet">${escapeHtml(l.subject || '(sans sujet)')}
+              ${l.fichiers ? `<span class="trace-pj">${escapeHtml(l.fichiers)}</span>` : ''}</td>
+            <td data-label="État"><span class="badge ${e.classe}">${escapeHtml(e.label)}</span>
+              ${l.error ? `<span class="trace-err" title="${escapeHtml(l.error)}">détail</span>` : ''}</td>
+            <td data-label="Facture" class="num">${Number(l.factures)
+              ? `<span class="badge st-green">${l.factures}</span>`
+              : '<span class="muted">aucune</span>'}</td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table>`;
+  } catch (err) {
+    console.error(err);
+    boite.innerHTML = `<p class="muted small">${escapeHtml(errorMessage(err, 'Recherche impossible.'))}</p>`;
+  }
+}
+
+// ---------------------------------------------------------------------
 // Initialisation
 // ---------------------------------------------------------------------
 export function initSettings() {
   $('#quarantine-list').addEventListener('click', (e) => {
+    const piece = e.target.closest('[data-piece]');
+    if (piece) return ouvrirPiece(piece.dataset.piece);
+
+    const voir = e.target.closest('[data-voir]');
+    if (voir) {
+      // Un seul expéditeur déplié à la fois : la quarantaine sert à
+      // trancher cas par cas, pas à tout étaler.
+      ouvert = ouvert === voir.dataset.voir ? null : voir.dataset.voir;
+      return renderSettings();
+    }
+
+    const refus = e.target.closest('[data-reject]');
+    if (refus) return refuser(refus.dataset.reject, refus);
+
     const b = e.target.closest('[data-allow]');
     if (b) allowAndReplay(b.dataset.allow, b);
+  });
+
+  // Retrouver la trace d'un courrier : la réponse à « le fournisseur me
+  // réclame une facture dont je ne trouve pas trace ».
+  $('#trace-btn').addEventListener('click', chercherTrace);
+  $('#trace-q').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); chercherTrace(); }
   });
   $('#allowed-list').addEventListener('click', (e) => {
     const b = e.target.closest('[data-revoke]');
