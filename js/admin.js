@@ -39,6 +39,66 @@ async function appeler(action, payload = {}) {
 }
 
 // ---------------------------------------------------------------------
+/**
+ * Ce que chaque journée a produit, et par qui.
+ *
+ * Jordan : « je ne vois pas la date de quand elle le traite ; cela me
+ * permet de contrôler ce qu'elle fait par jour. » On compte des GESTES,
+ * pas des factures : la même facture peut être contrôlée un jour, encodée
+ * le lendemain et payée la semaine suivante. Les additionner donnerait un
+ * chiffre qui ne veut rien dire.
+ *
+ * Et l'on dit franchement ce qui manque : les gestes antérieurs à la mise
+ * en place de cette mesure n'ont pas de date et ne peuvent pas en avoir.
+ * Sans cet avertissement, « zéro le 3 septembre » se lirait « personne
+ * n'a travaillé ce jour-là ».
+ */
+function activiteHtml(lignes, depuis) {
+  const COLONNES = [
+    ['controles', 'Contrôlées'],
+    ['smart', 'Réf. Smart'],
+    ['winauditor', 'WinAuditor'],
+    ['paiements', 'Paiements'],
+    ['signalements', 'Signalements'],
+    ['forcages', 'Forçages']
+  ];
+  const manquants = Number(depuis?.sans_date_smart || 0) + Number(depuis?.sans_date_controle || 0);
+
+  return `
+    <div class="card">
+      <div class="card-head">
+        <h2>Activité, jour par jour</h2>
+        <p class="muted small">Les gestes posés dans l'application sur les trente derniers jours.</p>
+      </div>
+      ${manquants ? `
+        <p class="activite-note">Les gestes antérieurs au 23 septembre 2026 n'ont pas de date :
+          l'application ne l'enregistrait pas. ${manquants} pièces sont dans ce cas, et
+          n'apparaissent donc dans aucune journée ci-dessous. Ce n'est pas du travail non fait,
+          c'est du travail non daté.</p>` : ''}
+      ${lignes.length ? `
+        <div class="table-wrap">
+          <table class="table">
+            <thead><tr><th>Jour</th><th>Qui</th>
+              ${COLONNES.map(([, l]) => `<th class="num">${l}</th>`).join('')}
+              <th class="num">Total</th></tr></thead>
+            <tbody>
+              ${lignes.map((x) => `
+                <tr>
+                  <td data-label="Jour">${escapeHtml(longDate(x.jour))}</td>
+                  <td data-label="Qui"><strong>${escapeHtml(x.qui)}</strong></td>
+                  ${COLONNES.map(([k, l]) => `<td class="num" data-label="${l}">${
+                    Number(x[k]) ? x[k] : '<span class="muted">—</span>'}</td>`).join('')}
+                  <td class="num strong" data-label="Total">${x.total}</td>
+                </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>`
+        : `<p class="muted small" style="padding:12px 14px">Aucun geste enregistré depuis que
+             l'application en garde la date. Les premiers apparaîtront ici dès le prochain
+             contrôle ou la prochaine référence Smart saisie.</p>`}
+    </div>`;
+}
+
 export async function renderAdmin() {
   const body = $('#admin-body');
   if (!isManager()) {
@@ -47,12 +107,15 @@ export async function renderAdmin() {
   }
   body.innerHTML = '<div class="muted small" style="padding:14px">Chargement…</div>';
 
-  let etat = null, journal = [];
+  let etat = null, journal = [], activite = [], depuis = {};
   try {
-    const [u, s, l] = await Promise.all([
+    const [u, s, l, a, d] = await Promise.all([
       appeler('list'),
       supabase.rpc('system_status'),
       supabase.from('change_log').select('*').order('created_at', { ascending: false }).limit(40),
+      // Ce que chaque journée a produit, et depuis quand on le sait.
+      supabase.rpc('activite'),
+      supabase.rpc('activite_depuis'),
       // Sauvegardes et contrôle de sécurité : chargés en même temps que le
       // reste, pour que l'écran ne s'affiche jamais sans eux.
       loadMaintenance()
@@ -60,6 +123,8 @@ export async function renderAdmin() {
     users = u.users || [];
     etat = typeof s.data === 'string' ? JSON.parse(s.data) : s.data;
     journal = l.data || [];
+    activite = (typeof a.data === 'string' ? JSON.parse(a.data) : a.data) || [];
+    depuis = (typeof d.data === 'string' ? JSON.parse(d.data) : d.data) || {};
   } catch (err) {
     console.error(err);
     body.innerHTML = `<div class="card pad"><p>${escapeHtml(errorMessage(err, 'Chargement impossible.'))}</p></div>`;
@@ -90,6 +155,7 @@ export async function renderAdmin() {
         <div class="kpi-sub">${etat.stockage_fichiers} fichier${Number(etat.stockage_fichiers) > 1 ? 's' : ''}</div></div>
     </div>
 
+    ${activiteHtml(activite, depuis)}
     ${backupCardHtml()}
     ${securityCardHtml()}
 

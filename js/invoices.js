@@ -1067,9 +1067,14 @@ function openRowMenu(anchor, id) {
       <button type="button" data-act="duplicate">${ICONS.copy}<span>Dupliquer</span></button>
       ${manager ? `
         <hr>
+        ${inv.payment_status === 'a_payer' || inv.payment_status === 'en_retard' ? `
+          <button type="button" data-act="avant_reprise">${ICONS.dash}<span>Réglée avant la reprise</span></button>` : ''}
+        ${inv.payment_status === 'avant_reprise' ? `
+          <button type="button" data-act="retour_paiement">${ICONS.dash}<span>Remettre dans le circuit de paiement</span></button>` : ''}
         <button type="button" data-act="litige">${ICONS.dash}<span>Marquer en litige</span></button>
         <button type="button" data-act="acompte">${ICONS.dash}<span>Acompte versé</span></button>
-        <button type="button" data-act="a_payer">${ICONS.dash}<span>Remettre à payer</span></button>
+        ${inv.payment_status === 'avant_reprise' ? ''
+          : `<button type="button" data-act="a_payer">${ICONS.dash}<span>Remettre à payer</span></button>`}
         <hr>
         <button type="button" class="danger" data-act="delete">${ICONS.trash}<span>Supprimer</span></button>` : ''}
     </div>`, 'pop-right');
@@ -1084,6 +1089,13 @@ function openRowMenu(anchor, id) {
     if (act === 'delete') return deleteInvoice(id);
     if (act === 'controlee') return marquerControlees([id]);
     if (act === 'pas-facture') return pasUneFacture(id);
+    // Le geste existait, mais uniquement en lot : il fallait cocher une
+    // case pour déclarer une seule facture réglée avant la reprise.
+    if (act === 'avant_reprise') return marquerAvantReprise([id]);
+    // Passe par la même fonction que la pose, pour que le retour soit
+    // journalisé comme elle. « Remettre à payer » écrirait le statut sans
+    // laisser de trace du fait qu'on défait une reprise d'historique.
+    if (act === 'retour_paiement') return marquerAvantReprise([id], true);
     if (act === 'suivi') return openSuiviPopover(anchor, id);
     if (act === 'ancien') return marquerAncienFranchise([id], !!inv.smart_ancien);
     return applyStatus(id, act);
@@ -1288,6 +1300,55 @@ async function marquerAncienFranchise(ids, annuler = false) {
     const n = (typeof data === 'string' ? JSON.parse(data) : data)?.touchees ?? cibles.length;
     cibles.forEach((i) => { i.smart_ancien = !annuler; i.in_smart = !annuler; });
     toast(annuler ? `Mention retirée sur ${n} facture(s).` : `${n} facture(s) marquées « ancien franchisé ».`);
+    clearSelection();
+    renderInvoices();
+    notifyDataChange();
+  } catch (err) {
+    console.error(err);
+    toast(errorMessage(err, 'Enregistrement impossible.'), 'error');
+  }
+}
+
+/**
+ * Déclarer des factures réglées par l'ancien franchisé.
+ *
+ * Même fonction de base que le bouton de la barre de sélection : une
+ * seule facture ou tout un lot, c'est le même geste et il doit se
+ * comporter pareil. La base refuse de toucher aux factures déjà payées
+ * ou en litige — leur état porte une information que la reprise n'annule
+ * pas.
+ */
+async function marquerAvantReprise(ids, annuler = false) {
+  const cibles = (ids || []).map(findInvoice).filter((i) => i
+    && (annuler ? i.payment_status === 'avant_reprise'
+                : i.payment_status === 'a_payer' || i.payment_status === 'en_retard'));
+  if (!cibles.length) {
+    return toast('Aucune de ces factures n\'est concernée : les factures payées et les litiges ne sont pas touchés.', 'error');
+  }
+
+  const total = cibles.reduce((s2, i) => s2 + (Number(i.amount_tvac) || 0), 0);
+  const ok = await confirmDialog(
+    annuler
+      ? `Remettre ${cibles.length} facture(s) dans le circuit de paiement ?\n`
+        + `${fmtEUR(total)} repasseront en « à payer » et réapparaîtront dans les retards.`
+      : `Déclarer ${cibles.length} facture(s) réglée(s) avant la reprise du magasin ?\n`
+        + `${fmtEUR(total)} sortiront du reste à payer et des alertes de retard.\n\n`
+        + 'SEUL LE PAIEMENT est concerné : elles restent à contrôler, à encoder dans Smart '
+        + 'et à envoyer à WinAuditor comme les autres.',
+    annuler ? 'Remettre à payer' : 'Réglée avant reprise');
+  if (!ok) return;
+
+  try {
+    const { data, error } = await supabase.rpc('mark_before_takeover', {
+      p_ids: cibles.map((i) => i.id), p_undo: annuler
+    });
+    if (error) throw error;
+    const r = typeof data === 'string' ? JSON.parse(data) : data;
+    const n = r?.touchees ?? r?.n ?? cibles.length;
+    cibles.forEach((i) => { i.payment_status = annuler ? 'a_payer' : 'avant_reprise'; });
+    toast(annuler
+      ? `${n} facture(s) remises dans le circuit de paiement.`
+      : `${n} facture(s) déclarées réglées avant la reprise.`);
     clearSelection();
     renderInvoices();
     notifyDataChange();

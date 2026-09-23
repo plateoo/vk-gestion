@@ -324,6 +324,18 @@
       <p>Rien n'est figé : les montants restent modifiables après coup, et une facture déjà
          contrôlée se rouvre et se corrige comme n'importe quelle autre.</p>
 
+      <h3>Réglée avant la reprise</h3>
+      <p>Certaines factures ont été <strong>payées par l'ancien franchisé</strong>. Elles restent
+         à encoder et à transmettre au comptable, mais elles ne sont plus à payer — et tant
+         qu'elles figurent dans le reste dû, tous les chiffres sont faux.</p>
+      <p>Menu <strong>⋯</strong> de fin de ligne → <strong>« Réglée avant la reprise »</strong>,
+         ou en lot sur une sélection. <strong>Seul le paiement est concerné</strong> : la facture
+         reste à contrôler, à encoder dans Smart et à envoyer à WinAuditor comme les autres.
+         Une facture déjà payée ou en litige n'est jamais touchée — son état porte une
+         information que la reprise n'annule pas. <span class="tag">gérant</span></p>
+      <p>Le même menu propose l'inverse — <em>« Remettre dans le circuit de paiement »</em> —
+         si l'on s'est trompé.</p>
+
       <h3>Encodée par l'ancien franchisé</h3>
       <p>Certaines factures ont été encodées dans Smart avant la reprise, mais
          <strong>leur référence est introuvable</strong>. Sans numéro, elles restaient
@@ -606,6 +618,20 @@
             du service lui-même. Une sauvegarde rangée à côté de l'original disparaît avec lui
             — il faut la mettre ailleurs.</li>
       </ul>
+      <h3>Activité, jour par jour</h3>
+      <p>Un tableau montre <strong>ce que chaque journée a produit</strong>, et par qui :
+         factures contrôlées, références Smart saisies, envois WinAuditor, paiements
+         enregistrés, signalements, forçages. Une ligne par jour et par personne.</p>
+      <p>On compte des <strong>gestes</strong>, pas des factures : la même facture peut être
+         contrôlée un jour, encodée le lendemain et payée la semaine suivante. Les additionner
+         donnerait un chiffre qui ne veut rien dire.</p>
+      <div class="guide-note warn">
+        <p>Les gestes <strong>antérieurs au 23 septembre 2026</strong> n'ont pas de date :
+           l'application ne l'enregistrait pas. Ils n'apparaissent donc dans aucune journée.
+           <strong>Ce n'est pas du travail non fait, c'est du travail non daté</strong> — et
+           l'écran le rappelle, pour qu'on ne lise pas un tableau vide comme une journée creuse.</p>
+      </div>
+
       <p>Le <strong>contrôle de sécurité</strong>, juste en dessous, vérifie neuf points et dit
          en français ce qui ne va pas. S'il passe au rouge sur la sauvegarde hors ligne, c'est
          qu'elle n'a plus été emportée depuis trop longtemps.</p>
