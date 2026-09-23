@@ -381,7 +381,7 @@ export const STATUSES = {
   // factures restent à encoder dans Smart et à envoyer à WinAuditor
   // comme les autres. « Avant reprise » tout court laissait croire
   // qu'elles sortaient du travail — elles n'en sortent pas.
-  avant_reprise: { label: 'Payée avant reprise', cls: 'st-grey' }
+  avant_reprise: { label: "Payée par l'ancien franchisé", cls: 'st-grey' }
 };
 export function statusLabel(s) { return (STATUSES[s] || {}).label || s || ''; }
 export function statusClass(s) { return (STATUSES[s] || {}).cls || 'st-grey'; }

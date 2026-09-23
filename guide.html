@@ -324,11 +324,11 @@
       <p>Rien n'est figé : les montants restent modifiables après coup, et une facture déjà
          contrôlée se rouvre et se corrige comme n'importe quelle autre.</p>
 
-      <h3>Réglée avant la reprise</h3>
+      <h3>Payée par l'ancien franchisé</h3>
       <p>Certaines factures ont été <strong>payées par l'ancien franchisé</strong>. Elles restent
          à encoder et à transmettre au comptable, mais elles ne sont plus à payer — et tant
          qu'elles figurent dans le reste dû, tous les chiffres sont faux.</p>
-      <p>Menu <strong>⋯</strong> de fin de ligne → <strong>« Réglée avant la reprise »</strong>,
+      <p>Menu <strong>⋯</strong> de fin de ligne → <strong>« Payée par l'ancien franchisé »</strong>,
          ou en lot sur une sélection. <strong>Seul le paiement est concerné</strong> : la facture
          reste à contrôler, à encoder dans Smart et à envoyer à WinAuditor comme les autres.
          Une facture déjà payée ou en litige n'est jamais touchée — son état porte une
@@ -434,6 +434,13 @@
             numéros différents. Ce sont peut-être deux livraisons du même jour.
             <strong>Regarde avant de supprimer.</strong></li>
       </ul>
+      <div class="guide-note">
+        <p>Deux factures dont les <strong>numéros se suivent</strong> — 2173130500 et
+           2173130501, FT202601265 et FT202601266 — ne sont <strong>jamais</strong> signalées,
+           même à date et montant identiques. Aucun système de facturation n'émet deux fois la
+           même pièce sous deux numéros consécutifs : c'est au contraire la signature de deux
+           factures distinctes, émises l'une après l'autre.</p>
+      </div>
       <p>Rien n'est jamais supprimé automatiquement. La corbeille sur la ligne supprime une
          facture, après une confirmation qui la nomme en entier — fournisseur, numéro, date,
          montant — car entre deux lignes jumelles, « supprimer cette facture ? » ne suffit pas.
@@ -519,7 +526,7 @@
 
       <h3>Les factures d'avant la reprise <span class="tag">gérant</span></h3>
       <p>Les factures reprises de l'ancienne franchise, déjà réglées par elle, portent l'état
-         <strong>« Payée avant reprise »</strong>. Elles ne comptent ni dans le reste à payer
+         <strong>« Payée par l'ancien franchisé »</strong>. Elles ne comptent ni dans le reste à payer
          ni dans les retards. Le filtre du même nom les retrouve ; le bouton de lot les remet
          dans le circuit si l'une se révèle réellement impayée.</p>
       <div class="guide-note warn">

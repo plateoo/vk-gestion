@@ -48,6 +48,29 @@ const NIVEAUX = { certain: 3, probable: 2, verifier: 1 };
  * @param {object[]} invoices  factures normalisées (avec supplier_name)
  * @returns {{cle:string, niveau:string, motif:string, invoices:object[]}[]}
  */
+/**
+ * Ces numéros se suivent-ils ?
+ *
+ * Deux factures du même jour numérotées à la file sont deux documents
+ * distincts, pas un doublon. On compare les noyaux chiffrés : « FT202601265 »
+ * et « FT202601266 » se suivent, « INV_5235 » et « 8841 » n'ont rien à voir.
+ *
+ * On exige que TOUS les numéros du groupe forment une suite : deux d'entre
+ * eux consécutifs et un troisième identique resterait suspect.
+ */
+export function numerosQuiSeSuivent(lignes) {
+  if (!lignes || lignes.length < 2) return false;
+  const noyaux = lignes.map((i) => numberCore(i.invoice_number));
+  if (noyaux.some((n) => !n)) return false;
+  // Même longueur : sinon on compare des numérotations différentes, et
+  // « 999 » suivi de « 1000 » n'est pas un cas qui se présente ici.
+  if (new Set(noyaux.map((n) => n.length)).size !== 1) return false;
+  const nombres = noyaux.map(Number).filter(Number.isSafeInteger).sort((x, y) => x - y);
+  if (nombres.length !== lignes.length) return false;
+  if (new Set(nombres).size !== nombres.length) return false;   // un doublon exact reste un doublon
+  return nombres.every((n, k) => k === 0 || n === nombres[k - 1] + 1);
+}
+
 export function findDuplicates(invoices) {
   const factures = (invoices || []).filter((i) => i.review_status !== 'document');
   const groupes = new Map();
@@ -96,9 +119,22 @@ export function findDuplicates(invoices) {
   }
 
   // 4. Même fournisseur, même date, même montant, numéros différents.
-  //    Souvent deux livraisons le même jour : à regarder, pas à croire.
+  //
+  //    Règle la plus fragile des cinq, et de loin. Un fournisseur qui
+  //    facture à la livraison émet couramment deux factures le même jour
+  //    pour le même montant — deux cuisines identiques, deux appareils du
+  //    même modèle. Jordan l'a signalé sur Electrolux et Emoliquids, et il
+  //    avait raison les deux fois.
+  //
+  //    On écarte donc le cas qui les distingue sans ambiguïté : des
+  //    NUMÉROS QUI SE SUIVENT. Deux factures numérotées 2173130500 et
+  //    2173130501 sont deux documents émis l'un après l'autre. Aucun
+  //    système de facturation ne produit deux fois la même pièce sous deux
+  //    numéros consécutifs ; c'est au contraire la signature de deux
+  //    factures distinctes.
   for (const [k, lignes] of parCle((i) =>
     montant(i) > 0 && i.invoice_date ? `${i.supplier_id}·${i.invoice_date}·${montant(i)}` : '')) {
+    if (numerosQuiSeSuivent(lignes)) continue;
     ajouter(k, 'verifier',
       'Même fournisseur, même date et même montant. Les numéros diffèrent : il peut s\'agir de deux factures distinctes.', lignes);
   }

@@ -1061,14 +1061,14 @@ function openRowMenu(anchor, id) {
       <button type="button" data-act="pas-facture">${ICONS.dash}<span>Ce n'est pas une facture…</span></button>
       ${!inv.smart_ref ? `
         <button type="button" data-act="ancien">${ICONS.dash}<span>${
-          inv.smart_ancien ? 'Retirer « ancien franchisé »' : 'Encodée par l\'ancien franchisé'}</span></button>` : ''}
+          inv.smart_ancien ? 'Retirer « encodée par l\'ancien franchisé »' : 'Encodée dans Smart par l\'ancien franchisé'}</span></button>` : ''}
       <hr>
       <button type="button" data-act="edit">${ICONS.pencil}<span>Modifier</span></button>
       <button type="button" data-act="duplicate">${ICONS.copy}<span>Dupliquer</span></button>
       ${manager ? `
         <hr>
         ${inv.payment_status === 'a_payer' || inv.payment_status === 'en_retard' ? `
-          <button type="button" data-act="avant_reprise">${ICONS.dash}<span>Réglée avant la reprise</span></button>` : ''}
+          <button type="button" data-act="avant_reprise">${ICONS.dash}<span>Payée par l'ancien franchisé</span></button>` : ''}
         ${inv.payment_status === 'avant_reprise' ? `
           <button type="button" data-act="retour_paiement">${ICONS.dash}<span>Remettre dans le circuit de paiement</span></button>` : ''}
         <button type="button" data-act="litige">${ICONS.dash}<span>Marquer en litige</span></button>
@@ -1331,11 +1331,11 @@ async function marquerAvantReprise(ids, annuler = false) {
     annuler
       ? `Remettre ${cibles.length} facture(s) dans le circuit de paiement ?\n`
         + `${fmtEUR(total)} repasseront en « à payer » et réapparaîtront dans les retards.`
-      : `Déclarer ${cibles.length} facture(s) réglée(s) avant la reprise du magasin ?\n`
+      : `Déclarer ${cibles.length} facture(s) payée(s) par l'ancien franchisé ?\n`
         + `${fmtEUR(total)} sortiront du reste à payer et des alertes de retard.\n\n`
         + 'SEUL LE PAIEMENT est concerné : elles restent à contrôler, à encoder dans Smart '
         + 'et à envoyer à WinAuditor comme les autres.',
-    annuler ? 'Remettre à payer' : 'Réglée avant reprise');
+    annuler ? 'Remettre à payer' : "Payée par l'ancien franchisé");
   if (!ok) return;
 
   try {
@@ -1348,7 +1348,7 @@ async function marquerAvantReprise(ids, annuler = false) {
     cibles.forEach((i) => { i.payment_status = annuler ? 'a_payer' : 'avant_reprise'; });
     toast(annuler
       ? `${n} facture(s) remises dans le circuit de paiement.`
-      : `${n} facture(s) déclarées réglées avant la reprise.`);
+      : `${n} facture(s) déclarées payées par l'ancien franchisé.`);
     clearSelection();
     renderInvoices();
     notifyDataChange();
@@ -1383,7 +1383,7 @@ async function bulkTakeover() {
         + 'SEUL LE PAIEMENT est concerné : elles restent à contrôler, à encoder dans Smart '
         + 'et à envoyer à WinAuditor comme les autres.\n'
         + 'Les factures payées et les litiges ne sont pas touchés.',
-    toutesMarquees ? 'Remettre à payer' : 'Réglées avant reprise');
+    toutesMarquees ? 'Remettre à payer' : "Payées par l'ancien franchisé");
   if (!ok) return;
 
   try {
