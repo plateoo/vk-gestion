@@ -77,6 +77,14 @@ export function findDuplicates(invoices) {
 
   const ajouter = (cle, niveau, motif, lignes) => {
     if (lignes.length < 2) return;
+    // Des numéros qui se suivent ne peuvent PAS désigner la même facture,
+    // quelle que soit la règle qui a rapproché ces lignes. Le garde-fou
+    // est donc ici, et pas dans une règle en particulier : Electrolux
+    // nomme toutes ses pièces jointes « Electrolux-facture.pdf », si bien
+    // que la règle du fichier tombait dans le même piège que celle du
+    // montant. Les règles fondées sur le numéro lui-même ne sont jamais
+    // concernées — deux numéros identiques ne se suivent pas.
+    if (numerosQuiSeSuivent(lignes)) return;
     const ids = lignes.map((i) => i.id).sort().join('|');
     const existant = groupes.get(ids);
     // Un même groupe peut être trouvé par plusieurs chemins : on garde le
@@ -119,22 +127,12 @@ export function findDuplicates(invoices) {
   }
 
   // 4. Même fournisseur, même date, même montant, numéros différents.
-  //
-  //    Règle la plus fragile des cinq, et de loin. Un fournisseur qui
-  //    facture à la livraison émet couramment deux factures le même jour
-  //    pour le même montant — deux cuisines identiques, deux appareils du
-  //    même modèle. Jordan l'a signalé sur Electrolux et Emoliquids, et il
-  //    avait raison les deux fois.
-  //
-  //    On écarte donc le cas qui les distingue sans ambiguïté : des
-  //    NUMÉROS QUI SE SUIVENT. Deux factures numérotées 2173130500 et
-  //    2173130501 sont deux documents émis l'un après l'autre. Aucun
-  //    système de facturation ne produit deux fois la même pièce sous deux
-  //    numéros consécutifs ; c'est au contraire la signature de deux
-  //    factures distinctes.
+  //    Règle la plus fragile des cinq : un fournisseur qui facture à la
+  //    livraison émet couramment deux factures le même jour pour le même
+  //    montant. Le garde-fou des numéros consécutifs, posé dans ajouter(),
+  //    écarte les cas que Jordan a signalés.
   for (const [k, lignes] of parCle((i) =>
     montant(i) > 0 && i.invoice_date ? `${i.supplier_id}·${i.invoice_date}·${montant(i)}` : '')) {
-    if (numerosQuiSeSuivent(lignes)) continue;
     ajouter(k, 'verifier',
       'Même fournisseur, même date et même montant. Les numéros diffèrent : il peut s\'agir de deux factures distinctes.', lignes);
   }
