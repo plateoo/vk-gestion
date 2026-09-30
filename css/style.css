@@ -2128,3 +2128,15 @@ kbd {
 
 /* La case « ne plus bloquer pour ce fournisseur », dans la zone de forçage */
 #rv-force-memo-wrap { display: flex; align-items: center; gap: 7px; margin-top: 10px; font-size: 13px; }
+
+/* Remarques et suivi, depuis l'écran de contrôle.
+   La remarque s'enregistrait uniquement en validant la facture — or on
+   écrit « voir avec Bob » précisément parce qu'on ne valide pas. */
+.rv-suivi-bloc { border-top: 1px solid var(--line-soft); padding-top: 12px; margin-top: 4px; }
+.rv-suivi-etats { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.rv-suivi-etats .badge { cursor: pointer; border: 1px solid transparent; }
+.rv-suivi-etats .badge.choisi { outline: 2px solid var(--vbk-red); outline-offset: 1px; }
+.rv-notes-bas {
+  display: flex; align-items: center; gap: 10px; margin-top: 7px; flex-wrap: wrap;
+}
+.rv-notes-bas .muted { flex: 1 1 auto; }

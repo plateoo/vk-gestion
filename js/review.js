@@ -9,7 +9,7 @@
 // =====================================================================
 import { supabase } from './supabase.js';
 import { getSuppliers, suppliersCache } from './suppliers.js';
-import { invalidateInvoices } from './invoices.js';
+import { invalidateInvoices, SUIVIS } from './invoices.js';
 import {
   $, $$, fmtEUR, fmtDate, escapeHtml, toast, errorMessage, confirmDialog,
   todayISO, notifyDataChange, ICONS, LEGAL_RATES, vatMismatch, longDate, ouvrirLien
@@ -594,9 +594,28 @@ async function renderDetail() {
           </div>
         </div>
 
-        <div class="field">
-          <label for="rv-notes">Remarques</label>
-          <textarea id="rv-notes" data-f="notes" rows="2">${escapeHtml(i.notes || '')}</textarea>
+        <!-- Signaler sans valider.
+             La remarque n'était enregistrée QU'EN validant la facture. Or
+             on écrit « voir avec Bob » précisément parce qu'on ne valide
+             PAS : le texte était donc perdu au moment même où il servait.
+             Les deux gestes se posent maintenant sur place, chacun de son
+             côté, sans toucher au reste du formulaire. -->
+        <div class="field rv-suivi-bloc">
+          <label for="rv-notes">Remarques et suivi</label>
+          <div class="rv-suivi-etats" role="group" aria-label="État de suivi">
+            ${Object.entries(SUIVIS).map(([cle, e]) => `
+              <button type="button" class="badge ${e.classe} ${i.suivi === cle ? 'choisi' : ''}"
+                      data-rv-etat="${cle}">${escapeHtml(e.label)}</button>`).join('')}
+          </div>
+          <textarea id="rv-notes" data-f="notes" rows="2"
+            placeholder="Par exemple : voir avec Bob pour le bon de livraison.">${escapeHtml(i.notes || '')}</textarea>
+          <div class="rv-notes-bas">
+            <span class="muted small" id="rv-notes-etat">${i.notes_name
+              ? `Dernière remarque de ${escapeHtml(i.notes_name)}${i.notes_at
+                  ? ' le ' + escapeHtml(fmtDate(String(i.notes_at).slice(0, 10))) : ''}`
+              : 'La remarque s\'enregistre seule : pas besoin de valider la facture.'}</span>
+            <button type="button" class="btn btn-sm" id="rv-notes-save" disabled>Enregistrer la remarque</button>
+          </div>
         </div>
 
         ${m.uncertain.length ? `
@@ -1029,6 +1048,23 @@ function wireDetail() {
 
   // Passe par l'aide d'ouverture : sur un téléphone où l'application est
   // installée, un nouvel onglet est purement ignoré par iOS.
+  // La remarque s'enregistre pour elle-même. Le bouton ne s'active que
+  // lorsque le texte a changé : un bouton toujours cliquable n'apprend
+  // rien sur ce qu'il reste à faire.
+  const champNotes = $('#rv-notes');
+  const boutonNotes = $('#rv-notes-save');
+  const noteInitiale = current?.notes || '';
+  champNotes.addEventListener('input', () => {
+    boutonNotes.disabled = champNotes.value.trim() === String(noteInitiale).trim();
+  });
+  boutonNotes.addEventListener('click', () => enregistrerRemarque(champNotes.value));
+
+  $$('#rv-form [data-rv-etat]').forEach((b2) => b2.addEventListener('click', () => {
+    // Recliquer l'état actif le retire, comme dans le tableau.
+    const actif = b2.classList.contains('choisi');
+    poserEtatSuivi(actif ? null : b2.dataset.rvEtat);
+  }));
+
   $('#rv-open').addEventListener('click', () => signedUrl && ouvrirLien(signedUrl));
   $('#rv-print').addEventListener('click', printCurrent);
   $('#rv-validate').addEventListener('click', validateCurrent);
@@ -1085,6 +1121,54 @@ function wireMemory() {
 function printCurrent() {
   if (!signedUrl) { toast('Aucun document à imprimer.', 'error'); return; }
   ouvrirLien(signedUrl);
+}
+
+/**
+ * Enregistre la seule remarque, sans rien valider.
+ *
+ * On ne touche qu'à ce champ : le reste du formulaire peut être en cours
+ * de correction, et l'écrire à moitié serait pire que de ne rien écrire.
+ */
+async function enregistrerRemarque(texte) {
+  if (!current) return;
+  const bouton = $('#rv-notes-save');
+  bouton.disabled = true;
+  try {
+    const { error } = await supabase.from('invoices')
+      .update({ notes: texte.trim() || null }).eq('id', current.id);
+    if (error) throw error;
+    current.notes = texte.trim() || null;
+    invalidateInvoices();
+    notifyDataChange();
+    $('#rv-notes-etat').textContent = texte.trim()
+      ? `Remarque enregistrée par ${displayName()} à l'instant`
+      : 'Remarque effacée.';
+    toast('Remarque enregistrée.');
+  } catch (err) {
+    console.error(err);
+    bouton.disabled = false;
+    toast(errorMessage(err, 'Enregistrement impossible.'), 'error');
+  }
+}
+
+/** Pose ou retire un état de suivi depuis l'écran de contrôle. */
+async function poserEtatSuivi(etat) {
+  if (!current) return;
+  try {
+    const { error } = await supabase.rpc('invoice_suivi', {
+      p_id: current.id, p_suivi: etat, p_note: $('#rv-notes').value.trim() || null
+    });
+    if (error) throw error;
+    current.suivi = etat;
+    $$('#rv-form [data-rv-etat]').forEach((b) =>
+      b.classList.toggle('choisi', b.dataset.rvEtat === etat));
+    invalidateInvoices();
+    notifyDataChange();
+    toast(etat ? `Signalé : ${SUIVIS[etat].label}.` : 'Signalement retiré.');
+  } catch (err) {
+    console.error(err);
+    toast(errorMessage(err, 'Enregistrement impossible.'), 'error');
+  }
 }
 
 async function validateCurrent({ force = false } = {}) {
