@@ -290,7 +290,14 @@ const MEMOIRE = [
     options: [['', '—'], ['0.21', '21 %'], ['0.12', '12 %'], ['0.06', '6 %'], ['0.00', '0 %']] },
   { champ: 'default_expense_type', label: 'Type de dépense habituel',  type: 'text' },
   { champ: 'discount_rate',        label: 'Escompte (%)',              type: 'number', step: '0.01' },
-  { champ: 'discount_days',        label: 'Délai d\'escompte (jours)', type: 'number' }
+  { champ: 'discount_days',        label: 'Délai d\'escompte (jours)', type: 'number' },
+  // Electrolux calcule sa TVA sur la base diminuée de l'escompte, alors
+  // que la somme réclamée reste le prix plein : HTVA + TVA n'égale pas le
+  // total, en toute légalité. D'autres fournisseurs ont leurs propres
+  // façons de présenter. Quand c'est connu et assumé, l'écart ne doit plus
+  // barrer la route à chaque facture.
+  { champ: 'encodage_particulier', label: 'Montants présentés autrement', type: 'select',
+    options: [['', 'Non'], ['true', 'Oui — ne pas bloquer sur les écarts']] }
 ];
 
 function renderMemoryPanel(s) {

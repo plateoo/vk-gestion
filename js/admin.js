@@ -60,6 +60,7 @@ function activiteHtml(lignes, depuis) {
     ['winauditor', 'WinAuditor'],
     ['paiements', 'Paiements'],
     ['signalements', 'Signalements'],
+    ['remarques', 'Remarques'],
     ['forcages', 'Forçages']
   ];
   const manquants = Number(depuis?.sans_date_smart || 0) + Number(depuis?.sans_date_controle || 0);

@@ -630,6 +630,13 @@ async function renderDetail() {
 Ou : document scanné de travers, chiffres relus un par un avec le fournisseur au téléphone."></textarea>
           <p class="force-avertissement">Ce motif restera visible sur la facture, avec ton nom et la date.
             Sans lui, personne ne saura dans six mois pourquoi ce montant a été accepté.</p>
+          <!-- Le cas d'Electrolux : l'écart revient sur chaque facture, et
+               écrire le même motif vingt fois ne renseigne personne. On
+               propose donc de le retenir sur la fiche. -->
+          <label class="check" id="rv-force-memo-wrap">
+            <input type="checkbox" id="rv-force-memo">
+            Ne plus bloquer sur les écarts de montant pour ce fournisseur
+          </label>
           <div class="force-actions">
             <button type="button" class="btn btn-sm" id="rv-force-annuler">Annuler</button>
             <button type="button" class="btn btn-sm btn-warn" id="rv-force-ok">Accepter en forçant</button>
@@ -885,6 +892,14 @@ function refreshVat() {
   }
 
   const mismatch = vatMismatch(htva, readTva, rate);
+  // Écart admis pour ce fournisseur : on le montre, on ne bloque plus.
+  if (mismatch === true && encodageParticulier()) {
+    block.classList.add('is-warn');
+    verdict.textContent = `Le taux choisi donne ${fmtEUR(calcTva)} de TVA, le document indique `
+      + `${fmtEUR(readTva)}. Cet écart est admis pour ce fournisseur — ses montants sont `
+      + 'présentés autrement. Vérifie quand même que le total correspond au papier.';
+    return refreshValidateState();
+  }
   if (!Number.isFinite(rate)) {
     block.classList.add('is-danger');
     verdict.textContent = 'Taux de TVA manquant.';
@@ -926,11 +941,25 @@ function structuralReason() {
  * qui écrit n'importe quoi, un champ qu'on ne recoupera jamais — il faut
  * pouvoir avancer. Ce qui doit rester, c'est la trace et le motif.
  */
+/**
+ * Ce fournisseur présente-t-il ses montants autrement ?
+ *
+ * Electrolux calcule sa TVA sur la base diminuée de l'escompte, alors que
+ * la somme réclamée reste le prix plein. C'est légal, et cela rend
+ * l'égalité HTVA + TVA = total fausse par construction. Quand c'est connu
+ * et coché sur la fiche, l'écart cesse de barrer la route : il reste
+ * affiché, mais il n'exige plus un forçage motivé à chaque facture.
+ */
+function encodageParticulier() {
+  const id = $('#rv-supplier')?.value;
+  return !!suppliersCache().find((s) => s.id === id)?.encodage_particulier;
+}
+
 function forcableReason() {
   const htva = Number($('#rv-htva').value);
   const rate = currentRate();
   if (!Number.isFinite(rate)) return 'Le taux de TVA doit être renseigné.';
-  if ($('#rv-rate').value !== 'manuel') {
+  if ($('#rv-rate').value !== 'manuel' && !encodageParticulier()) {
     const mismatch = vatMismatch(htva, Number(current?.meta?.brut?.montant_tva), rate);
     if (mismatch === true) return 'Le taux de TVA ne correspond pas au montant lu sur le document.';
   }
@@ -1065,6 +1094,23 @@ async function validateCurrent({ force = false } = {}) {
 
   let motif = null;
   if (force) {
+    // Retenir l'écart sur la fiche : le geste doit se faire AVANT la
+    // validation, pour que la facture suivante en profite déjà.
+    if ($('#rv-force-memo')?.checked && $('#rv-supplier').value) {
+      try {
+        const { error } = await supabase.rpc('remember_supplier_value', {
+          p_supplier: $('#rv-supplier').value, p_field: 'encodage_particulier',
+          p_value: 'true', p_source: 'écart de montant accepté sur une facture'
+        });
+        if (error) throw error;
+        const fiche = suppliersCache().find((x) => x.id === $('#rv-supplier').value);
+        if (fiche) fiche.encodage_particulier = true;
+        toast('Retenu : les écarts de montant ne bloqueront plus pour ce fournisseur.');
+      } catch (e) {
+        console.error(e);
+        toast(errorMessage(e, 'Le réglage n\'a pas pu être retenu, la facture passe quand même.'), 'error');
+      }
+    }
     motif = $('#rv-force-motif').value.trim();
     if (motif.length < 10) {
       toast('Explique en une phrase pourquoi tu acceptes malgré le contrôle.', 'error');

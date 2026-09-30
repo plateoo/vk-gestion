@@ -2114,3 +2114,17 @@ kbd {
   margin: 0 14px 12px; padding: 10px 12px; border-radius: 8px; font-size: 12.5px;
   background: var(--warn-soft); border: 1px solid var(--border-warn); color: var(--warn);
 }
+
+/* Une remarque écrite sur une facture, visible dans la liste.
+   Discrète mais présente : elle dit « quelqu'un s'est occupé de ça »,
+   ce qu'un champ caché au fond du formulaire ne disait pas. */
+.suivi-note {
+  display: inline-grid; place-items: center; cursor: help;
+  width: 26px; height: 26px; border-radius: 7px; font-size: 13px;
+  background: var(--surface-sunken); border: 1px solid var(--border-strong);
+  color: var(--text); font: inherit; line-height: 1;
+}
+.suivi-note:hover { border-color: var(--vbk-red); color: var(--vbk-red); }
+
+/* La case « ne plus bloquer pour ce fournisseur », dans la zone de forçage */
+#rv-force-memo-wrap { display: flex; align-items: center; gap: 7px; margin-top: 10px; font-size: 13px; }

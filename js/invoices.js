@@ -83,6 +83,7 @@ export async function getInvoices(force = false) {
                expense_type, notes, review_status, doc_type, doc_summary,
                vat_amount, forced_at, forced_name, forced_reason, validated_name,
                suivi, suivi_note, suivi_name, suivi_at, smart_ancien,
+               notes_at, notes_name,
                source, file_path, sender_email, message_id, created_at,
                supplier:suppliers(id, name, payment_terms)`)
       .order('invoice_date', { ascending: false });
@@ -703,6 +704,22 @@ function stockHtml(i) {
 function suiviHtml(i) {
   const e = SUIVIS[i.suivi];
   if (!e) {
+    // Une remarque écrite sur la facture, sans état posé.
+    //
+    // Jordan : « quand Marie met une note sur le dossier car elle l'a
+    // traité, on doit avoir une petite attention comme quoi elle a bien
+    // traité le dossier ; actuellement on ne sait pas sur lequel elle a
+    // travaillé. » Le champ « remarques » ne se voyait qu'en ouvrant la
+    // facture : écrire là où personne ne regarde revient à ne rien écrire.
+    if (String(i.notes || '').trim()) {
+      const quand = i.notes_at ? fmtDate(String(i.notes_at).slice(0, 10)) : '';
+      const infobulle = [
+        String(i.notes).trim(),
+        i.notes_name ? `— ${i.notes_name}${quand ? ' le ' + quand : ''}` : ''
+      ].filter(Boolean).join('\n');
+      return `<button type="button" class="suivi-note" data-suivi="${i.id}"
+        title="${escapeHtml(infobulle)}" aria-label="Remarque de ${escapeHtml(i.notes_name || 'quelqu\'un')}">✎</button>`;
+    }
     return `<button type="button" class="suivi-vide" data-suivi="${i.id}"
       title="Signaler quelque chose sur cette facture">+</button>`;
   }

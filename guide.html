@@ -237,6 +237,22 @@
          foi : le total TVAC en découle, et la facture est signalée à part pour le comptable,
          plutôt que rangée sous un taux moyen qui n'existe nulle part.</p>
 
+      <h3>Un fournisseur qui présente ses montants autrement</h3>
+      <p>Certains fournisseurs calculent leur TVA sur la <strong>base diminuée de
+         l'escompte</strong>, alors que la somme réclamée reste le prix plein. C'est parfaitement
+         légal en Belgique — Electrolux facture ainsi — mais l'égalité « HTVA + TVA = total »
+         devient fausse par construction, et le contrôle s'en alarmait à chaque facture.</p>
+      <p>Une alerte qui se déclenche sur du normal est pire qu'une absence d'alerte : elle
+         apprend à ne plus les lire. Ce cas est donc <strong>reconnu automatiquement</strong> et
+         ne déclenche plus rien.</p>
+      <p>Pour les autres façons de présenter, la fiche fournisseur porte un réglage :
+         <strong>« Montants présentés autrement »</strong>. Quand il est sur <em>oui</em>,
+         l'écart entre la TVA calculée et celle lue sur le document <strong>cesse de bloquer</strong> :
+         il reste affiché en orange, mais on valide normalement. Le réglage se coche depuis la
+         fiche, ou directement au moment où l'écart se présente — la case
+         <em>« Ne plus bloquer sur les écarts de montant pour ce fournisseur »</em> apparaît
+         alors sous le motif de forçage.</p>
+
       <h3>Forcer l'acceptation</h3>
       <p>Il arrive qu'un contrôle bloque sans qu'on puisse rien y faire : un document illisible,
          un fournisseur qui a imprimé n'importe quoi, un montant qu'on ne recoupera jamais.
@@ -300,6 +316,14 @@
         <li><strong>À voir avec Jordan</strong> — la décision n'appartient pas à la secrétaire.</li>
         <li><strong>Encodée</strong> — le travail est fait, on le note.</li>
       </ul>
+      <h3>Une remarque se voit dans la liste</h3>
+      <p>Le champ <strong>Remarques</strong> d'une facture ne se lisait qu'en l'ouvrant. Désormais,
+         une facture qui porte une remarque affiche un <strong>✎</strong> dans la colonne Suivi,
+         avec le texte, <strong>le nom de qui l'a écrite et la date</strong> au survol.</p>
+      <p>C'est ce qui permet de voir d'un coup d'œil sur quels dossiers quelqu'un a travaillé —
+         « voir avec Bob », « rappelé le fournisseur » — sans avoir à ouvrir chaque ligne. Ces
+         remarques comptent aussi dans le relevé d'activité du jour.</p>
+
       <p>La <strong>remarque est facultative</strong> : un état seul suffit. Exiger les deux
          reviendrait à n'en obtenir aucun. Ce qui est écrit reste <strong>signé et daté</strong>,
          visible au survol de la pastille, et part dans l'export au comptable.</p>

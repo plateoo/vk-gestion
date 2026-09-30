@@ -352,6 +352,39 @@ export function normalizedRate(d: Record<string, unknown>): number | null {
 // ---------------------------------------------------------------------
 // Contrôles automatiques : ils rattrapent les erreurs de lecture
 // ---------------------------------------------------------------------
+/**
+ * Le total se déduit-il des deux autres montants ?
+ *
+ * Normalement oui : HTVA + TVA = TVAC. Mais l'escompte pour paiement
+ * comptant casse cette égalité, en toute légalité belge : la TVA se
+ * calcule sur la base DIMINUÉE de l'escompte, alors que la somme réclamée
+ * reste le prix plein. Electrolux facture ainsi, et cinq de leurs
+ * factures portaient l'alerte « montants incohérents » alors qu'elles
+ * sont irréprochables. Jordan l'a signalé, et il avait raison.
+ *
+ * Une alerte qui se déclenche sur du normal est pire qu'une absence
+ * d'alerte : elle apprend à ne plus les lire. On reconnaît donc la
+ * signature de l'escompte, et elle est étroite :
+ *
+ *   • la TVA est cohérente avec le taux appliqué à la base — sans quoi
+ *     l'écart vient d'ailleurs et reste suspect ;
+ *   • le total DÉPASSE base + TVA, jamais l'inverse : un escompte
+ *     augmente l'écart au profit du vendeur, il ne le réduit pas ;
+ *   • l'écart reste sous 5 % de la base. Les escomptes pratiqués vont de
+ *     1 à 3 % ; au-delà, ce n'est plus un escompte, c'est une erreur.
+ *
+ * Hors de cette fenêtre, l'alerte se déclenche comme avant.
+ */
+export function totalExplique(htva: number, tva: number, tvac: number, rate: number): boolean {
+  const ecart = tvac - (htva + tva);
+  if (Math.abs(ecart) <= 0.02) return true;
+  if (ecart <= 0) return false;
+  if (!Number.isFinite(rate) || Math.abs(htva) < 0.01) return false;
+  // La TVA doit correspondre au taux appliqué à la base annoncée.
+  if (Math.abs(tva - htva * rate) > 0.02 + Math.abs(htva) * 0.001) return false;
+  return ecart <= Math.abs(htva) * 0.05;
+}
+
 export function runChecks(d: Record<string, unknown>): string[] {
   const alerts: string[] = [];
   const htva = Number(d.montant_htva);
@@ -360,7 +393,7 @@ export function runChecks(d: Record<string, unknown>): string[] {
   const rate = normalizedRate(d) ?? NaN;
 
   if ([htva, tva, tvac].every(Number.isFinite)) {
-    if (Math.abs(htva + tva - tvac) > 0.02) alerts.push('montants incohérents');
+    if (!totalExplique(htva, tva, tvac, rate)) alerts.push('montants incohérents');
     if (Number.isFinite(rate) && Math.abs(htva) > 0.01 && Math.abs(tva / htva - rate) > 0.02) {
       alerts.push('taux de TVA incohérent avec les montants');
     }
