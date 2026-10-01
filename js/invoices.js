@@ -29,6 +29,13 @@ const filters = {
   q: '',
   period: 'month',     // 'month' | 'all'
   supplier: '',
+  // Plusieurs fournisseurs cochés à la main. Jordan, après son premier
+  // export trimestriel : « j'ai pu sélectionner les fournisseurs hors
+  // Belgique, mais je n'ai pas pu cocher moi-même ceux que je voulais. »
+  // Les raccourcis d'ensemble couvrent les cas fréquents, pas le cas
+  // particulier — et c'est toujours le cas particulier qui fait perdre du
+  // temps un soir de clôture.
+  suppliers: [],       // vide = le réglage ci-dessus s'applique
   status: '',
   smart: '',           // '' | 'oui' | 'non'
   winauditor: '',
@@ -53,6 +60,10 @@ export const SUIVIS = {
   a_voir:              { label: 'À voir avec Jordan',  court: 'À voir',     classe: 'suivi-bleu' },
   encode:              { label: 'Encodée',             court: 'Encodée',    classe: 'suivi-vert' }
 };
+
+// Valeur du menu déroulant qui ouvre la liste à cocher. Préfixée comme
+// les autres pour ne jamais heurter un identifiant de fiche.
+const CHOISIR = '__choisir';
 
 const PAYS_BE = '__pays_be';
 const PAYS_ETRANGER = '__pays_etranger';
@@ -105,6 +116,9 @@ export function getFilters() { return { ...filters }; }
 
 /** Applique des filtres depuis l'extérieur (blocs d'alerte du tableau de bord) */
 export function setInvoiceFilters(patch) {
+  // Un bloc du tableau de bord parle d'un critère, pas d'une liste de
+  // fournisseurs : on l'efface, sinon le filtre s'empilerait en silence.
+  if (!('suppliers' in patch)) filters.suppliers = [];
   Object.assign(filters, patch);
   // Même règle que par la pastille : ces deux vues ne se bornent pas à une
   // période, et la période réelle doit le refléter à l'écran.
@@ -190,7 +204,11 @@ function applyFilters(rows) {
     // d'arriéré doit les voir apparaître, et aucun d'eux n'est du mois
     // affiché. C'est précisément le cas que Jordan décrit.
     if (filters.view !== 'arrivees' && filters.period !== 'all' && !inPeriod(i.invoice_date)) return false;
-    if (filters.supplier) {
+    // Une liste cochée prime sur tout raccourci : elle est plus précise,
+    // et c'est l'utilisateur qui l'a composée.
+    if (filters.suppliers.length) {
+      if (!filters.suppliers.includes(i.supplier_id)) return false;
+    } else if (filters.supplier) {
       const pays = supplierById(i.supplier_id)?.country || null;
       if (filters.supplier === PAYS_BE) { if (pays !== 'BE') return false; }
       else if (filters.supplier === PAYS_ETRANGER) { if (!pays || pays === 'BE') return false; }
@@ -801,6 +819,8 @@ function fillSupplierFilter() {
 
   sel.innerHTML =
     '<option value="">Tous les fournisseurs</option>' +
+    `<option value="${CHOISIR}">☰ Choisir moi-même…${
+      filters.suppliers.length ? ` (${filters.suppliers.length} coché${filters.suppliers.length > 1 ? 's' : ''})` : ''}</option>` +
     (belges.length ? `<option value="${PAYS_BE}">— Tous les fournisseurs belges (${belges.length})</option>` : '') +
     (etrangers.length ? `<option value="${PAYS_ETRANGER}">— Tous les fournisseurs hors Belgique (${etrangers.length})</option>` : '') +
     (inconnus.length ? `<option value="${PAYS_INCONNU}">— Pays à préciser (${inconnus.length})</option>` : '') +
@@ -808,7 +828,109 @@ function fillSupplierFilter() {
     groupe('Hors Belgique', etrangers) +
     groupe('Pays à préciser', inconnus);
 
-  sel.value = filters.supplier || '';
+  // Une liste cochée s'affiche à la place du réglage : c'est elle qui
+  // commande, et le menu doit dire ce qui s'applique.
+  sel.value = filters.suppliers.length ? CHOISIR : (filters.supplier || '');
+}
+
+/**
+ * Cocher soi-même les fournisseurs à sortir.
+ *
+ * Les raccourcis d'ensemble — tous, belges, hors Belgique — couvrent les
+ * cas fréquents. Mais un export se fait aussi pour trois fournisseurs
+ * précis, et jusqu'ici il fallait les sortir un par un.
+ *
+ * Le nombre de factures de la PÉRIODE AFFICHÉE accompagne chaque nom :
+ * cocher une fiche qui n'a rien sur le trimestre ne produit rien, et
+ * s'en apercevoir après le téléchargement fait perdre le double du temps.
+ */
+function ouvrirChoixFournisseurs() {
+  let coches = new Set(filters.suppliers);
+  let recherche = '';
+
+  const compte = (id) => invoicesCache()
+    .filter((i) => i.supplier_id === id && i.review_status !== 'document'
+      && (filters.period === 'all' || inPeriod(i.invoice_date))).length;
+
+  const peindre = () => {
+    const q = recherche.trim().toLowerCase();
+    const sups = suppliersCache()
+      .filter((s) => !s.archived && !s.merged_into)
+      .filter((s) => !q || s.name.toLowerCase().includes(q))
+      .sort((a, b) => a.name.localeCompare(b.name, 'fr'));
+
+    const groupes = [
+      ['Hors Belgique', sups.filter((s) => s.country && s.country !== 'BE')],
+      ['Belgique', sups.filter((s) => s.country === 'BE')],
+      ['Pays à préciser', sups.filter((s) => !s.country)]
+    ];
+
+    $('#fo-liste').innerHTML = groupes.filter(([, l]) => l.length).map(([titre, liste]) => `
+      <div class="fo-groupe">
+        <div class="fo-groupe-tete">
+          <strong>${escapeHtml(titre)}</strong>
+          <button type="button" class="link-btn" data-fo-groupe="${escapeHtml(titre)}">tout cocher</button>
+        </div>
+        ${liste.map((s) => {
+          const n = compte(s.id);
+          return `<label class="fo-ligne ${n ? '' : 'vide'}">
+            <input type="checkbox" data-fo="${s.id}" ${coches.has(s.id) ? 'checked' : ''}>
+            <span class="fo-nom">${escapeHtml(s.name)}${
+              s.country && s.country !== 'BE' ? ` <span class="muted">(${s.country})</span>` : ''}</span>
+            <span class="fo-compte ${n ? '' : 'muted'}">${n || 'aucune'}</span>
+          </label>`;
+        }).join('')}
+      </div>`).join('') || '<p class="muted small">Aucun fournisseur ne correspond.</p>';
+
+    const total = [...coches].reduce((a, id) => a + compte(id), 0);
+    $('#fo-resume').textContent = coches.size
+      ? `${coches.size} fournisseur${coches.size > 1 ? 's' : ''} coché${coches.size > 1 ? 's' : ''} — `
+        + `${total} facture${total > 1 ? 's' : ''} sur ${periodLabel().toLowerCase()}.`
+      : 'Aucun fournisseur coché : le réglage d\'ensemble s\'appliquera.';
+  };
+
+  const boite = $('#modal-fournisseurs');
+  boite.onclick = (e) => {
+    const c = e.target.closest('[data-fo]');
+    if (c) {
+      if (c.checked) coches.add(c.dataset.fo); else coches.delete(c.dataset.fo);
+      // On ne repeint pas : cela remettrait la liste en haut et perdrait
+      // la place de l'utilisateur. Seul le résumé bouge.
+      const total = [...coches].reduce((a, id) => a + compte(id), 0);
+      $('#fo-resume').textContent = coches.size
+        ? `${coches.size} fournisseur(s) coché(s) — ${total} facture(s) sur ${periodLabel().toLowerCase()}.`
+        : 'Aucun fournisseur coché : le réglage d\'ensemble s\'appliquera.';
+      return;
+    }
+    const g = e.target.closest('[data-fo-groupe]');
+    if (g) {
+      const bloc = g.closest('.fo-groupe');
+      const cases = [...bloc.querySelectorAll('[data-fo]')];
+      const tout = cases.every((x) => coches.has(x.dataset.fo));
+      cases.forEach((x) => { if (tout) coches.delete(x.dataset.fo); else coches.add(x.dataset.fo); });
+      peindre();
+    }
+  };
+
+  $('#fo-recherche').value = '';
+  $('#fo-recherche').oninput = (e) => { recherche = e.target.value; peindre(); };
+  $('#fo-tout').onclick = () => {
+    suppliersCache().filter((s) => !s.archived && !s.merged_into).forEach((s) => coches.add(s.id));
+    peindre();
+  };
+  $('#fo-rien').onclick = () => { coches = new Set(); peindre(); };
+  $('#fo-ok').onclick = () => {
+    filters.suppliers = [...coches];
+    // Cocher à la main remplace le raccourci : garder les deux laisserait
+    // croire que l'un restreint l'autre.
+    if (filters.suppliers.length) filters.supplier = '';
+    closeModal('modal-fournisseurs');
+    syncFilterInputs();
+    renderInvoices();
+  };
+
+  peindre();
+  openModal('modal-fournisseurs');
 }
 
 // ---------------------------------------------------------------------
@@ -1692,6 +1814,9 @@ function syncPeriodInputs() {
 
 function syncFilterInputs() {
   $('#f-search').value = filters.q;
+  // Le menu fournisseur se reconstruit : son libellé porte le nombre de
+  // fiches cochées, qui vient de changer.
+  fillSupplierFilter();
   syncPeriodInputs();
   // La vue peut être imposée de l'extérieur — un bloc du tableau de bord.
   // Sans cela, la pastille active resterait sur « Factures » alors que le
@@ -1701,7 +1826,7 @@ function syncFilterInputs() {
     c.classList.toggle('active', actif);
     c.setAttribute('aria-selected', actif ? 'true' : 'false');
   });
-  $('#f-supplier').value = filters.supplier;
+  $('#f-supplier').value = filters.suppliers.length ? CHOISIR : filters.supplier;
   $('#f-status').value = filters.status;
   $('#f-smart').value = filters.smart;
   $('#f-winauditor').value = filters.winauditor;
@@ -1746,7 +1871,15 @@ export function initInvoices(onOpenDocument = null) {
   $('#f-year').addEventListener('change', (e) => { setPeriod({ kind: 'year', year: e.target.value }); renderInvoices(); });
   $('#f-from').addEventListener('change', (e) => { setPeriod({ kind: 'range', from: e.target.value }); renderInvoices(); });
   $('#f-to').addEventListener('change', (e) => { setPeriod({ kind: 'range', to: e.target.value }); renderInvoices(); });
-  $('#f-supplier').addEventListener('change', (e) => { filters.supplier = e.target.value; renderInvoices(); });
+  $('#f-supplier').addEventListener('change', (e) => {
+    if (e.target.value === CHOISIR) return ouvrirChoixFournisseurs();
+    // Repasser par le menu abandonne la liste cochée : deux filtres
+    // fournisseur à la fois seraient impossibles à relire.
+    filters.suppliers = [];
+    filters.supplier = e.target.value;
+    syncFilterInputs();
+    renderInvoices();
+  });
   $('#f-status').addEventListener('change', (e) => { filters.status = e.target.value; renderInvoices(); });
   $('#f-smart').addEventListener('change', (e) => { filters.smart = e.target.value; renderInvoices(); });
   $('#f-winauditor').addEventListener('change', (e) => { filters.winauditor = e.target.value; renderInvoices(); });

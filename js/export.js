@@ -237,6 +237,19 @@ async function facturesAffichees() {
  */
 function suffixeFiltre() {
   const f = getFilters();
+  // Des fournisseurs cochés à la main : on nomme le fichier d'après eux
+  // tant qu'ils sont peu nombreux, et par leur nombre au-delà. Un nom de
+  // fichier doit tenir sur une ligne et rester reconnaissable des mois
+  // plus tard.
+  if (f.suppliers?.length) {
+    const noms = f.suppliers
+      .map((id) => suppliersCache().find((s) => s.id === id)?.name)
+      .filter(Boolean);
+    if (noms.length && noms.length <= 3) {
+      return '_' + noms.map((n) => nomSur(n).replace(/\s+/g, '-').slice(0, 18)).join('+');
+    }
+    return `_${f.suppliers.length}-fournisseurs`;
+  }
   if (f.supplier === '__pays_etranger') return '_hors-Belgique';
   if (f.supplier === '__pays_be') return '_Belgique';
   if (f.supplier === '__pays_inconnu') return '_pays-a-preciser';

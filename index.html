@@ -799,6 +799,33 @@
 <!-- ============================================================
      MODALE FOURNISSEUR
      ============================================================ -->
+<!-- Cocher soi-même les fournisseurs à sortir -->
+<div id="modal-fournisseurs" class="modal modal-top" hidden>
+  <div class="modal-backdrop" data-close="modal-fournisseurs"></div>
+  <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="modal-fournisseurs-title">
+    <div class="modal-head">
+      <h2 id="modal-fournisseurs-title">Choisir les fournisseurs</h2>
+      <button type="button" class="icon-btn" data-close="modal-fournisseurs" aria-label="Fermer">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="toolbar" style="padding:0 0 10px">
+        <input id="fo-recherche" type="search" class="search"
+               placeholder="Chercher un fournisseur…" aria-label="Chercher un fournisseur">
+        <button type="button" class="btn btn-sm" id="fo-tout">Tout cocher</button>
+        <button type="button" class="btn btn-sm" id="fo-rien">Tout décocher</button>
+      </div>
+      <!-- Le nombre de factures de la période affichée, par fournisseur :
+           cocher une fiche vide n'apporte rien et on doit le voir avant. -->
+      <div id="fo-liste" class="fo-liste"></div>
+      <p id="fo-resume" class="periode-apercu">—</p>
+      <div class="modal-actions">
+        <button type="button" class="btn" data-close="modal-fournisseurs">Annuler</button>
+        <button type="button" class="btn btn-primary" id="fo-ok">Appliquer</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Choix de la période, depuis le bandeau : elle vaut pour toute l'app -->
 <div id="modal-periode" class="modal modal-top" hidden>
   <div class="modal-backdrop" data-close="modal-periode"></div>

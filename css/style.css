@@ -2140,3 +2140,32 @@ kbd {
   display: flex; align-items: center; gap: 10px; margin-top: 7px; flex-wrap: wrap;
 }
 .rv-notes-bas .muted { flex: 1 1 auto; }
+
+/* =====================================================================
+   Cocher soi-même les fournisseurs
+   Le nombre de factures de la période accompagne chaque nom : cocher une
+   fiche qui n'a rien sur le trimestre ne produit rien, et s'en apercevoir
+   après le téléchargement fait perdre le double du temps.
+   ===================================================================== */
+.fo-liste { max-height: 52vh; overflow-y: auto; margin-bottom: 12px; }
+.fo-groupe { margin-bottom: 14px; }
+.fo-groupe-tete {
+  display: flex; align-items: baseline; gap: 10px; padding: 4px 2px 6px;
+  border-bottom: 1px solid var(--border); margin-bottom: 4px;
+  position: sticky; top: 0; background: var(--surface);
+}
+.fo-groupe-tete strong {
+  font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted);
+}
+.fo-ligne {
+  display: flex; align-items: center; gap: 10px; padding: 7px 4px;
+  border-radius: 7px; cursor: pointer; min-height: 38px;
+}
+.fo-ligne:hover { background: var(--surface-hover); }
+.fo-nom { flex: 1 1 auto; font-size: 13.5px; }
+.fo-compte {
+  flex: 0 0 auto; font-size: 12px; font-weight: 600;
+  padding: 2px 8px; border-radius: 999px; background: var(--surface-sunken);
+}
+/* Une fiche sans facture sur la période : visible, mais en retrait. */
+.fo-ligne.vide .fo-nom { color: var(--text-muted); }
