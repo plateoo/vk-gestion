@@ -1,14 +1,15 @@
 // =====================================================================
 // export.js — export CSV (Excel FR) et impression / PDF
 // =====================================================================
-import { getInvoices, currentSelection, getFilters } from './invoices.js';
+import { getInvoices, currentSelection, getFilters, invalidateInvoices } from './invoices.js';
 import { suppliersCache } from './suppliers.js';
 import { supabase } from './supabase.js';
 import { buildXlsx } from './xlsx.js';
 import { buildZip, nomSur } from './zip.js';
 import {
   $, $$, csvNum, fmtDate, statusLabel, getMonth, monthLabel, inMonth, imprimerEcran,
-  toast, errorMessage, confirmDialog, inPeriod, periodLabel, periodSlug, getPeriod
+  toast, errorMessage, confirmDialog, inPeriod, periodLabel, periodSlug, getPeriod,
+  notifyDataChange
 } from './ui.js';
 
 // En-têtes identiques au fichier Excel du magasin
@@ -315,7 +316,11 @@ async function exportAccountant() {
       }
       utilises.add(nom.toLowerCase());
 
-      fichiers.push({ name: `Factures/${nom}`, data: new Uint8Array(await data.arrayBuffer()) });
+      // Un sous-dossier par fournisseur. Jordan encode fournisseur par
+      // fournisseur dans WinAuditor : soixante-huit PDF à plat dans un
+      // seul dossier l'obligeraient à les trier lui-même.
+      const dossier = nomSur(i.supplier_name || 'Fournisseur');
+      fichiers.push({ name: `Factures/${dossier}/${nom}`, data: new Uint8Array(await data.arrayBuffer()) });
       faits++;
       if (faits % 10 === 0) toast(`Dossier comptable : ${faits}/${avecPdf.length} documents…`);
     } catch (err) {
@@ -345,6 +350,51 @@ async function exportAccountant() {
   toast(manquants.length
     ? `Dossier prêt : ${faits} document(s), ${manquants.length} illisible(s) — voir DOCUMENTS_MANQUANTS.txt`
     : `Dossier prêt : ${rows.length} facture(s), ${faits} document(s).`);
+
+  // Le dossier est parti : proposer de marquer ces factures dans le même
+  // geste.
+  //
+  // Jordan : « dès que je fais cela, je dois pouvoir également valider le
+  // WinAuditor de toutes les factures qui auront été extraites. » Le
+  // bouton existait, mais ailleurs, et il fallait resélectionner les mêmes
+  // lignes à la main — soixante-huit cases à cocher pour un trimestre.
+  // La question se pose donc ici, avec exactement les factures du dossier.
+  await proposerWinauditor(rows);
+}
+
+/**
+ * Marquer « envoyées à WinAuditor » les factures qui viennent de partir.
+ *
+ * On ne touche qu'à celles qui ne le sont pas déjà, et seulement après
+ * confirmation : le téléchargement d'un fichier n'est pas la preuve qu'il
+ * a été déposé quelque part. C'est à l'utilisateur de le dire.
+ */
+async function proposerWinauditor(rows) {
+  const aMarquer = rows.filter((i) => !i.in_winauditor);
+  if (!aMarquer.length) return;
+
+  const ok = await confirmDialog(
+    `Marquer ${aMarquer.length} facture${aMarquer.length > 1 ? 's' : ''} comme envoyée${aMarquer.length > 1 ? 's' : ''} à WinAuditor ?\n\n`
+    + 'Ce sont exactement celles du dossier que tu viens de télécharger.\n\n'
+    + 'À ne faire qu\'une fois le dossier RÉELLEMENT déposé dans WinAuditor : '
+    + 'télécharger un fichier ne prouve pas qu\'il est arrivé. Tu peux répondre '
+    + 'non maintenant et le faire plus tard depuis le tableau.',
+    `Marquer les ${aMarquer.length}`);
+  if (!ok) return;
+
+  try {
+    const ids = aMarquer.map((i) => i.id);
+    const { error } = await supabase.from('invoices')
+      .update({ in_winauditor: true }).in('id', ids);
+    if (error) throw error;
+    aMarquer.forEach((i) => { i.in_winauditor = true; });
+    toast(`${ids.length} facture(s) marquées envoyées à WinAuditor.`);
+    invalidateInvoices();
+    notifyDataChange();
+  } catch (err) {
+    console.error(err);
+    toast(errorMessage(err, 'Marquage impossible — le dossier est téléchargé, réessaie depuis le tableau.'), 'error');
+  }
 }
 
 function exportSelection() {

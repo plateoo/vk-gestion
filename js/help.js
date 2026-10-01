@@ -25,6 +25,8 @@ const PAR_ECRAN = {
   invoices: 'arrivees',
   suppliers: 'fournisseurs',
   payments: 'paiement',
+  // L'export trimestriel est le geste du gérant sur cet écran.
+
   settings: 'email',
   admin: 'sauvegardes'
 };

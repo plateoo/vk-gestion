@@ -595,6 +595,43 @@
          menus ni les boutons.</p>
     </section>
 
+    <!-- 11bis -->
+    <section id="trimestre">
+      <h2>Le dossier du trimestre pour WinAuditor</h2>
+      <p>C'est le geste de fin de trimestre : sortir tous les PDF d'une période pour les déposer
+         dans WinAuditor. Trois étapes, dans cet ordre.</p>
+      <ol class="guide-steps">
+        <li><strong>Choisis la période</strong> en haut de l'écran : clique sur le libellé,
+            puis <em>Trimestre</em> et lequel. Ou <em>Dates au choix</em> pour une tranche
+            particulière.</li>
+        <li><strong>Choisis les fournisseurs</strong> dans la barre du tableau. Trois raccourcis
+            sont en tête de liste : <em>Tous les fournisseurs</em>,
+            <strong><em>Tous les fournisseurs hors Belgique</em></strong> — ceux qui n'envoient
+            pas par Peppol, et donc les seuls à ressaisir — et <em>Tous les fournisseurs
+            belges</em>. Le chiffre entre parenthèses dit combien de fiches sont concernées.</li>
+        <li><strong>Exporter ▾ → « Dossier pour le comptable (ZIP) »</strong>. L'archive contient
+            le récapitulatif Excel et <strong>un sous-dossier par fournisseur</strong> avec ses
+            PDF, nommés « Fournisseur - numéro ». Le nom du fichier porte la période et le
+            filtre : <code>VK_comptable_2026-Q3_hors-Belgique.zip</code>.</li>
+      </ol>
+      <p>Une facture sans document joint figure au récapitulatif mais pas dans les dossiers :
+         elle est listée dans <code>DOCUMENTS_MANQUANTS.txt</code>, pour qu'elle ne disparaisse
+         pas en silence.</p>
+      <div class="guide-note">
+        <p><strong>Juste après le téléchargement</strong>, l'application propose de marquer ces
+           factures — exactement celles du dossier — comme <strong>envoyées à WinAuditor</strong>.
+           Plus besoin de les resélectionner une par une.</p>
+        <p>Réponds <strong>non</strong> si le dossier n'est pas encore déposé : télécharger un
+           fichier ne prouve pas qu'il est arrivé. Le bouton
+           <em>« Marquer envoyées WinAuditor »</em> reste disponible dans la barre de sélection
+           du tableau.</p>
+      </div>
+      <p>Les fournisseurs <strong>sans pays renseigné</strong> ne figurent ni dans « hors
+         Belgique » ni dans « belges ». Le raccourci <em>Pays à préciser</em> les montre :
+         jette-lui un œil avant un export trimestriel, pour qu'aucune facture ne reste en
+         dehors des deux listes.</p>
+    </section>
+
     <!-- 12 -->
     <section id="fournisseurs">
       <h2>12. Les fournisseurs</h2>
