@@ -14,9 +14,13 @@
 //
 // Le fil du dossier s'écrit tout seul pour les changements d'état et de
 // date (déclencheur en base). On n'y tape que ce qui ne se déduit pas.
+//
+// Le RELAIS : Jordan confie un dossier à Marie avec une consigne, elle
+// répond « traité » ou « pas traité » d'un geste, avec un mot. Jordan lit
+// la réponse et classe. Un relais à la fois par dossier (client_relais).
 // =====================================================================
 import { supabase } from './supabase.js';
-import { isManager } from './auth.js';
+import { isManager, currentUser } from './auth.js';
 import {
   $, $$, escapeHtml, toast, errorMessage, confirmDialog, fmtDate, todayISO
 } from './ui.js';
@@ -29,6 +33,8 @@ let notes = [];
 let suite = null;           // id de la fiche dont le formulaire « suite » est déplié
 let montrerFinies = false;
 let creation = { source: 'telephone', kind: 'pose' };
+let autres = null;          // le prénom de l'autre (Marie pour Jordan, Jordan pour Marie)
+let filtreChoisi = false;   // tant que personne n'a choisi, le filtre suit le relais
 
 export const ETATS = {
   pose: {
@@ -61,6 +67,38 @@ async function chargerDossiers() {
   const { data, error } = await supabase.rpc('client_file_list');
   if (error) throw error;
   dossiers = (typeof data === 'string' ? JSON.parse(data) : data) || [];
+  if (autres === null) await chargerAutres();
+}
+
+/** Le prénom à afficher sur les boutons du relais : « Confier à Marie ». */
+async function chargerAutres() {
+  autres = isManager() ? 'Marie' : 'Jordan';
+  try {
+    const { data } = await supabase.rpc('equipe');
+    const tous = (typeof data === 'string' ? JSON.parse(data) : data) || [];
+    const prenoms = tous.filter((p) => p.id !== currentUser?.id)
+      .map((p) => String(p.full_name || '').trim().split(/\s+/)[0]).filter(Boolean);
+    if (prenoms.length) autres = prenoms.join(' / ');
+  } catch { /* le prénom par défaut suffit */ }
+}
+
+function poserPastille(n) {
+  $$('.client-badge').forEach((b) => { b.textContent = n; b.hidden = n === 0; });
+}
+
+/**
+ * La pastille du menu : à traiter pour Marie, réponses à lire pour Jordan.
+ * Appelée à la connexion : on oublie alors le prénom et le filtre du
+ * compte précédent.
+ */
+export async function refreshClientBadge({ connexion = false } = {}) {
+  if (connexion) { autres = null; filtreChoisi = false; ouvert = null; }
+  try {
+    const { data, error } = await supabase.rpc('client_relais_count');
+    if (error) throw error;
+    const c = (typeof data === 'string' ? JSON.parse(data) : data) || {};
+    poserPastille(Number(isManager() ? c.reponses : c.a_traiter) || 0);
+  } catch { /* une pastille absente ne bloque rien */ }
 }
 
 async function chargerNotes(id) {
@@ -73,7 +111,10 @@ async function chargerNotes(id) {
 /** Un dossier est en cours tant qu'il n'a pas de fiche, ou qu'une fiche est ouverte. */
 const enCours = (d) => !d.jobs.length || d.jobs.some((j) => !finie(j));
 
+// Les deux filtres du relais se lisent du point de vue de qui regarde.
 const FILTRES = {
+  relais:     { label: '', test: (d) => d.relais === 'a_traiter' },
+  reponses:   { label: '', test: (d) => ['traite', 'non_traite'].includes(d.relais) },
   encours:    { label: 'En cours',          test: enCours },
   a_planifier:{ label: 'Poses à planifier', test: (d) => d.jobs.some((j) => j.kind === 'pose' && j.status === 'a_planifier') },
   poses:      { label: 'Poses à venir',     test: (d) => d.jobs.some((j) => j.kind === 'pose' && j.status === 'planifiee') },
@@ -106,6 +147,18 @@ function prochaineDate(d) {
 // ---------------------------------------------------------------------
 // Rendu — la liste
 // ---------------------------------------------------------------------
+const RELAIS = {
+  a_traiter:  { cls: 'st-orange', texte: () => isManager() ? `Chez ${autres}` : 'À traiter pour toi' },
+  traite:     { cls: 'st-green',  texte: () => '✓ Traité' },
+  non_traite: { cls: 'st-red',    texte: () => '✗ Pas traité' }
+};
+
+function libelleFiltre(k) {
+  if (k === 'relais') return isManager() ? `Chez ${autres}` : 'À traiter pour toi';
+  if (k === 'reponses') return isManager() ? `Réponses de ${autres}` : 'Réponses envoyées';
+  return FILTRES[k].label;
+}
+
 function carteHtml(d) {
   const prochaine = prochaineDate(d);
   const ouvertes = d.jobs.filter((j) => !finie(j));
@@ -120,24 +173,46 @@ function carteHtml(d) {
       </div>
       ${d.address ? `<span class="muted small">${escapeHtml(d.address)}</span>` : ''}
       <div class="cl-fiches">
+        ${d.relais ? `<span class="badge ${RELAIS[d.relais].cls} cl-relais-badge">${escapeHtml(RELAIS[d.relais].texte())}</span>` : ''}
         ${montrees.map((j) => `
           <span class="badge ${etat(j).cls}">${j.kind === 'pose' ? 'Pose' : 'SAV'} · ${escapeHtml(etat(j).label)}</span>`).join('')}
         ${!d.jobs.length ? '<span class="badge st-grey">Aucune fiche</span>' : ''}
       </div>
-      ${d.todo ? `<p class="cl-todo">${escapeHtml(d.todo)}</p>` : ''}
-      ${d.last_note && !d.last_note.automatique ? `<p class="cl-dernier muted small">« ${escapeHtml(d.last_note.body)} » — ${escapeHtml(d.last_note.author_name || '')}</p>` : ''}
+      ${d.relais === 'a_traiter' && d.relais_consigne
+        ? `<p class="cl-todo cl-consigne">${escapeHtml(d.relais_consigne)}</p>`
+        : d.todo && !d.relais ? `<p class="cl-todo">${escapeHtml(d.todo)}</p>` : ''}
+      ${d.relais && d.relais !== 'a_traiter' ? `
+        <p class="cl-dernier muted small">Consigne : ${escapeHtml(d.relais_consigne || '')}</p>
+        ${d.relais_reponse ? `<p class="cl-dernier small">« ${escapeHtml(d.relais_reponse)} » — ${escapeHtml(d.relais_par_name || '')}</p>` : ''}` : ''}
+      ${d.last_note && !d.last_note.automatique && !d.relais ? `<p class="cl-dernier muted small">« ${escapeHtml(d.last_note.body)} » — ${escapeHtml(d.last_note.author_name || '')}</p>` : ''}
     </li>`;
 }
 
 function listeHtml() {
   const compte = (k) => dossiers.filter(FILTRES[k].test).length;
+  // À l'ouverture, chacun tombe sur ce qui l'attend : Marie sur ce qu'on
+  // lui a confié, Jordan sur les réponses — tant qu'il y en a.
+  if (!filtreChoisi) {
+    const attente = isManager() ? 'reponses' : 'relais';
+    filtre = compte(attente) ? attente : 'encours';
+  }
+  // Les filtres du relais n'apparaissent que s'ils ont quelque chose à montrer
+  const montres = Object.keys(FILTRES).filter((k) => !['relais', 'reponses'].includes(k) || compte(k) || k === filtre);
   const visibles = dossiers.filter(FILTRES[filtre].test).filter((d) => correspond(d, recherche));
+  // Confier d'un coup les SAV en cours qui ont un « reste à faire »
+  const aConfier = isManager() && filtre === 'sav'
+    ? visibles.filter((d) => d.relais !== 'a_traiter' && String(d.todo || '').trim()) : [];
   return `
     <div class="cl-filtres">
-      ${Object.entries(FILTRES).map(([k, f]) => `
-        <button type="button" class="cl-filtre ${k === filtre ? 'active' : ''}" data-filtre="${k}">
-          ${f.label}<span class="cl-n">${compte(k)}</span></button>`).join('')}
+      ${montres.map((k) => `
+        <button type="button" class="cl-filtre ${k === filtre ? 'active' : ''}${['relais', 'reponses'].includes(k) ? ' relais' : ''}" data-filtre="${k}">
+          ${escapeHtml(libelleFiltre(k))}<span class="cl-n">${compte(k)}</span></button>`).join('')}
     </div>
+    ${aConfier.length ? `
+      <div class="cl-lot">
+        <span class="small">${aConfier.length} dossier${aConfier.length > 1 ? 's' : ''} SAV avec un « reste à faire » pas encore confié${aConfier.length > 1 ? 's' : ''} à ${escapeHtml(autres)}.</span>
+        <button type="button" class="btn btn-sm btn-primary" data-confier-lot="${aConfier.map((d) => d.id).join(',')}">Tout confier à ${escapeHtml(autres)}</button>
+      </div>` : ''}
     ${visibles.length
       ? `<ul class="cl-liste">${visibles.map(carteHtml).join('')}</ul>`
       : `<div class="card pad"><p class="muted">${dossiers.length
@@ -263,6 +338,54 @@ function contactHtml(d) {
   return liens.length ? `<div class="cl-contact">${liens.join('')}</div>` : '';
 }
 
+/**
+ * Le relais dans un dossier. Jordan confie, Marie répond, Jordan classe.
+ * Chacun peut faire chaque geste : si Jordan a lui-même réglé la chose, il
+ * la marque traitée sans attendre.
+ */
+function relaisHtml(d) {
+  const quand = d.relais_le ? fmtDate(String(d.relais_le).slice(0, 10)) : '';
+  if (d.relais === 'a_traiter') {
+    return `
+      <div class="card pad cl-bloc cl-relais attente">
+        <p class="cl-relais-titre"><strong>${isManager() ? `Confié à ${escapeHtml(autres)}` : 'À traiter pour toi'}</strong>
+          <span class="muted small">${escapeHtml(d.relais_par_name || '')}${quand ? ` · ${escapeHtml(quand)}` : ''}</span></p>
+        <p class="cl-consigne">${escapeHtml(d.relais_consigne || '')}</p>
+        <textarea id="relais-texte" rows="2" placeholder="${isManager() ? 'Un mot (facultatif)' : 'Ta réponse : ce que tu as fait, ou pourquoi ce n\'est pas fait'}"></textarea>
+        <div class="cl-actions">
+          <button type="button" class="btn btn-sm cl-ok" data-relais="traite">✓ Traité</button>
+          <button type="button" class="btn btn-sm cl-sav" data-relais="non_traite">✗ Pas traité</button>
+          ${isManager() ? '<button type="button" class="btn btn-ghost btn-sm" data-relais="classe">Retirer</button>' : ''}
+        </div>
+      </div>`;
+  }
+  if (d.relais) {
+    const fait = d.relais === 'traite';
+    return `
+      <div class="card pad cl-bloc cl-relais ${fait ? 'fait' : 'pas-fait'}">
+        <p class="cl-relais-titre"><strong>${fait ? '✓ Traité' : '✗ Pas traité'}</strong>
+          <span class="muted small">par ${escapeHtml(d.relais_par_name || '—')}${quand ? ` · ${escapeHtml(quand)}` : ''}</span></p>
+        <p class="muted small">Consigne : ${escapeHtml(d.relais_consigne || '')}</p>
+        ${d.relais_reponse ? `<p class="cl-consigne">« ${escapeHtml(d.relais_reponse)} »</p>` : ''}
+        ${isManager() ? `
+          <textarea id="relais-texte" rows="2" placeholder="Nouvelle consigne pour ${escapeHtml(autres)}, si tu la renvoies"></textarea>
+          <div class="cl-actions">
+            <button type="button" class="btn btn-sm cl-ok" data-relais="classe">Vu, classer</button>
+            <button type="button" class="btn btn-sm" data-relais="a_traiter">Renvoyer à ${escapeHtml(autres)}</button>
+          </div>` : `<p class="muted small">En attente de lecture par ${escapeHtml(autres)}.</p>`}
+      </div>`;
+  }
+  // Rien en cours : c'est Jordan qui confie.
+  if (!isManager()) return '';
+  return `
+    <div class="card pad cl-bloc cl-relais">
+      <textarea id="relais-texte" rows="2" placeholder="Ce que ${escapeHtml(autres)} doit faire. Laissé vide : « ce qu'il reste à faire » ci-dessus"></textarea>
+      <div class="cl-actions">
+        <button type="button" class="btn btn-sm btn-primary" data-relais="a_traiter">Confier à ${escapeHtml(autres)}</button>
+      </div>
+    </div>`;
+}
+
 function dossierHtml(d) {
   const ouvertes = d.jobs.filter((j) => !finie(j));
   const finies = d.jobs.filter(finie);
@@ -288,6 +411,8 @@ function dossierHtml(d) {
       <label class="field"><span class="sub"><strong>Ce qu'il reste à faire</strong></span>
         <textarea rows="3" data-champ-dossier="todo" placeholder="Ex. : poser les plinthes, régler la porte du frigo…">${escapeHtml(d.todo || '')}</textarea></label>
     </div>
+
+    ${relaisHtml(d)}
 
     <div class="cl-section-tete">
       <h2>Fiches</h2>
@@ -358,6 +483,7 @@ export async function renderClients() {
     await chargerDossiers();
     if (ouvert && !dossiers.some((d) => d.id === ouvert)) ouvert = null;
     if (ouvert) await chargerNotes(ouvert);
+    poserPastille(dossiers.filter(FILTRES[isManager() ? 'reponses' : 'relais'].test).length);
   } catch (err) {
     console.error(err);
     boite.innerHTML = `<div class="card pad"><p>${escapeHtml(errorMessage(err, 'Chargement impossible.'))}</p></div>`;
@@ -461,6 +587,28 @@ async function rouvrir(id) {
   await majFiche(id, { status }, { message: 'Fiche rouverte.' });
 }
 
+async function relais(etat) {
+  const texte = $('#relais-texte')?.value.trim() || null;
+  const r = await rpc('client_relais', { p_file: ouvert, p_etat: etat, p_texte: texte }, 'Enregistrement impossible.');
+  if (!r) return;
+  toast({ a_traiter: `Confié à ${autres}.`, traite: 'Marqué traité.', non_traite: 'Marqué pas traité.', classe: 'Classé.' }[etat]);
+  // Marie a répondu : elle revient à sa liste, au dossier suivant
+  if (!isManager() && etat !== 'a_traiter') { ouvert = null; await renderClients(); window.scrollTo(0, 0); return; }
+  await renderClients();
+}
+
+async function confierLot(ids) {
+  const ok = await confirmDialog(`Confier à ${autres} ${ids.length} dossier${ids.length > 1 ? 's' : ''} ?\n`
+    + 'Pour chacun, la consigne est son « reste à faire ».', 'Confier');
+  if (!ok) return;
+  const r = await rpc('client_relais_lot', { p_files: ids }, 'Envoi impossible.');
+  if (!r) return;
+  toast(`${r.confies} dossier${r.confies > 1 ? 's' : ''} confié${r.confies > 1 ? 's' : ''} à ${autres}.`);
+  filtre = 'relais';
+  filtreChoisi = true;
+  await renderClients();
+}
+
 async function noter() {
   const champ = $('#client-note');
   const texte = champ?.value.trim();
@@ -506,7 +654,9 @@ function cabler() {
     const ds = b.dataset;
     if (ds.ouvrir) { ouvert = ds.ouvrir; suite = null; montrerFinies = false; renderClients().then(() => window.scrollTo(0, 0)); return; }
     if ('retour' in ds) { ouvert = null; suite = null; return renderClients(); }
-    if (ds.filtre) { filtre = ds.filtre; return renderClients(); }
+    if (ds.filtre) { filtre = ds.filtre; filtreChoisi = true; return renderClients(); }
+    if (ds.relais) return relais(ds.relais);
+    if (ds.confierLot) return confierLot(ds.confierLot.split(','));
     if (ds.nouvelleFiche) return nouvelleFiche(ds.nouvelleFiche);
     if (ds.etape) return majFiche(ds.job, { status: ds.etape }, { message: `SAV : ${ETATS.sav[ds.etape].label}.` });
     if (ds.cloturer) return cloturer(ds.cloturer);

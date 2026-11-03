@@ -2229,6 +2229,21 @@ kbd {
 .cl-todo { margin: 0; font-size: 13px; white-space: pre-wrap; }
 .cl-dernier { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+/* Le relais Jordan → Marie */
+.cl-filtre.relais:not(.active) { border-color: var(--border-warn); background: var(--warn-soft); color: var(--warn); font-weight: 600; }
+.cl-consigne { margin: 0; font-size: 14px; font-weight: 600; white-space: pre-wrap; }
+.cl-carte .cl-consigne { font-size: 13px; color: var(--warn); }
+.cl-relais { display: flex; flex-direction: column; gap: 8px; }
+.cl-relais textarea { width: 100%; }
+.cl-relais-titre { margin: 0; display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.cl-relais.attente { border-color: var(--border-warn); background: var(--warn-soft); }
+.cl-relais.fait { border-color: var(--border-ok); background: var(--green-bg); }
+.cl-relais.pas-fait { border-color: var(--border-danger); background: var(--red-bg); }
+.cl-lot {
+  display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 10px;
+  padding: 8px 12px; border: 1px dashed var(--border-warn); border-radius: var(--radius-card); background: var(--warn-soft);
+}
+
 .cl-retour { margin-bottom: 10px; }
 .cl-bloc { margin-bottom: 10px; }
 .cl-grille { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 12px; }

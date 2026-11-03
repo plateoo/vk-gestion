@@ -84,7 +84,7 @@
     <nav class="nav">
       <button type="button" class="nav-item active" data-tab="dashboard"><span class="ico">▤</span> Tableau de bord</button>
       <button type="button" class="nav-item" data-tab="taches"><span class="ico">☑</span> À faire<span id="task-badge" class="nav-badge" hidden>0</span></button>
-      <button type="button" class="nav-item" data-tab="clients"><span class="ico">⌂</span> Clients</button>
+      <button type="button" class="nav-item" data-tab="clients"><span class="ico">⌂</span> Clients<span class="nav-badge client-badge" hidden>0</span></button>
       <button type="button" class="nav-item" data-tab="memoire"><span class="ico">✎</span> Mémoire</button>
       <button type="button" class="nav-item" data-tab="planning"><span class="ico">▦</span> Planning</button>
       <button type="button" class="nav-item" data-tab="invoices"><span class="ico">▣</span> Factures</button>
@@ -694,7 +694,7 @@
          Réglages — donc la quarantaine — étaient purement inaccessibles
          depuis un téléphone. Une barre qui cache des écrans entiers ne les
          range pas, elle les supprime. -->
-    <button type="button" class="tabbar-item" id="tabbar-plus"><span class="ico">⋯</span>Plus</button>
+    <button type="button" class="tabbar-item" id="tabbar-plus"><span class="ico">⋯</span>Plus<span class="nav-badge client-badge" hidden>0</span></button>
   </nav>
 
   <!-- Le reste des écrans, au doigt, depuis le bas de l'écran -->
@@ -702,7 +702,7 @@
   <nav class="plus-sheet" id="plus-sheet" hidden aria-label="Autres écrans">
     <p class="plus-titre">Aller à</p>
     <button type="button" class="plus-item" data-tab="clients"><span class="ico">⌂</span>
-      <span><strong>Clients</strong><small>Dossiers, poses et SAV</small></span></button>
+      <span><strong>Clients</strong><small>Dossiers, poses et SAV</small></span><span class="nav-badge client-badge" hidden>0</span></button>
     <button type="button" class="plus-item" data-tab="planning"><span class="ico">▦</span>
       <span><strong>Planning</strong><small>Le calendrier et les échéances</small></span></button>
     <button type="button" class="plus-item manager-only" data-tab="payments" hidden><span class="ico">€</span>
@@ -1163,7 +1163,7 @@ import { renderCourrier } from './js/courrier.js';
 import { initPlanning, renderPlanning } from './js/planning.js';
 import { initTaches, renderTaches, refreshTaskBadge, remplirDestinataires } from './js/taches.js';
 import { renderMemoire } from './js/memoire.js';
-import { initClients, renderClients } from './js/clients.js';
+import { initClients, renderClients, refreshClientBadge } from './js/clients.js';
 import { initSettings, renderSettings } from './js/settings.js';
 import { initSearch, openSearch } from './js/search.js';
 import { initPayments, renderPayments } from './js/payments.js';
@@ -1221,6 +1221,7 @@ async function enterApp(user) {
   showTab('dashboard');
   refreshReviewBadge();
   refreshTaskBadge();
+  refreshClientBadge({ connexion: true });
   remplirDestinataires();
 
   // Visite guidée au tout premier login de cet utilisateur
