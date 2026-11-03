@@ -104,7 +104,7 @@ export async function renderSuppliers() {
       <td data-label="Délai" class="num">${Number(s.payment_terms ?? 30)} j</td>
       <td data-label="Factures" class="num">${st.count}</td>
       <td data-label="Total TVAC" class="num">${fmtEUR(st.total)}</td>
-      <td data-label="Reste à payer" class="num ${st.due > 0 ? 'txt-red' : ''}">${fmtEUR(st.due)}</td>
+      ${isManager() ? `<td data-label="Reste à payer" class="num ${st.due > 0 ? 'txt-red' : ''}">${fmtEUR(st.due)}</td>` : ''}
     </tr>`).join('');
 }
 

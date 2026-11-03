@@ -12,6 +12,7 @@
 // =====================================================================
 import { getInvoices, setInvoiceFilters } from './invoices.js';
 import { rendezVousClients, ouvrirDossier } from './clients.js';
+import { isManager } from './auth.js';
 import {
   $, $$, fmtEUR, fmtDate, escapeHtml, toast, errorMessage, longDate,
   getMonth, setMonth, shiftMonth, monthLabel, todayISO, estDue, isOverdue
@@ -129,7 +130,10 @@ export async function renderPlanning() {
     return;
   }
 
-  const jours = parJour(factures, mois);
+  // Échéances, retards et escomptes : pour le gérant seul. L'équipe voit
+  // le même calendrier avec les rendez-vous clients, sans les sommes dues.
+  const gerant = isManager();
+  const jours = gerant ? parJour(factures, mois) : new Map();
   const aujourdhui = todayISO();
   const rdvJour = new Map();
   for (const r of await rdvPromesse) {
@@ -198,6 +202,7 @@ export async function renderPlanning() {
   }).join('');
 
   boite.innerHTML = `
+    ${gerant ? `
     <div class="pl-resume">
       <div class="pl-chiffre">
         <span class="pl-chiffre-lbl">À payer ce mois-ci</span>
@@ -211,17 +216,18 @@ export async function renderPlanning() {
         <span class="pl-chiffre-lbl">Escomptes encore saisissables</span>
         <strong>${fmtEUR(escompte)}</strong>
       </div>
-    </div>
+    </div>` : ''}
 
     <div class="card pad">
       <div class="pl-entetes"><span class="pl-sem-tete">sem.</span>${JOURS.map((j) => `<span>${j}</span>`).join('')}</div>
       <div class="pl-grille">${cases}</div>
       <p class="pl-legende">
+        ${gerant ? `
         <span class="pl-pastille echeance"></span> échéance de paiement
         <span class="pl-pastille escompte"></span> dernier jour pour l'escompte
-        <span class="pl-pastille en-retard"></span> déjà échue
+        <span class="pl-pastille en-retard"></span> déjà échue` : ''}
         <span class="pl-pastille rdv"></span> livraison, pose ou SAV chez un client
-        <span class="sep">·</span> clique sur un jour pour voir ses factures
+        ${gerant ? '<span class="sep">·</span> clique sur un jour pour voir ses factures' : '<span class="sep">·</span> clique sur un rendez-vous pour ouvrir le dossier'}
       </p>
     </div>`;
 

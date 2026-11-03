@@ -137,12 +137,14 @@
           <div id="kpi-tvac" class="kpi-value">—</div>
           <div id="kpi-tvac-sub" class="kpi-sub"></div>
         </div>
-        <div class="card kpi kpi-hero" id="card-due">
+        <!-- Les sommes dues et en retard ne regardent que le gérant : les
+             montrer à toute l'équipe inquiète sans rien permettre. -->
+        <div class="card kpi kpi-hero manager-only" id="card-due" hidden>
           <div class="kpi-label">Reste à payer</div>
           <div id="kpi-due" class="kpi-value">—</div>
           <div class="kpi-sub">Factures du mois non soldées</div>
         </div>
-        <div class="card kpi clickable" id="card-late">
+        <div class="card kpi clickable manager-only" id="card-late" hidden>
           <div class="kpi-label">Factures en retard</div>
           <div id="kpi-late" class="kpi-value">—</div>
           <div id="kpi-late-sub" class="kpi-sub">—</div>
@@ -187,7 +189,7 @@
                 <th>Fournisseur</th>
                 <th class="num">Factures</th>
                 <th class="num">Total TVAC</th>
-                <th class="num">Reste dû</th>
+                <th class="num manager-only" hidden>Reste dû</th>
               </tr>
             </thead>
             <tbody id="top-tbody"></tbody>
@@ -488,7 +490,7 @@
                   <th class="num">Délai</th>
                   <th class="num">Factures</th>
                   <th class="num">Total TVAC</th>
-                  <th class="num">Reste à payer</th>
+                  <th class="num manager-only" hidden>Reste à payer</th>
                 </tr>
               </thead>
               <tbody id="suppliers-tbody"></tbody>
@@ -536,8 +538,9 @@
         <div class="kpi-grid kpi-grid-4">
           <div class="card kpi"><div class="kpi-label">Factures</div><div id="sd-count" class="kpi-value">—</div></div>
           <div class="card kpi"><div class="kpi-label">Total TVAC</div><div id="sd-total" class="kpi-value">—</div></div>
-          <div class="card kpi"><div class="kpi-label">Payé</div><div id="sd-paid" class="kpi-value">—</div></div>
-          <div class="card kpi"><div class="kpi-label">Reste dû</div><div id="sd-due" class="kpi-value">—</div></div>
+          <!-- Ce qui est payé et ce qui reste dû : pour le gérant seul. -->
+          <div class="card kpi manager-only" hidden><div class="kpi-label">Payé</div><div id="sd-paid" class="kpi-value">—</div></div>
+          <div class="card kpi manager-only" hidden><div class="kpi-label">Reste dû</div><div id="sd-due" class="kpi-value">—</div></div>
         </div>
 
         <div class="card">

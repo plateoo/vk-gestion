@@ -2,6 +2,7 @@
 // dashboard.js — KPI du mois sélectionné, alertes, top fournisseurs
 // =====================================================================
 import { getInvoices, setInvoiceFilters, resumeArrivees } from './invoices.js';
+import { isManager } from './auth.js';
 import {
   $, fmtEUR, escapeHtml, toast, errorMessage, getMonth, setMonth, shiftMonth,
   currentMonthKey, monthLabel, inMonth, isOverdue, ICONS,
@@ -134,7 +135,7 @@ export async function renderDashboard() {
       <td data-label="Fournisseur">${escapeHtml(t.name)}</td>
       <td data-label="Factures" class="num">${t.count}</td>
       <td data-label="Total TVAC" class="num">${fmtEUR(t.total)}</td>
-      <td data-label="Reste dû" class="num ${t.due > 0 ? 'txt-red' : ''}">${fmtEUR(t.due)}</td>
+      ${isManager() ? `<td data-label="Reste dû" class="num ${t.due > 0 ? 'txt-red' : ''}">${fmtEUR(t.due)}</td>` : ''}
     </tr>`).join('');
 }
 

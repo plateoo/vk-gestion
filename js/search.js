@@ -8,6 +8,7 @@
 import { supabase } from './supabase.js';
 import { renderSupplierDetail } from './suppliers.js';
 import { setInvoiceFilters } from './invoices.js';
+import { isManager } from './auth.js';
 import {
   $, $$, fmtEUR, fmtDate, escapeHtml, toast, errorMessage,
   openModal, closeModal, statusLabel, statusClass, ICONS
@@ -71,7 +72,7 @@ function render(r, q) {
               ${s.needs_review ? '<span class="tag">à valider</span>' : ''}</span>
             <span class="hit-meta">${s.factures} facture${Number(s.factures) > 1 ? 's' : ''}
               <span class="sep">·</span> ${fmtEUR(s.total)} facturé
-              ${Number(s.reste_du) > 0 ? `<span class="sep">·</span> <span class="txt-red">${fmtEUR(s.reste_du)} dû</span>` : ''}
+              ${isManager() && Number(s.reste_du) > 0 ? `<span class="sep">·</span> <span class="txt-red">${fmtEUR(s.reste_du)} dû</span>` : ''}
               ${s.vat_number ? `<span class="sep">·</span> ${escapeHtml(s.vat_number)}` : ''}</span>
           </button>`).join('')}
       </div>` : ''}
