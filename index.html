@@ -84,6 +84,7 @@
     <nav class="nav">
       <button type="button" class="nav-item active" data-tab="dashboard"><span class="ico">▤</span> Tableau de bord</button>
       <button type="button" class="nav-item" data-tab="taches"><span class="ico">☑</span> À faire<span id="task-badge" class="nav-badge" hidden>0</span></button>
+      <button type="button" class="nav-item" data-tab="clients"><span class="ico">⌂</span> Clients</button>
       <button type="button" class="nav-item" data-tab="memoire"><span class="ico">✎</span> Mémoire</button>
       <button type="button" class="nav-item" data-tab="planning"><span class="ico">▦</span> Planning</button>
       <button type="button" class="nav-item" data-tab="invoices"><span class="ico">▣</span> Factures</button>
@@ -259,6 +260,53 @@
       </div>
 
       <div id="taches-body"></div>
+    </section>
+
+    <!-- ========================================================
+         1 ter. CLIENTS — dossiers, poses et service après-vente
+         ======================================================== -->
+    <section id="tab-clients" class="tab" hidden>
+      <div class="page-head">
+        <h1>Clients</h1>
+        <p class="muted small">Les dossiers en cours : poses, SAV, ce qu'il reste à faire.</p>
+      </div>
+
+      <div id="clients-tete">
+        <!-- Le client est au téléphone : le nom suffit, le reste se
+             complète dans le dossier. -->
+        <div class="card pad cl-ajout">
+          <div class="cl-ajout-ligne">
+            <input id="client-nom" type="text" class="search" autocomplete="off"
+                   placeholder="Nom du nouveau client" aria-label="Nom du nouveau client">
+            <input id="client-tel" type="tel" autocomplete="off" placeholder="Téléphone" aria-label="Téléphone">
+          </div>
+          <div class="cl-ajout-ligne">
+            <input id="client-adresse" type="text" class="search" autocomplete="off"
+                   placeholder="Adresse (rue, numéro, commune)" aria-label="Adresse">
+          </div>
+          <div class="cl-ajout-ligne">
+            <div class="cl-choix" id="client-source" role="group" aria-label="Comment le client s'est manifesté">
+              <button type="button" class="active" data-val="telephone">Téléphone</button>
+              <button type="button" data-val="magasin">Magasin</button>
+              <button type="button" data-val="mail">Mail</button>
+            </div>
+            <div class="cl-choix" id="client-type" role="group" aria-label="Pour quoi">
+              <button type="button" class="active" data-val="pose">Pose</button>
+              <button type="button" data-val="sav">SAV</button>
+              <button type="button" data-val="">Rien encore</button>
+            </div>
+          </div>
+          <div class="cl-ajout-ligne">
+            <input id="client-objet" type="text" class="search" autocomplete="off"
+                   placeholder="Objet (facultatif) : cuisine complète, porte abîmée…" aria-label="Objet">
+            <button type="button" id="client-creer" class="btn btn-primary">Créer le dossier</button>
+          </div>
+        </div>
+        <input id="client-recherche" type="search" class="search cl-recherche" autocomplete="off"
+               placeholder="Chercher un client : nom, téléphone, adresse, référence…" aria-label="Chercher un client">
+      </div>
+
+      <div id="clients-body"></div>
     </section>
 
     <!-- ========================================================
@@ -650,6 +698,8 @@
   <div class="sheet-backdrop" id="plus-backdrop" hidden></div>
   <nav class="plus-sheet" id="plus-sheet" hidden aria-label="Autres écrans">
     <p class="plus-titre">Aller à</p>
+    <button type="button" class="plus-item" data-tab="clients"><span class="ico">⌂</span>
+      <span><strong>Clients</strong><small>Dossiers, poses et SAV</small></span></button>
     <button type="button" class="plus-item" data-tab="planning"><span class="ico">▦</span>
       <span><strong>Planning</strong><small>Le calendrier et les échéances</small></span></button>
     <button type="button" class="plus-item manager-only" data-tab="payments" hidden><span class="ico">€</span>
@@ -1110,6 +1160,7 @@ import { renderCourrier } from './js/courrier.js';
 import { initPlanning, renderPlanning } from './js/planning.js';
 import { initTaches, renderTaches, refreshTaskBadge, remplirDestinataires } from './js/taches.js';
 import { renderMemoire } from './js/memoire.js';
+import { initClients, renderClients } from './js/clients.js';
 import { initSettings, renderSettings } from './js/settings.js';
 import { initSearch, openSearch } from './js/search.js';
 import { initPayments, renderPayments } from './js/payments.js';
@@ -1136,6 +1187,7 @@ function showTab(name) {
   if (name === 'dashboard') { renderDashboard(); renderCourrier(); }
   if (name === 'planning') renderPlanning();
   if (name === 'taches') renderTaches();
+  if (name === 'clients') renderClients();
   if (name === 'memoire') renderMemoire();
   if (name === 'review') renderReview();
   if (name === 'payments') renderPayments();
@@ -1410,6 +1462,7 @@ initUpdateCheck();
 initCalc();
 initPlanning();
 initTaches();
+initClients();
 // Le planning montre, le tableau permet d'agir : un jour cliqué y renvoie.
 window.addEventListener('vk:goto', (e) => showTab(e.detail));
 initSuppliers();
