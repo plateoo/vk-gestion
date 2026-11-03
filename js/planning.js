@@ -11,12 +11,14 @@
 // dates qu'on a déjà serait un gaspillage.
 // =====================================================================
 import { getInvoices, setInvoiceFilters } from './invoices.js';
+import { rendezVousClients, ouvrirDossier } from './clients.js';
 import {
   $, $$, fmtEUR, fmtDate, escapeHtml, toast, errorMessage, longDate,
   getMonth, setMonth, shiftMonth, monthLabel, todayISO, estDue, isOverdue
 } from './ui.js';
 
 const JOURS = ['lun', 'mar', 'mer', 'jeu', 'ven', 'sam', 'dim'];
+const RDV = { livraison: 'Livraison', pose: 'Pose', sav: 'SAV' };
 
 /**
  * Numéro de semaine ISO 8601 — la norme en Belgique.
@@ -116,6 +118,9 @@ export async function renderPlanning() {
   $('#planning-label').textContent = monthLabel(mois);
 
   let factures;
+  // Les rendez-vous clients ne doivent jamais empêcher d'afficher les
+  // échéances : un échec ici laisse simplement le calendrier sans eux.
+  const rdvPromesse = rendezVousClients().catch((err) => { console.warn('clients', err); return []; });
   try {
     factures = await getInvoices();
   } catch (err) {
@@ -126,6 +131,16 @@ export async function renderPlanning() {
 
   const jours = parJour(factures, mois);
   const aujourdhui = todayISO();
+  const rdvJour = new Map();
+  for (const r of await rdvPromesse) {
+    if (String(r.jour).slice(0, 7) !== mois) continue;
+    const k = String(r.jour).slice(0, 10);
+    if (!rdvJour.has(k)) rdvJour.set(k, []);
+    rdvJour.get(k).push(r);
+  }
+  // Dans la journée : livraisons, puis poses, puis SAV
+  const ordre = { livraison: 0, pose: 1, sav: 2 };
+  rdvJour.forEach((l) => l.sort((a, b) => ordre[a.quoi] - ordre[b.quoi] || a.nom.localeCompare(b.nom, 'fr')));
 
   // Les trois chiffres qui décident d'une journée de travail
   let aPayer = 0, enRetard = 0, escompte = 0;
@@ -146,6 +161,7 @@ export async function renderPlanning() {
       : '';
     if (!jour) return tete + '<div class="pl-case vide"></div>';
     const items = jours.get(jour) || [];
+    const rdv = rdvJour.get(jour) || [];
     const num = Number(jour.slice(8));
     const total = items.filter((i) => i.type === 'echeance').reduce((s, i) => s + i.montant, 0);
     const retard = items.some((i) => i.retard);
@@ -153,12 +169,21 @@ export async function renderPlanning() {
       'pl-case',
       jour === aujourdhui ? 'aujourdhui' : '',
       items.length ? 'charge' : '',
+      rdv.length ? 'agenda' : '',
       retard ? 'retard' : ''
     ].filter(Boolean).join(' ');
 
     return tete + `
       <div class="${classes}" ${items.length ? `data-jour="${jour}"` : ''}>
         <div class="pl-num">${num}${jour === aujourdhui ? '<span class="pl-today">aujourd&rsquo;hui</span>' : ''}</div>
+        ${rdv.length ? `
+          <ul class="pl-rdv">
+            ${rdv.slice(0, 4).map((r) => `
+              <li><button type="button" class="pl-rdv-btn ${r.quoi}${r.finie ? ' finie' : ''}" data-dossier="${r.dossier}"
+                    title="${escapeHtml(`${RDV[r.quoi]} — ${r.nom}${r.titre ? ` — ${r.titre}` : ''}${r.finie ? ' (terminée)' : ''}`)}">
+                <span class="pl-rdv-quoi">${RDV[r.quoi]}</span> ${escapeHtml(r.nom)}</button></li>`).join('')}
+            ${rdv.length > 4 ? `<li class="pl-plus">+ ${rdv.length - 4} rendez-vous</li>` : ''}
+          </ul>` : ''}
         ${items.length ? `
           <ul class="pl-items">
             ${items.slice(0, 3).map((it) => `
@@ -195,9 +220,19 @@ export async function renderPlanning() {
         <span class="pl-pastille echeance"></span> échéance de paiement
         <span class="pl-pastille escompte"></span> dernier jour pour l'escompte
         <span class="pl-pastille en-retard"></span> déjà échue
+        <span class="pl-pastille rdv"></span> livraison, pose ou SAV chez un client
         <span class="sep">·</span> clique sur un jour pour voir ses factures
       </p>
     </div>`;
+
+  // Un rendez-vous cliqué ouvre le dossier du client — et seulement lui :
+  // le clic ne doit pas remonter jusqu'à la case, qui mène aux factures.
+  $$('#planning-body [data-dossier]').forEach((b) => {
+    b.addEventListener('click', (e) => {
+      e.stopPropagation();
+      ouvrirDossier(b.dataset.dossier);
+    });
+  });
 
   // Un jour cliqué ouvre les factures concernées : le calendrier montre,
   // le tableau permet d'agir.

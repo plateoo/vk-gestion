@@ -320,6 +320,37 @@ function dossierHtml(d) {
       </div>` : ''}`;
 }
 
+// ---------------------------------------------------------------------
+// Pour le Planning : les dates des fiches, jour par jour
+// ---------------------------------------------------------------------
+/**
+ * Les rendez-vous chez les clients : livraisons, poses, interventions.
+ * Une fiche relancée en nouvelle intervention n'y figure plus — sa date
+ * est celle de la fiche qui lui succède.
+ */
+export async function rendezVousClients() {
+  await chargerDossiers();
+  const out = [];
+  for (const d of dossiers) {
+    for (const j of d.jobs) {
+      if (j.status === 'nouvelle_intervention') continue;
+      const base = { nom: d.name, dossier: d.id, finie: finie(j), titre: j.title || '' };
+      if (j.delivery_date) out.push({ ...base, jour: j.delivery_date, quoi: 'livraison' });
+      if (j.pose_date) out.push({ ...base, jour: j.pose_date, quoi: 'pose' });
+      if (j.intervention_date) out.push({ ...base, jour: j.intervention_date, quoi: 'sav' });
+    }
+  }
+  return out;
+}
+
+/** Ouvre un dossier depuis un autre écran */
+export function ouvrirDossier(id) {
+  ouvert = id;
+  suite = null;
+  montrerFinies = false;
+  window.dispatchEvent(new CustomEvent('vk:goto', { detail: 'clients' }));
+}
+
 export async function renderClients() {
   const boite = $('#clients-body');
   if (!boite) return;

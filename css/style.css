@@ -1349,6 +1349,17 @@ kbd {
 .pl-mt { flex: 0 0 auto; font-variant-numeric: tabular-nums; color: var(--text-muted); }
 .pl-item.escompte .pl-mt { color: var(--ok); }
 .pl-plus { font-size: 10.5px; color: var(--text-muted); padding-left: 8px; }
+/* Rendez-vous clients : en bleu, à part des montants */
+.pl-rdv { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.pl-rdv-btn {
+  font: inherit; font-size: 11px; line-height: 1.3; width: 100%; text-align: left; cursor: pointer;
+  background: var(--info-soft); color: var(--text); border: none; border-left: 2px solid var(--info);
+  border-radius: 3px; padding: 2px 5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.pl-rdv-btn:hover { background: var(--border-info); }
+.pl-rdv-btn.finie { opacity: .6; text-decoration: line-through; }
+.pl-rdv-quoi { font-weight: 700; color: var(--info); }
+.pl-pastille.rdv { background: var(--info); }
 .pl-total {
   margin-top: 4px; padding-top: 3px; border-top: 1px solid var(--line-soft);
   font-size: 11.5px; font-weight: 700; text-align: right; font-variant-numeric: tabular-nums;
@@ -1372,6 +1383,9 @@ kbd {
   .pl-case { min-height: 0; }
   .pl-case.vide { display: none; }
   .pl-case:not(.charge) { display: none; }
+  /* Un jour sans facture mais avec un rendez-vous client reste visible */
+  .pl-case.agenda { display: block; }
+  .pl-rdv-btn { white-space: normal; font-size: 13px; padding: 6px 8px; }
 }
 
 /* ---------------------------------------------------------------
