@@ -18,6 +18,7 @@ import { isManager } from './auth.js';
 import { loadMaintenance, backupCardHtml, securityCardHtml, wireMaintenance } from './maintenance.js';
 
 let users = [];
+let motDePasse = null;    // id du compte dont le champ « nouveau mot de passe » est ouvert
 
 const octets = (n) => {
   const v = Number(n) || 0;
@@ -172,7 +173,8 @@ export async function renderAdmin() {
             ${users.map((u) => `
               <tr data-user="${u.id}">
                 <td data-label="Utilisateur">
-                  <span class="strong">${escapeHtml(u.full_name || '—')}</span>
+                  <input type="text" class="adm-nom" data-name-for="${u.id}" value="${escapeHtml(u.full_name || '')}"
+                         aria-label="Nom affiché" title="Nom affiché : modifie-le puis quitte le champ">
                   ${u.is_self ? '<span class="tag">vous</span>' : ''}
                   <div class="muted small">${escapeHtml(u.email || '')}</div>
                 </td>
@@ -180,6 +182,7 @@ export async function renderAdmin() {
                   <select class="role-select" data-role-for="${u.id}" ${u.is_self ? 'disabled title="Vous ne pouvez pas modifier votre propre rôle"' : ''}>
                     <option value="manager" ${u.role === 'manager' ? 'selected' : ''}>Gérant</option>
                     <option value="secretary" ${u.role === 'secretary' ? 'selected' : ''}>Secrétaire</option>
+                    <option value="seller" ${u.role === 'seller' ? 'selected' : ''}>Vendeur</option>
                   </select>
                   ${u.role ? '' : '<div class="field-hint warn">sans profil : aucun accès aux données</div>'}
                 </td>
@@ -188,6 +191,12 @@ export async function renderAdmin() {
                   ? '<span class="badge st-red">désactivé</span>'
                   : '<span class="badge st-green">actif</span>'}</td>
                 <td data-label="Actions" class="no-print actions">
+                  ${motDePasse === u.id ? `
+                    <span class="adm-mdp">
+                      <input type="text" id="adm-mdp-valeur" value="" placeholder="Nouveau mot de passe" autocomplete="off" aria-label="Nouveau mot de passe">
+                      <button type="button" class="btn btn-sm btn-primary" data-mdp-ok="${u.id}">Enregistrer</button>
+                      <button type="button" class="btn btn-sm btn-ghost" data-mdp-annuler>Annuler</button>
+                    </span>` : `<button type="button" class="btn btn-sm" data-mdp="${u.id}">Changer le mot de passe</button>`}
                   <button type="button" class="btn btn-sm" data-reset="${escapeHtml(u.email || '')}">Lien de mot de passe</button>
                   ${u.is_self ? '' : `<button type="button" class="btn btn-sm ${u.disabled ? '' : 'btn-danger'}"
                      data-toggle-user="${u.id}" data-disabled="${u.disabled ? '1' : ''}">${u.disabled ? 'Réactiver' : 'Désactiver'}</button>`}
@@ -205,13 +214,16 @@ export async function renderAdmin() {
         <input id="adm-email" type="email" placeholder="prenom@vkgestion.local" class="search">
         <input id="adm-name" type="text" placeholder="Nom affiché">
         <select id="adm-role">
+          <option value="seller">Vendeur</option>
           <option value="secretary">Secrétaire</option>
           <option value="manager">Gérant</option>
         </select>
+        <input id="adm-password" type="text" value="" placeholder="Mot de passe (vide = lien)" autocomplete="off" aria-label="Mot de passe">
         <button type="button" id="adm-create" class="btn btn-primary">Créer</button>
       </div>
-      <p class="field-hint">Aucun mot de passe n'est créé ni affiché. Un lien de définition de mot de passe
-        est produit, à transmettre à la personne.</p>
+      <p class="field-hint">Un vendeur ne voit que les dossiers clients, le planning de leurs rendez-vous et
+        ses tâches : ni factures, ni fournisseurs, ni paiements. Mot de passe : au moins 8 caractères ;
+        laissé vide, un lien de définition de mot de passe est produit à la place.</p>
       <div id="adm-link" class="admin-link" hidden></div>
     </div>
 
@@ -310,21 +322,37 @@ async function creer() {
   const email = $('#adm-email').value.trim();
   const full_name = $('#adm-name').value.trim();
   const role = $('#adm-role').value;
+  const password = $('#adm-password').value.trim();
   if (!email.includes('@')) { toast('Adresse e-mail invalide.', 'error'); return; }
+  if (password && password.length < 8) { toast('Le mot de passe doit faire au moins 8 caractères.', 'error'); return; }
   const btn = $('#adm-create');
   btn.disabled = true;
   try {
-    const r = await appeler('create', { email, full_name, role });
-    toast(`Compte ${email} créé.`);
+    const r = await appeler('create', { email, full_name, role, password: password || undefined });
+    toast(password ? `Compte ${email} créé, mot de passe : ${password}` : `Compte ${email} créé.`, 'ok', 6000);
     $('#adm-email').value = '';
     $('#adm-name').value = '';
     await renderAdmin();
-    afficherLien(r.lien, email);
+    if (r.lien) afficherLien(r.lien, email);
   } catch (err) {
     console.error(err);
     toast(errorMessage(err, err.message || 'Création impossible.'), 'error');
   } finally {
     btn.disabled = false;
+  }
+}
+
+async function changerMotDePasse(id) {
+  const password = $('#adm-mdp-valeur')?.value.trim() || '';
+  if (password.length < 8) { toast('Le mot de passe doit faire au moins 8 caractères.', 'error'); return; }
+  const u = users.find((x) => x.id === id);
+  try {
+    await appeler('set_password', { id, password });
+    motDePasse = null;
+    toast(`Mot de passe de ${u?.full_name || u?.email} changé.`, 'ok', 4000);
+    await renderAdmin();
+  } catch (err) {
+    toast(errorMessage(err, err.message || 'Changement impossible.'), 'error');
   }
 }
 
@@ -335,6 +363,12 @@ export function initAdmin() {
   body.addEventListener('click', async (e) => {
     const creerBtn = e.target.closest('#adm-create');
     if (creerBtn) return creer();
+
+    const mdp = e.target.closest('[data-mdp]');
+    if (mdp) { motDePasse = mdp.dataset.mdp; await renderAdmin(); $('#adm-mdp-valeur')?.select(); return; }
+    if (e.target.closest('[data-mdp-annuler]')) { motDePasse = null; return renderAdmin(); }
+    const mdpOk = e.target.closest('[data-mdp-ok]');
+    if (mdpOk) return changerMotDePasse(mdpOk.dataset.mdpOk);
 
     const reset = e.target.closest('[data-reset]');
     if (reset) {
@@ -369,6 +403,21 @@ export function initAdmin() {
   });
 
   body.addEventListener('change', async (e) => {
+    const nom = e.target.closest('[data-name-for]');
+    if (nom) {
+      const u = users.find((x) => x.id === nom.dataset.nameFor);
+      const v = nom.value.trim();
+      if (!v) { nom.value = u?.full_name || ''; return toast('Le nom ne peut pas être vide.', 'error'); }
+      if (v === (u?.full_name || '')) return;
+      try {
+        await appeler('set_name', { id: nom.dataset.nameFor, full_name: v });
+        if (u) u.full_name = v;
+        toast('Nom modifié.');
+      } catch (err) {
+        toast(errorMessage(err, err.message || 'Changement de nom impossible.'), 'error');
+      }
+      return;
+    }
     const sel = e.target.closest('[data-role-for]');
     if (!sel) return;
     try {

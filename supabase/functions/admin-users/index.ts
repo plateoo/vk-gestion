@@ -26,6 +26,9 @@ const json = (b: unknown, s = 200) =>
 
 const admin = () => createClient(URL_, SERVICE, { auth: { persistSession: false } });
 
+// Gérant, secrétaire (le bureau), vendeur (la partie clients seulement)
+const ROLES = ['manager', 'secretary', 'seller'];
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
   if (req.method !== 'POST') return json({ error: 'Méthode non autorisée.' }, 405);
@@ -96,10 +99,14 @@ Deno.serve(async (req) => {
       const role = String(body.role ?? 'secretary');
       const fullName = String(body.full_name ?? '').trim() || email.split('@')[0];
       if (!email.includes('@')) return json({ error: 'Adresse e-mail invalide.' }, 400);
-      if (!['manager', 'secretary'].includes(role)) return json({ error: 'Rôle inconnu.' }, 400);
+      if (!ROLES.includes(role)) return json({ error: 'Rôle inconnu.' }, 400);
 
-      // Mot de passe aléatoire que personne ne lit : l'accès passe par le lien.
-      const jetable = crypto.randomUUID() + crypto.randomUUID();
+      // Un mot de passe choisi par le gérant (les vendeurs en partagent un
+      // simple), sinon un mot de passe aléatoire que personne ne lit :
+      // l'accès passe alors par le lien.
+      const choisi = String(body.password ?? '');
+      if (choisi && choisi.length < 8) return json({ error: 'Le mot de passe doit faire au moins 8 caractères.' }, 400);
+      const jetable = choisi || crypto.randomUUID() + crypto.randomUUID();
       const { data: created, error } = await sb.auth.admin.createUser({
         email, password: jetable, email_confirm: true, user_metadata: { full_name: fullName }
       });
@@ -115,9 +122,9 @@ Deno.serve(async (req) => {
 
       await journaliser('compte', null, `${email} (${role})`, 'création de compte', created.user.id, email);
 
-      const { data: lien } = await sb.auth.admin.generateLink({ type: 'recovery', email });
+      const { data: lien } = choisi ? { data: null } : await sb.auth.admin.generateLink({ type: 'recovery', email });
       return json({
-        created: true, id: created.user.id, email, role,
+        created: true, id: created.user.id, email, role, password_set: !!choisi,
         // lien à transmettre : il permet de DÉFINIR le mot de passe, il n'en révèle aucun
         lien: lien?.properties?.action_link ?? null
       });
@@ -138,7 +145,7 @@ Deno.serve(async (req) => {
     if (action === 'set_role') {
       const id = String(body.id ?? '');
       const role = String(body.role ?? '');
-      if (!['manager', 'secretary'].includes(role)) return json({ error: 'Rôle inconnu.' }, 400);
+      if (!ROLES.includes(role)) return json({ error: 'Rôle inconnu.' }, 400);
       if (id === moi && role !== 'manager') {
         return json({ error: 'Un gérant ne peut pas se retirer lui-même le rôle gérant.' }, 403);
       }
@@ -151,6 +158,35 @@ Deno.serve(async (req) => {
       const { data: u } = await sb.auth.admin.getUserById(id);
       await journaliser('role', actuel?.role ?? null, role, 'changement de rôle', id, u?.user?.email ?? null);
       return json({ updated: true, id, role });
+    }
+
+    // -----------------------------------------------------------------
+    // Fixer le mot de passe d'un compte. Jamais journalisé en clair : le
+    // journal dit qu'il a changé, pas ce qu'il est devenu.
+    if (action === 'set_password') {
+      const id = String(body.id ?? '');
+      const password = String(body.password ?? '');
+      if (password.length < 8) return json({ error: 'Le mot de passe doit faire au moins 8 caractères.' }, 400);
+      const { error } = await sb.auth.admin.updateUserById(id, { password });
+      if (error) throw error;
+      const { data: u } = await sb.auth.admin.getUserById(id);
+      await journaliser('mot_de_passe', null, 'nouveau mot de passe fixé par le gérant',
+                        'changement de mot de passe', id, u?.user?.email ?? null);
+      return json({ updated: true, id });
+    }
+
+    // -----------------------------------------------------------------
+    // Corriger le nom affiché d'un compte
+    if (action === 'set_name') {
+      const id = String(body.id ?? '');
+      const fullName = String(body.full_name ?? '').trim();
+      if (!fullName) return json({ error: 'Le nom ne peut pas être vide.' }, 400);
+      const { data: avant } = await sb.from('profiles').select('full_name').eq('id', id).single();
+      const { error } = await sb.from('profiles').update({ full_name: fullName }).eq('id', id);
+      if (error) throw error;
+      const { data: u } = await sb.auth.admin.getUserById(id);
+      await journaliser('nom', avant?.full_name ?? null, fullName, 'changement de nom', id, u?.user?.email ?? null);
+      return json({ updated: true, id, full_name: fullName });
     }
 
     // -----------------------------------------------------------------

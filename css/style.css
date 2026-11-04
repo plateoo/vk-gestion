@@ -675,6 +675,9 @@ body.modal-open { overflow: hidden; }
 
 /* Administration */
 .role-select { font-size: 12px; min-height: 30px; max-width: 130px; }
+.adm-nom { font-weight: 600; min-width: 0; width: 100%; max-width: 240px; }
+.adm-mdp { display: inline-flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.adm-mdp input { width: 170px; max-width: 100%; }
 .admin-link {
   margin-top: 12px; padding: 12px; border-radius: var(--radius);
   background: var(--warn-soft); border: 1px solid var(--border-warn);
@@ -2261,6 +2264,20 @@ kbd {
   display: flex; flex-direction: column; gap: 10px;
 }
 .cl-fiche.sav { border-left-color: var(--warn); }
+.cl-fiche.mesure { border-left-color: var(--info); }
+.cl-fiche.demande { border-left-color: var(--border-strong); }
+.cl-qui { margin: 0; font-size: 11px; }
+.cl-urgent { font-weight: 800; letter-spacing: .04em; }
+.cl-relais.urgent { border-color: var(--border-danger); background: var(--red-bg); }
+.cl-case-urgent { align-items: center; min-height: 34px; }
+.cl-case-urgent input { margin: 0; }
+.cl-alerte-urgent {
+  display: flex; width: 100%; justify-content: space-between; align-items: center; gap: 10px;
+  margin-bottom: 10px; padding: 10px 12px; font: inherit; font-size: 14px; cursor: pointer; text-align: left;
+  border: 1px solid var(--border-danger); border-left: 4px solid var(--red); border-radius: var(--radius-card);
+  background: var(--red-bg); color: var(--red);
+}
+.cl-alerte-urgent span { font-weight: 600; text-decoration: underline; }
 .cl-fiche.finie { border-left-color: var(--border-strong); background: var(--surface-alt); }
 .cl-fiche-haut { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .cl-type { font-weight: 700; font-size: 13px; text-transform: uppercase; letter-spacing: .03em; }

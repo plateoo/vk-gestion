@@ -19,7 +19,7 @@ import {
 } from './ui.js';
 
 const JOURS = ['lun', 'mar', 'mer', 'jeu', 'ven', 'sam', 'dim'];
-const RDV = { livraison: 'Livraison', pose: 'Pose', sav: 'SAV' };
+const RDV = { mesure: 'Mesurage', livraison: 'Livraison', pose: 'Pose', sav: 'SAV' };
 
 /**
  * Numéro de semaine ISO 8601 — la norme en Belgique.
@@ -143,7 +143,7 @@ export async function renderPlanning() {
     rdvJour.get(k).push(r);
   }
   // Dans la journée : livraisons, puis poses, puis SAV
-  const ordre = { livraison: 0, pose: 1, sav: 2 };
+  const ordre = { mesure: 0, livraison: 1, pose: 2, sav: 3 };
   rdvJour.forEach((l) => l.sort((a, b) => ordre[a.quoi] - ordre[b.quoi] || a.nom.localeCompare(b.nom, 'fr')));
 
   // Les trois chiffres qui décident d'une journée de travail

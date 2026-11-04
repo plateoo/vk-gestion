@@ -13,12 +13,17 @@ export function isManager() {
   return currentProfile?.role === 'manager';
 }
 
+/** Un vendeur : la partie clients seulement, jamais la comptabilité */
+export function isSeller() {
+  return currentProfile?.role === 'seller';
+}
+
 export function displayName() {
   return currentProfile?.full_name || currentUser?.email || '';
 }
 
 export function roleLabel() {
-  return isManager() ? 'Gérant' : 'Secrétaire';
+  return isManager() ? 'Gérant' : isSeller() ? 'Vendeur' : 'Secrétaire';
 }
 
 /** Session existante au chargement (null si aucune) */

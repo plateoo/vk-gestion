@@ -20,7 +20,7 @@
 // la réponse et classe. Un relais à la fois par dossier (client_relais).
 // =====================================================================
 import { supabase } from './supabase.js';
-import { isManager, currentUser, displayName } from './auth.js';
+import { isManager, isSeller, currentUser, displayName } from './auth.js';
 import {
   $, $$, escapeHtml, toast, errorMessage, confirmDialog, fmtDate, longDate, todayISO
 } from './ui.js';
@@ -34,7 +34,7 @@ let suite = null;           // id de la fiche dont le formulaire « suite » est
 let courriel = null;        // id de la fiche dont le mail au client est déplié
 let montrerFinies = false;
 let creation = { source: 'telephone', kind: 'pose' };
-let autres = null;          // le prénom de l'autre (Marie pour Jordan, Jordan pour Marie)
+let equipe = null;          // [{ id, full_name, role }] : à qui confier un dossier
 let filtreChoisi = false;   // tant que personne n'a choisi, le filtre suit le relais
 
 export const ETATS = {
@@ -51,14 +51,30 @@ export const ETATS = {
     planifie:  { label: 'Planifié',  cls: 'st-blue' },
     cloture:   { label: 'Clôturé',   cls: 'st-green' },
     nouvelle_intervention: { label: 'Nouvelle intervention', cls: 'st-grey' }
+  },
+  mesure: {
+    a_planifier: { label: 'À planifier', cls: 'st-orange' },
+    planifiee:   { label: 'Planifié',    cls: 'st-blue' },
+    faite:       { label: 'Fait',        cls: 'st-green' }
+  },
+  demande: {
+    a_traiter: { label: 'À traiter', cls: 'st-red' },
+    en_cours:  { label: 'En cours',  cls: 'st-orange' },
+    traitee:   { label: 'Traitée',   cls: 'st-green' }
   }
 };
-// Les étapes d'un SAV, dans l'ordre où elles arrivent
-const ETAPES_SAV = ['a_traiter', 'commande', 'recu', 'planifie'];
+// Le nom d'une fiche, selon sa sorte
+export const SORTES = { pose: 'Pose', sav: 'SAV', mesure: 'Mesurage', demande: 'Demande' };
+// Les étapes, dans l'ordre où elles arrivent (un mesurage avance par sa date)
+const ETAPES = { sav: ['a_traiter', 'commande', 'recu', 'planifie'], demande: ['a_traiter', 'en_cours'] };
+// L'état final « sans suite » de chaque sorte
+const FIN = { pose: 'terminee', sav: 'cloture', mesure: 'faite', demande: 'traitee' };
 const SOURCES = { telephone: 'Téléphone', magasin: 'Magasin', mail: 'Mail' };
 
 const finie = (j) => (j.kind === 'pose' && ['terminee', 'sav'].includes(j.status))
-  || (j.kind === 'sav' && ['cloture', 'nouvelle_intervention'].includes(j.status));
+  || (j.kind === 'sav' && ['cloture', 'nouvelle_intervention'].includes(j.status))
+  || (j.kind === 'mesure' && j.status === 'faite')
+  || (j.kind === 'demande' && j.status === 'traitee');
 const etat = (j) => ETATS[j.kind]?.[j.status] || { label: j.status, cls: 'st-grey' };
 
 // ---------------------------------------------------------------------
@@ -68,7 +84,7 @@ async function chargerDossiers() {
   const { data, error } = await supabase.rpc('client_file_list');
   if (error) throw error;
   dossiers = (typeof data === 'string' ? JSON.parse(data) : data) || [];
-  if (autres === null) await chargerAutres();
+  if (equipe === null) await chargerEquipe();
 }
 
 /**
@@ -77,34 +93,42 @@ async function chargerDossiers() {
  */
 const relaisActif = () => dossiers.some((d) => 'relais' in d);
 
-/** Le prénom à afficher sur les boutons du relais : « Confier à Marie ». */
-async function chargerAutres() {
-  autres = isManager() ? 'Marie' : 'Jordan';
+/** Toute l'équipe, pour « confier à » — les vendeurs compris */
+async function chargerEquipe() {
+  equipe = [];
   try {
     const { data } = await supabase.rpc('equipe');
-    const tous = (typeof data === 'string' ? JSON.parse(data) : data) || [];
-    const prenoms = tous.filter((p) => p.id !== currentUser?.id)
-      .map((p) => String(p.full_name || '').trim().split(/\s+/)[0]).filter(Boolean);
-    if (prenoms.length) autres = prenoms.join(' / ');
-  } catch { /* le prénom par défaut suffit */ }
+    equipe = (typeof data === 'string' ? JSON.parse(data) : data) || [];
+  } catch { /* sans annuaire, on ne peut confier à personne */ }
 }
 
-function poserPastille(n) {
-  $$('.client-badge').forEach((b) => { b.textContent = n; b.hidden = n === 0; });
+const moi = () => currentUser?.id;
+const ROLE_COURT = { manager: 'gérant', secretary: 'bureau', seller: 'vendeur' };
+/** « Marie (bureau) », « Marie Closson (vendeur) » : les deux Marie se distinguent */
+const nomPersonne = (p) => `${p.full_name || '—'}${ROLE_COURT[p.role] ? ` (${ROLE_COURT[p.role]})` : ''}`;
+const collegues = () => (equipe || []).filter((p) => p.id !== moi());
+
+function poserPastille(n, urgent = false) {
+  $$('.client-badge').forEach((b) => {
+    b.textContent = n;
+    // Un vendeur a Clients dans sa barre du bas : pas de doublon sur « Plus »
+    b.hidden = n === 0 || (isSeller() && !!b.closest('#tabbar-plus'));
+    b.classList.toggle('urgent', urgent);
+  });
 }
 
 /**
- * La pastille du menu : à traiter pour Marie, réponses à lire pour Jordan.
- * Appelée à la connexion : on oublie alors le prénom et le filtre du
- * compte précédent.
+ * La pastille du menu : ce qu'on m'a confié, plus les réponses à ce que
+ * j'ai confié. Appelée à la connexion : on oublie alors l'équipe et le
+ * filtre du compte précédent.
  */
 export async function refreshClientBadge({ connexion = false } = {}) {
-  if (connexion) { autres = null; filtreChoisi = false; ouvert = null; }
+  if (connexion) { equipe = null; filtreChoisi = false; ouvert = null; }
   try {
     const { data, error } = await supabase.rpc('client_relais_count');
     if (error) throw error;
     const c = (typeof data === 'string' ? JSON.parse(data) : data) || {};
-    poserPastille(Number(isManager() ? c.reponses : c.a_traiter) || 0);
+    poserPastille((Number(c.a_traiter) || 0) + (Number(c.reponses) || 0), Number(c.urgents) > 0);
   } catch { /* une pastille absente ne bloque rien */ }
 }
 
@@ -118,14 +142,20 @@ async function chargerNotes(id) {
 /** Un dossier est en cours tant qu'il n'a pas de fiche, ou qu'une fiche est ouverte. */
 const enCours = (d) => !d.jobs.length || d.jobs.some((j) => !finie(j));
 
-// Les deux filtres du relais se lisent du point de vue de qui regarde.
+// Les filtres du relais se lisent du point de vue de qui regarde.
+const pourMoi = (d) => d.relais === 'a_traiter' && d.relais_pour === moi();
+const reponseAMoi = (d) => ['traite', 'non_traite'].includes(d.relais) && d.relais_de === moi();
 const FILTRES = {
-  relais:     { label: '', test: (d) => d.relais === 'a_traiter' },
-  reponses:   { label: '', test: (d) => ['traite', 'non_traite'].includes(d.relais) },
+  relais:     { label: 'À traiter pour toi', test: pourMoi },
+  reponses:   { label: 'Réponses reçues',    test: reponseAMoi },
+  confies:    { label: 'Confiés en attente', test: (d) => d.relais === 'a_traiter' && d.relais_de === moi() },
   encours:    { label: 'En cours',          test: enCours },
+  miens:      { label: 'Mes dossiers',      test: (d) => d.created_by === moi() || d.relais_pour === moi() || d.relais_de === moi() },
+  mesures:    { label: 'Mesurages à planifier', test: (d) => d.jobs.some((j) => j.kind === 'mesure' && j.status === 'a_planifier') },
   a_planifier:{ label: 'Poses à planifier', test: (d) => d.jobs.some((j) => j.kind === 'pose' && j.status === 'a_planifier') },
   poses:      { label: 'Poses à venir',     test: (d) => d.jobs.some((j) => j.kind === 'pose' && j.status === 'planifiee') },
   sav:        { label: 'SAV en cours',      test: (d) => d.jobs.some((j) => j.kind === 'sav' && !finie(j)) },
+  demandes:   { label: 'Demandes en cours', test: (d) => d.jobs.some((j) => j.kind === 'demande' && !finie(j)) },
   clotures:   { label: 'Clôturés',          test: (d) => !enCours(d) },
   tous:       { label: 'Tous',              test: () => true }
 };
@@ -134,7 +164,7 @@ function correspond(d, q) {
   if (!q) return true;
   const n = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   const chiffres = q.replace(/\D/g, '');
-  const texte = n([d.name, d.email, d.address, d.todo, ...d.jobs.map((j) => `${j.title || ''} ${j.order_ref || ''} ${j.remarks || ''}`)].join(' '));
+  const texte = n([d.name, d.email, d.address, d.todo, d.created_name, ...d.jobs.map((j) => `${j.title || ''} ${j.order_ref || ''} ${j.remarks || ''} ${j.preferences || ''}`)].join(' '));
   return texte.includes(n(q)) || (chiffres.length >= 3 && String(d.phone || '').replace(/\D/g, '').includes(chiffres));
 }
 
@@ -145,7 +175,7 @@ function prochaineDate(d) {
     if (finie(j)) continue;
     if (j.delivery_date) dates.push({ date: j.delivery_date, quoi: 'Livraison' });
     if (j.pose_date) dates.push({ date: j.pose_date, quoi: 'Pose' });
-    if (j.intervention_date) dates.push({ date: j.intervention_date, quoi: 'Intervention SAV' });
+    if (j.intervention_date) dates.push({ date: j.intervention_date, quoi: j.kind === 'mesure' ? 'Mesurage' : 'Intervention SAV' });
   }
   const futures = dates.filter((x) => x.date >= todayISO()).sort((a, b) => a.date.localeCompare(b.date));
   return futures[0] || null;
@@ -155,16 +185,12 @@ function prochaineDate(d) {
 // Rendu — la liste
 // ---------------------------------------------------------------------
 const RELAIS = {
-  a_traiter:  { cls: 'st-orange', texte: () => isManager() ? `Chez ${autres}` : 'À traiter pour toi' },
-  traite:     { cls: 'st-green',  texte: () => '✓ Traité' },
-  non_traite: { cls: 'st-red',    texte: () => '✗ Pas traité' }
+  a_traiter:  { cls: 'st-orange', texte: (d) => d.relais_pour === moi() ? 'À traiter pour toi' : `Chez ${d.relais_pour_name || '—'}` },
+  traite:     { cls: 'st-green',  texte: (d) => `✓ Traité par ${d.relais_par_name || '—'}` },
+  non_traite: { cls: 'st-red',    texte: (d) => `✗ Pas traité par ${d.relais_par_name || '—'}` }
 };
-
-function libelleFiltre(k) {
-  if (k === 'relais') return isManager() ? `Chez ${autres}` : 'À traiter pour toi';
-  if (k === 'reponses') return isManager() ? `Réponses de ${autres}` : 'Réponses envoyées';
-  return FILTRES[k].label;
-}
+const libelleFiltre = (k) => FILTRES[k].label;
+const FILTRES_RELAIS = ['relais', 'reponses', 'confies'];
 
 function carteHtml(d) {
   const prochaine = prochaineDate(d);
@@ -180,9 +206,10 @@ function carteHtml(d) {
       </div>
       ${d.address ? `<span class="muted small">${escapeHtml(d.address)}</span>` : ''}
       <div class="cl-fiches">
-        ${d.relais ? `<span class="badge ${RELAIS[d.relais].cls} cl-relais-badge">${escapeHtml(RELAIS[d.relais].texte())}</span>` : ''}
+        ${d.relais === 'a_traiter' && d.relais_urgent ? '<span class="badge st-red cl-urgent">URGENT</span>' : ''}
+        ${d.relais ? `<span class="badge ${RELAIS[d.relais].cls} cl-relais-badge">${escapeHtml(RELAIS[d.relais].texte(d))}</span>` : ''}
         ${montrees.map((j) => `
-          <span class="badge ${etat(j).cls}">${j.kind === 'pose' ? 'Pose' : 'SAV'} · ${escapeHtml(etat(j).label)}</span>`).join('')}
+          <span class="badge ${etat(j).cls}">${SORTES[j.kind] || j.kind} · ${escapeHtml(etat(j).label)}</span>`).join('')}
         ${!d.jobs.length ? '<span class="badge st-grey">Aucune fiche</span>' : ''}
       </div>
       ${d.relais === 'a_traiter' && d.relais_consigne
@@ -192,33 +219,43 @@ function carteHtml(d) {
         <p class="cl-dernier muted small">Consigne : ${escapeHtml(d.relais_consigne || '')}</p>
         ${d.relais_reponse ? `<p class="cl-dernier small">« ${escapeHtml(d.relais_reponse)} » — ${escapeHtml(d.relais_par_name || '')}</p>` : ''}` : ''}
       ${d.last_note && !d.last_note.automatique && !d.relais ? `<p class="cl-dernier muted small">« ${escapeHtml(d.last_note.body)} » — ${escapeHtml(d.last_note.author_name || '')}</p>` : ''}
+      ${d.created_name ? `<p class="cl-qui muted small">Créé par ${escapeHtml(d.created_name)}${d.updated_name && d.updated_name !== d.created_name ? ` · modifié par ${escapeHtml(d.updated_name)}` : ''}</p>` : ''}
     </li>`;
 }
 
 function listeHtml() {
   const compte = (k) => dossiers.filter(FILTRES[k].test).length;
-  // À l'ouverture, chacun tombe sur ce qui l'attend : Marie sur ce qu'on
-  // lui a confié, Jordan sur les réponses — tant qu'il y en a.
+  // À l'ouverture, chacun tombe sur ce qui l'attend : ce qu'on lui a
+  // confié d'abord, puis les réponses à ce qu'il a confié.
   if (!filtreChoisi) {
-    const attente = isManager() ? 'reponses' : 'relais';
-    filtre = compte(attente) ? attente : 'encours';
+    filtre = compte('relais') ? 'relais' : compte('reponses') ? 'reponses' : 'encours';
   }
-  // Les filtres du relais n'apparaissent que s'ils ont quelque chose à montrer
-  const montres = Object.keys(FILTRES).filter((k) => !['relais', 'reponses'].includes(k) || compte(k) || k === filtre);
-  const visibles = dossiers.filter(FILTRES[filtre].test).filter((d) => correspond(d, recherche));
+  // Les filtres du relais et des sortes rares n'apparaissent que s'ils ont
+  // quelque chose à montrer ; « Mes dossiers » sert surtout aux vendeurs.
+  const facultatifs = [...FILTRES_RELAIS, 'mesures', 'demandes', ...(isSeller() ? [] : ['miens'])];
+  const montres = Object.keys(FILTRES).filter((k) => !facultatifs.includes(k) || compte(k) || k === filtre);
+  // L'urgent passe devant
+  const visibles = dossiers.filter(FILTRES[filtre].test).filter((d) => correspond(d, recherche))
+    .sort((a, b) => Number(pourMoi(b) && b.relais_urgent) - Number(pourMoi(a) && a.relais_urgent));
+  const urgents = dossiers.filter((d) => pourMoi(d) && d.relais_urgent).length;
   // Confier d'un coup les SAV en cours qui ont un « reste à faire »
-  const aConfier = isManager() && filtre === 'sav' && relaisActif()
+  const aConfier = !isSeller() && filtre === 'sav' && relaisActif() && collegues().length
     ? visibles.filter((d) => d.relais !== 'a_traiter' && String(d.todo || '').trim()) : [];
   return `
+    ${urgents ? `
+      <button type="button" class="cl-alerte-urgent" data-filtre="relais">
+        <strong>${urgents} demande${urgents > 1 ? 's' : ''} urgente${urgents > 1 ? 's' : ''} pour toi</strong>
+        <span>Voir</span></button>` : ''}
     <div class="cl-filtres">
       ${montres.map((k) => `
-        <button type="button" class="cl-filtre ${k === filtre ? 'active' : ''}${['relais', 'reponses'].includes(k) ? ' relais' : ''}" data-filtre="${k}">
+        <button type="button" class="cl-filtre ${k === filtre ? 'active' : ''}${FILTRES_RELAIS.includes(k) ? ' relais' : ''}" data-filtre="${k}">
           ${escapeHtml(libelleFiltre(k))}<span class="cl-n">${compte(k)}</span></button>`).join('')}
     </div>
     ${aConfier.length ? `
       <div class="cl-lot">
-        <span class="small">${aConfier.length} dossier${aConfier.length > 1 ? 's' : ''} SAV avec un « reste à faire » pas encore confié${aConfier.length > 1 ? 's' : ''} à ${escapeHtml(autres)}.</span>
-        <button type="button" class="btn btn-sm btn-primary" data-confier-lot="${aConfier.map((d) => d.id).join(',')}">Tout confier à ${escapeHtml(autres)}</button>
+        <span class="small">${aConfier.length} dossier${aConfier.length > 1 ? 's' : ''} SAV avec un « reste à faire » pas encore confié${aConfier.length > 1 ? 's' : ''}.</span>
+        <select id="lot-pour" aria-label="Confier à">${collegues().map((p) => `<option value="${p.id}" ${p.role === 'secretary' ? 'selected' : ''}>${escapeHtml(nomPersonne(p))}</option>`).join('')}</select>
+        <button type="button" class="btn btn-sm btn-primary" data-confier-lot="${aConfier.map((d) => d.id).join(',')}">Tout confier</button>
       </div>` : ''}
     ${visibles.length
       ? `<ul class="cl-liste">${visibles.map(carteHtml).join('')}</ul>`
@@ -273,18 +310,19 @@ const ORIGINE = { telephone: 'votre appel', magasin: 'votre passage au magasin',
 // doit rester chez nous.
 const MODELES = {
   maj:          { label: 'Mise à jour',    blocs: ['demande', 'contact'] },
-  confirmation: { label: 'Fiche créée',   blocs: ['demande', 'infos', 'ref', 'dates', 'adresse', 'tel', 'contact'] },
+  confirmation: { label: 'Fiche créée',   blocs: ['demande', 'infos', 'ref', 'dates', 'prefs', 'adresse', 'tel', 'contact'] },
   date:         { label: 'Date planifiée', blocs: ['demande', 'dates', 'adresse', 'contact'] },
   info:         { label: 'Message libre',  blocs: ['demande', 'contact'] }
 };
 
 // Ce que la fiche peut apporter au mail. « valeur » vide = case absente.
 const BLOCS = [
-  { cle: 'demande', label: (j) => j.kind === 'pose' ? 'Objet' : 'Demande', valeur: (j) => j.title },
+  { cle: 'demande', label: (j) => j.kind === 'pose' ? 'Objet' : j.kind === 'mesure' ? 'À mesurer' : 'Demande', valeur: (j) => j.title },
   { cle: 'infos',   label: () => 'Informations notées', valeur: (j) => j.remarks,
     aide: 'reprend les remarques de la fiche : rien d\'interne ?' },
   { cle: 'ref',     label: () => 'Référence de commande', valeur: (j) => j.kind === 'sav' ? j.order_ref : '' },
-  { cle: 'dates',   label: (j) => j.kind === 'pose' ? 'Dates de livraison et de pose' : 'Date d\'intervention', valeur: (j) => phraseDate(j).join(' ') },
+  { cle: 'dates',   label: (j) => ({ pose: 'Dates de livraison et de pose', mesure: 'Date du mesurage' }[j.kind] || 'Date d\'intervention'), valeur: (j) => phraseDate(j).join(' ') },
+  { cle: 'prefs',   label: () => 'Vos disponibilités notées', valeur: (j) => j.preferences },
   { cle: 'adresse', label: () => 'Adresse', valeur: (j, d) => d.address },
   { cle: 'tel',     label: () => 'Téléphone', valeur: (j, d) => d.phone },
   { cle: 'reste',   label: () => 'Ce qu\'il reste à faire', valeur: (j, d) => d.todo, aide: 'note interne, décochée d\'office' },
@@ -326,7 +364,7 @@ function dernierMail(j) {
 
 /** La date d'avant, lue dans « déplacée du A au B » ou « retirée (était le A) » */
 function dateAvant(body) {
-  const m = String(body).match(/(?:déplacée du|était le) (\d{2})\/(\d{2})\/(\d{4})/);
+  const m = String(body).match(/(?:déplacée? du|était le) (\d{2})\/(\d{2})\/(\d{4})/);
   return m ? `${m[3]}-${m[2]}-${m[1]}` : null;
 }
 
@@ -344,9 +382,9 @@ function changements(j, d) {
   const pose = j.kind === 'pose';
   const out = [];
 
-  const etapes = auto.filter((n) => /^(SAV|Pose) : .+ → /.test(n.body));
+  const etapes = auto.filter((n) => /^(SAV|Pose|Mesurage|Demande) : .+ → /.test(n.body));
   const dateNotes = (mot) => auto.filter((n) => String(n.body).startsWith(mot + ' '));
-  const interv = dateNotes('Intervention');
+  const interv = j.kind === 'mesure' ? dateNotes('Mesurage').filter((n) => !/^Mesurage : /.test(n.body)) : dateNotes('Intervention');
   const livr = dateNotes('Livraison');
   const posee = dateNotes('Pose').filter((n) => !/^Pose : /.test(n.body));
   // Une date fixée pour la première fois, en même temps que l'étape
@@ -356,7 +394,15 @@ function changements(j, d) {
 
   if (etapes.length) {
     const ancien = String(etapes[0].body).split(' : ')[1].split(' → ')[0];
-    const phrase = {
+    const parSorte = {
+      'mesure:planifiee': j.intervention_date ? `Le mesurage est planifié le ${le(j.intervention_date)}.` : 'Le mesurage va être planifié : nous vous communiquerons la date très prochainement.',
+      'mesure:faite': 'Le mesurage a été effectué. Merci pour votre accueil.',
+      'mesure:a_planifier': 'La date du mesurage reste à fixer : nous vous la communiquerons prochainement.',
+      'demande:en_cours': 'Votre demande est en cours de traitement.',
+      'demande:traitee': 'Votre demande a été traitée.',
+      'demande:a_traiter': 'Votre demande est de nouveau en cours : nous revenons vers vous rapidement.'
+    };
+    const phrase = parSorte[`${j.kind}:${j.status}`] || {
       commande: `La pièce nécessaire a été commandée${j.order_ref ? ` (référence ${j.order_ref})` : ''}. Nous vous recontacterons dès sa réception pour fixer une date d'intervention.`,
       recu: 'Bonne nouvelle : la pièce est arrivée au magasin. Il nous reste à convenir avec vous d\'une date d\'intervention.',
       planifie: j.intervention_date ? `Votre intervention est planifiée le ${le(j.intervention_date)}.` : 'Votre intervention va être planifiée : nous vous communiquerons la date très prochainement.',
@@ -379,12 +425,14 @@ function changements(j, d) {
     const phrase = !valeur
       ? `La date ${nom} prévue le ${le(avant)} est annulée : nous vous recontacterons pour en fixer une nouvelle.`
       : avant ? `La date ${nom} est modifiée : ${quoi} aura lieu le ${le(valeur)} (au lieu du ${le(avant)}).`
-      : `${quoi[0].toUpperCase() + quoi.slice(1)} est fixée au ${le(valeur)}.`;
-    out.push({ cle, label: `${nom === 'd\'intervention' ? 'Intervention' : nom === 'de livraison' ? 'Livraison' : 'Pose'} : ${valeur ? fmtDate(valeur) : 'date retirée'}${avant ? ` (était le ${fmtDate(avant)})` : ''}`, phrase, coche: true });
+      : `${quoi[0].toUpperCase() + quoi.slice(1)} est fixé${quoi.startsWith('le ') ? '' : 'e'} au ${le(valeur)}.`;
+    out.push({ cle, label: `${{ 'd\'intervention': 'Intervention', 'de livraison': 'Livraison', 'du mesurage': 'Mesurage' }[nom] || 'Pose'} : ${valeur ? fmtDate(valeur) : 'date retirée'}${avant ? ` (était le ${fmtDate(avant)})` : ''}`, phrase, coche: true });
   };
   if (pose) {
     dateChange(livr, j.delivery_date, 'livraison', 'la livraison', 'de livraison');
     dateChange(posee, j.pose_date, 'pose', 'la pose', 'de pose');
+  } else if (j.kind === 'mesure') {
+    dateChange(interv, j.intervention_date, 'intervention', 'le mesurage', 'du mesurage');
   } else {
     dateChange(interv, j.intervention_date, 'intervention', 'l\'intervention', 'd\'intervention');
   }
@@ -412,6 +460,14 @@ function modeleProbable(j) {
 /** Où en est la date : ce qu'on peut en dire au client */
 function phraseDate(j) {
   const le = (iso) => longDate(String(iso).slice(0, 10));
+  if (j.kind === 'mesure') {
+    if (j.status === 'faite') return ['Le mesurage a été effectué. Merci pour votre accueil.'];
+    return [j.intervention_date ? `Le mesurage est planifié le ${le(j.intervention_date)}.`
+      : 'La date du mesurage vous sera communiquée prochainement.'];
+  }
+  if (j.kind === 'demande') {
+    return j.status === 'traitee' ? ['Votre demande a été traitée.'] : [];
+  }
   if (j.kind === 'pose') {
     return [
       j.delivery_date ? `Livraison prévue le ${le(j.delivery_date)}.` : '',
@@ -430,7 +486,7 @@ function phraseDate(j) {
 function texteMail(j, d, o = optsParDefaut('confirmation')) {
   const pose = j.kind === 'pose';
   const a = (cle) => o.blocs.has(cle) && String(BLOCS.find((b) => b.cle === cle).valeur(j, d) || '').trim();
-  const quoi = pose ? 'dossier de pose' : 'demande de service après-vente';
+  const quoi = { pose: 'dossier de pose', sav: 'demande de service après-vente', mesure: 'demande de mesurage', demande: 'demande' }[j.kind];
   const lignes = [`Bonjour${d.name ? ` ${d.name}` : ''},`, ''];
 
   if (o.modele === 'maj') {
@@ -444,10 +500,11 @@ function texteMail(j, d, o = optsParDefaut('confirmation')) {
   }
 
   const details = [];
-  if (a('demande') && !(o.modele === 'maj' && j.title)) details.push(`${pose ? 'Objet' : 'Demande'} : ${j.title}`);
+  if (a('demande') && !(o.modele === 'maj' && j.title)) details.push(`${pose ? 'Objet' : j.kind === 'mesure' ? 'À mesurer' : 'Demande'} : ${j.title}`);
   if (a('infos')) details.push(`Informations notées : ${j.remarks}`);
   if (a('ref')) details.push(`Référence de commande : ${j.order_ref}`);
   if (a('reste')) details.push(`Prochaine étape : ${d.todo}`);
+  if (a('prefs')) details.push(`Vos disponibilités notées : ${j.preferences}`);
   if (details.length) lignes.push('', ...details);
 
   if (o.modele === 'maj') {
@@ -470,10 +527,10 @@ function texteMail(j, d, o = optsParDefaut('confirmation')) {
 }
 
 function objetMail(j, modele = 'confirmation') {
-  const pose = j.kind === 'pose';
-  if (modele === 'maj') return `Suivi de votre dossier ${pose ? 'de pose' : 'SAV'} — ${MAGASIN}`;
-  if (modele === 'date') return `${pose ? 'Date de pose' : 'Date d\'intervention'} — ${MAGASIN}`;
-  return `Votre dossier ${pose ? 'de pose' : 'SAV'} — ${MAGASIN}`;
+  const dossier = { pose: 'de pose', sav: 'SAV', mesure: 'de mesurage', demande: '' }[j.kind] ?? '';
+  if (modele === 'maj') return `Suivi de votre dossier${dossier ? ` ${dossier}` : ''} — ${MAGASIN}`;
+  if (modele === 'date') return `${{ pose: 'Date de pose', mesure: 'Date du mesurage' }[j.kind] || 'Date d\'intervention'} — ${MAGASIN}`;
+  return `Votre dossier${dossier ? ` ${dossier}` : ''} — ${MAGASIN}`;
 }
 
 /** mailto : les fins de ligne en CRLF, comme le veut la norme */
@@ -557,46 +614,74 @@ function boutonMail(j, d) {
     : `<button type="button" class="btn btn-sm" data-mail="${j.id}">✉ Mail au client</button>`;
 }
 
+// Ce que dit le champ « objet » de chaque sorte de fiche
+const OBJET = {
+  pose:    { label: 'Objet (facultatif)', aide: 'Cuisine complète, plan de travail…' },
+  sav:     { label: 'Problème', aide: 'Porte abîmée, pièce manquante…' },
+  mesure:  { label: 'À mesurer', aide: 'Cuisine, îlot, salle de bain…' },
+  demande: { label: 'Demande', aide: 'Devis, renseignement, rappel…' }
+};
+const BOUTON_FIN = { pose: 'Pose terminée', sav: 'Clôturer le SAV', mesure: 'Mesurage fait', demande: 'Demande traitée' };
+
+/** « créée par Bob Tilkin le 04/11/2026 · modifiée par Marie » */
+function quiHtml(o, genre = 'e') {
+  const parts = [];
+  if (o.created_name) parts.push(`créé${genre} par ${escapeHtml(o.created_name)}${o.created_at ? ` le ${escapeHtml(fmtDate(String(o.created_at).slice(0, 10)))}` : ''}`);
+  if (o.updated_name) parts.push(`modifié${genre} par ${escapeHtml(o.updated_name)}${o.updated_at ? ` le ${escapeHtml(fmtDate(String(o.updated_at).slice(0, 10)))}` : ''}`);
+  return parts.length ? `<p class="cl-qui muted small">${parts.join(' · ')}</p>` : '';
+}
+
 function ficheHtml(j, d) {
   const e = etat(j);
-  const pose = j.kind === 'pose';
+  const k = j.kind;
+  const pose = k === 'pose';
   const parent = j.parent_id ? d.jobs.find((x) => x.id === j.parent_id) : null;
 
   // Une fiche terminée reste entièrement modifiable : on corrige une
   // date ou une remarque après coup sans devoir la rouvrir.
   const close = finie(j);
   const avecSuite = ['sav', 'nouvelle_intervention'].includes(j.status);
+  const etapes = ETAPES[k];
+  const objet = OBJET[k] || OBJET.demande;
 
   return `
-    <div class="cl-fiche ${pose ? 'pose' : 'sav'}${close ? ' finie' : ''}" data-fiche="${j.id}">
+    <div class="cl-fiche ${k}${close ? ' finie' : ''}" data-fiche="${j.id}">
       <div class="cl-fiche-haut">
-        <span class="cl-type">${pose ? 'Pose' : 'SAV'}</span>
+        <span class="cl-type">${SORTES[k] || k}</span>
         <span class="badge ${e.cls}">${escapeHtml(e.label)}</span>
         ${close && j.closed_at ? `<span class="muted small">terminée le ${escapeHtml(fmtDate(String(j.closed_at).slice(0, 10)))}</span>` : ''}
         ${j.source && SOURCES[j.source] ? `<span class="muted small">signalé par ${SOURCES[j.source].toLowerCase()}</span>` : ''}
         ${parent ? `<span class="muted small">suite de : ${parent.kind === 'pose' ? 'la pose' : 'SAV'}${parent.title ? ` « ${escapeHtml(parent.title)} »` : ''}</span>` : ''}
       </div>
+      ${quiHtml(j)}
 
-      ${pose || close ? '' : `
-        <div class="cl-etapes" role="group" aria-label="Étape du SAV">
-          ${ETAPES_SAV.map((s) => `
-            <button type="button" class="${s === j.status ? 'active' : ''} ${ETAPES_SAV.indexOf(s) < ETAPES_SAV.indexOf(j.status) ? 'passee' : ''}"
-              data-etape="${s}" data-job="${j.id}">${ETATS.sav[s].label}</button>`).join('')}
+      ${!etapes || close ? '' : `
+        <div class="cl-etapes" role="group" aria-label="Étape">
+          ${etapes.map((s) => `
+            <button type="button" class="${s === j.status ? 'active' : ''} ${etapes.indexOf(s) < etapes.indexOf(j.status) ? 'passee' : ''}"
+              data-etape="${s}" data-job="${j.id}">${ETATS[k][s].label}</button>`).join('')}
         </div>`}
 
       <div class="cl-grille">
-        <label class="field col-2"><span class="sub">${pose ? 'Objet (facultatif)' : 'Problème'}</span>
+        <label class="field col-2"><span class="sub">${objet.label}</span>
           <input type="text" data-champ-fiche="title" data-job="${j.id}" value="${escapeHtml(j.title || '')}"
-                 placeholder="${pose ? 'Cuisine complète, plan de travail…' : 'Porte abîmée, pièce manquante…'}"></label>
+                 placeholder="${objet.aide}"></label>
         ${pose ? `
           <label class="field"><span class="sub">Livraison</span>
             <input type="date" data-champ-fiche="delivery_date" data-job="${j.id}" value="${j.delivery_date || ''}"></label>
           <label class="field"><span class="sub">Pose</span>
-            <input type="date" data-champ-fiche="pose_date" data-job="${j.id}" value="${j.pose_date || ''}"></label>` : `
+            <input type="date" data-champ-fiche="pose_date" data-job="${j.id}" value="${j.pose_date || ''}"></label>` : ''}
+        ${k === 'sav' ? `
           <label class="field"><span class="sub">Référence de commande</span>
             <input type="text" data-champ-fiche="order_ref" data-job="${j.id}" value="${escapeHtml(j.order_ref || '')}"></label>
           <label class="field"><span class="sub">Date d'intervention</span>
-            <input type="date" data-champ-fiche="intervention_date" data-job="${j.id}" value="${j.intervention_date || ''}"></label>`}
+            <input type="date" data-champ-fiche="intervention_date" data-job="${j.id}" value="${j.intervention_date || ''}"></label>` : ''}
+        ${k === 'mesure' ? `
+          <label class="field"><span class="sub">Date du mesurage</span>
+            <input type="date" data-champ-fiche="intervention_date" data-job="${j.id}" value="${j.intervention_date || ''}"></label>` : ''}
+        <label class="field col-2"><span class="sub">Disponibilités du client</span>
+          <textarea rows="2" data-champ-fiche="preferences" data-job="${j.id}"
+            placeholder="Quand le client est joignable, quand on peut passer : le mardi après 17 h, pas le vendredi…">${escapeHtml(j.preferences || '')}</textarea></label>
         <label class="field col-2"><span class="sub">Remarques</span>
           <textarea rows="2" data-champ-fiche="remarks" data-job="${j.id}"
             placeholder="Tout ce qui est utile : accès, pièce en stock, à rappeler…">${escapeHtml(j.remarks || '')}</textarea></label>
@@ -612,8 +697,8 @@ function ficheHtml(j, d) {
           ${isManager() ? `<button type="button" class="btn btn-ghost btn-sm" data-suppr-fiche="${j.id}">Supprimer la fiche</button>` : ''}
         </div>` : suite === j.id ? formSuiteHtml(j) : `
         <div class="cl-actions">
-          <button type="button" class="btn btn-sm cl-ok" data-cloturer="${j.id}">✓ ${pose ? 'Pose terminée' : 'Clôturer le SAV'}</button>
-          <button type="button" class="btn btn-sm cl-sav" data-suite="${j.id}">${pose ? '⚠ Ouvrir un SAV' : '↻ Nouvelle intervention'}</button>
+          <button type="button" class="btn btn-sm cl-ok" data-cloturer="${j.id}">✓ ${BOUTON_FIN[k] || 'Terminer'}</button>
+          ${['pose', 'sav'].includes(k) ? `<button type="button" class="btn btn-sm cl-sav" data-suite="${j.id}">${pose ? '⚠ Ouvrir un SAV' : '↻ Nouvelle intervention'}</button>` : ''}
           ${courriel === j.id ? '' : boutonMail(j, d)}
           ${isManager() ? `<button type="button" class="btn btn-ghost btn-sm" data-suppr-fiche="${j.id}">Supprimer la fiche</button>` : ''}
         </div>`}
@@ -655,17 +740,22 @@ function contactHtml(d) {
 function relaisHtml(d) {
   if (!relaisActif()) return '';
   const quand = d.relais_le ? fmtDate(String(d.relais_le).slice(0, 10)) : '';
+  // Qui a confié peut retirer ou classer ; le gérant aussi, toujours.
+  const maitre = d.relais_de === moi() || isManager();
   if (d.relais === 'a_traiter') {
+    const pourToi = d.relais_pour === moi();
     return `
-      <div class="card pad cl-bloc cl-relais attente">
-        <p class="cl-relais-titre"><strong>${isManager() ? `Confié à ${escapeHtml(autres)}` : 'À traiter pour toi'}</strong>
-          <span class="muted small">${escapeHtml(d.relais_par_name || '')}${quand ? ` · ${escapeHtml(quand)}` : ''}</span></p>
+      <div class="card pad cl-bloc cl-relais attente${d.relais_urgent ? ' urgent' : ''}">
+        <p class="cl-relais-titre">
+          ${d.relais_urgent ? '<span class="badge st-red cl-urgent">URGENT</span>' : ''}
+          <strong>${pourToi ? 'À traiter pour toi' : `Confié à ${escapeHtml(d.relais_pour_name || '—')}`}</strong>
+          <span class="muted small">par ${escapeHtml(d.relais_de_name || '—')}${quand ? ` · ${escapeHtml(quand)}` : ''}</span></p>
         <p class="cl-consigne">${escapeHtml(d.relais_consigne || '')}</p>
-        <textarea id="relais-texte" rows="2" placeholder="${isManager() ? 'Un mot (facultatif)' : 'Ta réponse : ce que tu as fait, ou pourquoi ce n\'est pas fait'}"></textarea>
+        <textarea id="relais-texte" rows="2" placeholder="${pourToi ? 'Ta réponse : ce que tu as fait, ou pourquoi ce n\'est pas fait' : 'Un mot (facultatif)'}"></textarea>
         <div class="cl-actions">
           <button type="button" class="btn btn-sm cl-ok" data-relais="traite">✓ Traité</button>
           <button type="button" class="btn btn-sm cl-sav" data-relais="non_traite">✗ Pas traité</button>
-          ${isManager() ? '<button type="button" class="btn btn-ghost btn-sm" data-relais="classe">Retirer</button>' : ''}
+          ${maitre ? '<button type="button" class="btn btn-ghost btn-sm" data-relais="classe">Retirer</button>' : ''}
         </div>
       </div>`;
   }
@@ -675,23 +765,32 @@ function relaisHtml(d) {
       <div class="card pad cl-bloc cl-relais ${fait ? 'fait' : 'pas-fait'}">
         <p class="cl-relais-titre"><strong>${fait ? '✓ Traité' : '✗ Pas traité'}</strong>
           <span class="muted small">par ${escapeHtml(d.relais_par_name || '—')}${quand ? ` · ${escapeHtml(quand)}` : ''}</span></p>
-        <p class="muted small">Consigne : ${escapeHtml(d.relais_consigne || '')}</p>
+        <p class="muted small">Consigne de ${escapeHtml(d.relais_de_name || '—')} : ${escapeHtml(d.relais_consigne || '')}</p>
         ${d.relais_reponse ? `<p class="cl-consigne">« ${escapeHtml(d.relais_reponse)} »</p>` : ''}
-        ${isManager() ? `
-          <textarea id="relais-texte" rows="2" placeholder="Nouvelle consigne pour ${escapeHtml(autres)}, si tu la renvoies"></textarea>
+        ${maitre ? `
+          <textarea id="relais-texte" rows="2" placeholder="Nouvelle consigne, si tu le renvoies"></textarea>
           <div class="cl-actions">
             <button type="button" class="btn btn-sm cl-ok" data-relais="classe">Vu, classer</button>
-            <button type="button" class="btn btn-sm" data-relais="a_traiter">Renvoyer à ${escapeHtml(autres)}</button>
-          </div>` : `<p class="muted small">En attente de lecture par ${escapeHtml(autres)}.</p>`}
+            <button type="button" class="btn btn-sm" data-relais="a_traiter" data-pour="${d.relais_pour || ''}">Renvoyer à ${escapeHtml(d.relais_pour_name || '—')}</button>
+          </div>` : `<p class="muted small">En attente de lecture par ${escapeHtml(d.relais_de_name || '—')}.</p>`}
       </div>`;
   }
-  // Rien en cours : c'est Jordan qui confie.
-  if (!isManager()) return '';
+  // Rien en cours : n'importe qui confie le dossier à un collègue
+  const gens = collegues();
+  if (!gens.length) return '';
+  // Le bureau confie d'abord à la secrétaire ; un vendeur, au gérant
+  const defaut = (isSeller() ? gens.find((p) => p.role === 'manager') : gens.find((p) => p.role === 'secretary')) || gens[0];
   return `
     <div class="card pad cl-bloc cl-relais">
-      <textarea id="relais-texte" rows="2" placeholder="Ce que ${escapeHtml(autres)} doit faire. Laissé vide : « ce qu'il reste à faire » ci-dessus"></textarea>
+      <p class="cl-relais-titre"><strong>Confier ce dossier</strong>
+        <span class="muted small">à un collègue, avec une consigne</span></p>
+      <textarea id="relais-texte" rows="2" placeholder="Ce qu'il faut faire. Laissé vide : « ce qu'il reste à faire » ci-dessus"></textarea>
       <div class="cl-actions">
-        <button type="button" class="btn btn-sm btn-primary" data-relais="a_traiter">Confier à ${escapeHtml(autres)}</button>
+        <select id="relais-pour" aria-label="Confier à">
+          ${gens.map((p) => `<option value="${p.id}" ${p.id === defaut.id ? 'selected' : ''}>${escapeHtml(nomPersonne(p))}</option>`).join('')}
+        </select>
+        <label class="cl-case cl-case-urgent"><input type="checkbox" id="relais-urgent"><span><strong>Urgent</strong></span></label>
+        <button type="button" class="btn btn-sm btn-primary" data-relais="a_traiter">Confier</button>
       </div>
     </div>`;
 }
@@ -707,6 +806,7 @@ function dossierHtml(d) {
     <div class="card pad cl-bloc">
       ${d.address ? `<p class="cl-adresse">${escapeHtml(d.address)}</p>` : ''}
       ${contactHtml(d)}
+      ${quiHtml(d, '')}
       <div class="cl-grille">
         <label class="field col-2"><span class="sub">Nom du client</span>
           <input type="text" class="cl-nom-champ" data-champ-dossier="name" value="${escapeHtml(d.name)}" required></label>
@@ -727,13 +827,15 @@ function dossierHtml(d) {
     <div class="cl-section-tete">
       <h2>Fiches</h2>
       <span class="spacer"></span>
-      <button type="button" class="btn btn-sm" data-nouvelle-fiche="pose">+ Fiche pose</button>
-      <button type="button" class="btn btn-sm" data-nouvelle-fiche="sav">+ Fiche SAV</button>
+      <button type="button" class="btn btn-sm" data-nouvelle-fiche="mesure">+ Mesurage</button>
+      <button type="button" class="btn btn-sm" data-nouvelle-fiche="pose">+ Pose</button>
+      <button type="button" class="btn btn-sm" data-nouvelle-fiche="sav">+ SAV</button>
+      <button type="button" class="btn btn-sm" data-nouvelle-fiche="demande">+ Autre demande</button>
     </div>
     ${ouvertes.length ? ouvertes.map((j) => ficheHtml(j, d)).join('')
       : `<div class="card pad"><p class="muted small">${finies.length
           ? 'Tout est terminé pour ce client.'
-          : 'Pas encore de fiche. Ajoute une pose ou un SAV.'}</p></div>`}
+          : 'Pas encore de fiche. Ajoute un mesurage, une pose, un SAV ou une autre demande.'}</p></div>`}
     ${finies.length ? `
       <button type="button" class="btn btn-ghost btn-sm cl-finies-btn" data-finies>
         ${montrerFinies ? '▾' : '▸'} Fiches terminées (${finies.length})</button>
@@ -772,7 +874,7 @@ export async function rendezVousClients() {
       const base = { nom: d.name, dossier: d.id, finie: finie(j), titre: j.title || '' };
       if (j.delivery_date) out.push({ ...base, jour: j.delivery_date, quoi: 'livraison' });
       if (j.pose_date) out.push({ ...base, jour: j.pose_date, quoi: 'pose' });
-      if (j.intervention_date) out.push({ ...base, jour: j.intervention_date, quoi: 'sav' });
+      if (j.intervention_date) out.push({ ...base, jour: j.intervention_date, quoi: j.kind === 'mesure' ? 'mesure' : 'sav' });
     }
   }
   return out;
@@ -867,7 +969,7 @@ async function majFiche(id, patch, { redessiner = true, message = null } = {}) {
 async function nouvelleFiche(kind) {
   const r = await rpc('client_job_create', { p_file: ouvert, p_kind: kind, p_title: null, p_source: null }, 'Création impossible.');
   if (!r) return;
-  toast(kind === 'pose' ? 'Fiche pose ajoutée.' : 'Fiche SAV ajoutée.');
+  toast({ pose: 'Fiche pose ajoutée.', sav: 'Fiche SAV ajoutée.', mesure: 'Fiche mesurage ajoutée.', demande: 'Demande ajoutée.' }[kind]);
   await renderClients();
   $(`[data-fiche="${r.id}"] input`)?.focus();
 }
@@ -886,8 +988,8 @@ async function cloturer(id) {
   const d = dossiers.find((x) => x.id === ouvert);
   const j = d?.jobs.find((x) => x.id === id);
   if (!j) return;
-  await majFiche(id, { status: j.kind === 'pose' ? 'terminee' : 'cloture' },
-    { message: j.kind === 'pose' ? 'Pose clôturée.' : 'SAV clôturé.' });
+  await majFiche(id, { status: FIN[j.kind] },
+    { message: { pose: 'Pose clôturée.', sav: 'SAV clôturé.', mesure: 'Mesurage fait.', demande: 'Demande traitée.' }[j.kind] });
 }
 
 async function rouvrir(id) {
@@ -895,28 +997,41 @@ async function rouvrir(id) {
   const j = d?.jobs.find((x) => x.id === id);
   if (!j) return;
   // La base remet « à planifier » une pose sans date.
-  const status = j.kind === 'pose' ? 'planifiee' : (j.intervention_date ? 'planifie' : 'a_traiter');
+  const status = { pose: 'planifiee', mesure: 'planifiee', demande: 'en_cours',
+                   sav: j.intervention_date ? 'planifie' : 'a_traiter' }[j.kind];
   await majFiche(id, { status }, { message: 'Fiche rouverte.' });
 }
 
-async function relais(etat) {
+async function relais(etat, pourDonne = null) {
+  const d = dossiers.find((x) => x.id === ouvert);
   const texte = $('#relais-texte')?.value.trim() || null;
-  const r = await rpc('client_relais', { p_file: ouvert, p_etat: etat, p_texte: texte }, 'Enregistrement impossible.');
+  const pour = etat === 'a_traiter' ? (pourDonne || $('#relais-pour')?.value || null) : null;
+  const urgent = etat === 'a_traiter' ? !!$('#relais-urgent')?.checked : false;
+  const r = await rpc('client_relais', {
+    p_file: ouvert, p_etat: etat, p_texte: texte, p_pour: pour, p_urgent: urgent
+  }, 'Enregistrement impossible.');
   if (!r) return;
-  toast({ a_traiter: `Confié à ${autres}.`, traite: 'Marqué traité.', non_traite: 'Marqué pas traité.', classe: 'Classé.' }[etat]);
-  // Marie a répondu : elle revient à sa liste, au dossier suivant
-  if (!isManager() && etat !== 'a_traiter') { ouvert = null; await renderClients(); window.scrollTo(0, 0); return; }
+  const lui = (equipe || []).find((p) => p.id === pour);
+  toast({ a_traiter: `Confié à ${lui ? nomPersonne(lui) : 'un collègue'}${urgent ? ', en urgent' : ''}.`,
+          traite: 'Marqué traité.', non_traite: 'Marqué pas traité.', classe: 'Classé.' }[etat]);
+  // On a répondu à ce qu'on nous avait confié : retour à la liste, au suivant
+  if (d?.relais_pour === moi() && ['traite', 'non_traite'].includes(etat)) {
+    ouvert = null; await renderClients(); window.scrollTo(0, 0); return;
+  }
   await renderClients();
 }
 
 async function confierLot(ids) {
-  const ok = await confirmDialog(`Confier à ${autres} ${ids.length} dossier${ids.length > 1 ? 's' : ''} ?\n`
+  const pour = $('#lot-pour')?.value;
+  const lui = (equipe || []).find((p) => p.id === pour);
+  if (!lui) return toast('Choisis à qui confier.', 'error');
+  const ok = await confirmDialog(`Confier à ${nomPersonne(lui)} ${ids.length} dossier${ids.length > 1 ? 's' : ''} ?\n`
     + 'Pour chacun, la consigne est son « reste à faire ».', 'Confier');
   if (!ok) return;
-  const r = await rpc('client_relais_lot', { p_files: ids }, 'Envoi impossible.');
+  const r = await rpc('client_relais_lot', { p_files: ids, p_pour: pour, p_urgent: false }, 'Envoi impossible.');
   if (!r) return;
-  toast(`${r.confies} dossier${r.confies > 1 ? 's' : ''} confié${r.confies > 1 ? 's' : ''} à ${autres}.`);
-  filtre = 'relais';
+  toast(`${r.confies} dossier${r.confies > 1 ? 's' : ''} confié${r.confies > 1 ? 's' : ''} à ${nomPersonne(lui)}.`);
+  filtre = 'confies';
   filtreChoisi = true;
   await renderClients();
 }
@@ -1031,10 +1146,13 @@ function cabler() {
     if ('mailCopier' in ds) return copierMail();
     if ('mailEmail' in ds) { const c = $('[data-champ-dossier="email"]'); c?.scrollIntoView({ block: 'center' }); c?.focus(); return; }
     if (ds.filtre) { filtre = ds.filtre; filtreChoisi = true; return renderClients(); }
-    if (ds.relais) return relais(ds.relais);
+    if (ds.relais) return relais(ds.relais, ds.pour || null);
     if (ds.confierLot) return confierLot(ds.confierLot.split(','));
     if (ds.nouvelleFiche) return nouvelleFiche(ds.nouvelleFiche);
-    if (ds.etape) return majFiche(ds.job, { status: ds.etape }, { message: `SAV : ${ETATS.sav[ds.etape].label}.` });
+    if (ds.etape) {
+      const j = dossiers.find((x) => x.id === ouvert)?.jobs.find((x) => x.id === ds.job);
+      return majFiche(ds.job, { status: ds.etape }, { message: `${SORTES[j?.kind] || 'Fiche'} : ${ETATS[j?.kind]?.[ds.etape]?.label || ds.etape}.` });
+    }
     if (ds.cloturer) return cloturer(ds.cloturer);
     if (ds.suite) { suite = ds.suite; return renderClients().then(() => $(`[data-suite-titre="${ds.suite}"]`)?.focus()); }
     if (ds.suiteAnnuler) { suite = null; return renderClients(); }

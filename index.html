@@ -72,7 +72,7 @@
         <span id="user-name" class="user-name">—</span>
         <span id="user-role" class="user-role">—</span>
       </div>
-      <button type="button" id="btn-search" class="appbar-btn round" title="Rechercher (/)" aria-label="Rechercher">⌕</button>
+      <button type="button" id="btn-search" class="appbar-btn round staff-only" title="Rechercher (/)" aria-label="Rechercher">⌕</button>
       <button type="button" id="btn-calc" class="appbar-btn round" title="Calculette (C)" aria-label="Calculette">=</button>
       <button type="button" id="btn-help" class="appbar-btn round" title="Aide" aria-label="Aide" aria-haspopup="menu">?</button>
       <button type="button" id="btn-logout" class="appbar-btn">Se déconnecter</button>
@@ -82,13 +82,13 @@
   <!-- Barre latérale (desktop) -->
   <aside class="sidebar">
     <nav class="nav">
-      <button type="button" class="nav-item active" data-tab="dashboard"><span class="ico">▤</span> Tableau de bord</button>
+      <button type="button" class="nav-item active staff-only" data-tab="dashboard"><span class="ico">▤</span> Tableau de bord</button>
       <button type="button" class="nav-item" data-tab="taches"><span class="ico">☑</span> À faire<span id="task-badge" class="nav-badge" hidden>0</span></button>
       <button type="button" class="nav-item" data-tab="clients"><span class="ico">⌂</span> Clients<span class="nav-badge client-badge" hidden>0</span></button>
-      <button type="button" class="nav-item" data-tab="memoire"><span class="ico">✎</span> Mémoire</button>
+      <button type="button" class="nav-item staff-only" data-tab="memoire"><span class="ico">✎</span> Mémoire</button>
       <button type="button" class="nav-item" data-tab="planning"><span class="ico">▦</span> Planning</button>
-      <button type="button" class="nav-item" data-tab="invoices"><span class="ico">▣</span> Factures</button>
-      <button type="button" class="nav-item" data-tab="suppliers"><span class="ico">◫</span> Fournisseurs</button>
+      <button type="button" class="nav-item staff-only" data-tab="invoices"><span class="ico">▣</span> Factures</button>
+      <button type="button" class="nav-item staff-only" data-tab="suppliers"><span class="ico">◫</span> Fournisseurs</button>
       <button type="button" class="nav-item manager-only" data-tab="payments" hidden><span class="ico">€</span> Paiements</button>
       <button type="button" class="nav-item manager-only" data-tab="settings" hidden><span class="ico">⚙</span> Réglages</button>
       <button type="button" class="nav-item manager-only" data-tab="admin" hidden><span class="ico">◈</span> Administration</button>
@@ -293,8 +293,10 @@
               <button type="button" data-val="mail">Mail</button>
             </div>
             <div class="cl-choix" id="client-type" role="group" aria-label="Pour quoi">
+              <button type="button" data-val="mesure">Mesurage</button>
               <button type="button" class="active" data-val="pose">Pose</button>
               <button type="button" data-val="sav">SAV</button>
+              <button type="button" data-val="demande">Autre demande</button>
               <button type="button" data-val="">Rien encore</button>
             </div>
           </div>
@@ -685,10 +687,13 @@
   <span id="review-badge-m" hidden></span>
 
   <nav class="tabbar">
-    <button type="button" class="tabbar-item active" data-tab="dashboard"><span class="ico">▤</span>Bord</button>
-    <button type="button" class="tabbar-item" data-tab="memoire"><span class="ico">✎</span>Mémoire</button>
-    <button type="button" class="tabbar-item" data-tab="invoices"><span class="ico">▣</span>Factures</button>
-    <button type="button" class="tabbar-item" data-tab="suppliers"><span class="ico">◫</span>Fourn.</button>
+    <button type="button" class="tabbar-item active staff-only" data-tab="dashboard"><span class="ico">▤</span>Bord</button>
+    <button type="button" class="tabbar-item staff-only" data-tab="memoire"><span class="ico">✎</span>Mémoire</button>
+    <button type="button" class="tabbar-item staff-only" data-tab="invoices"><span class="ico">▣</span>Factures</button>
+    <button type="button" class="tabbar-item staff-only" data-tab="suppliers"><span class="ico">◫</span>Fourn.</button>
+    <!-- Un vendeur n'a que la partie clients : ses deux onglets à lui -->
+    <button type="button" class="tabbar-item seller-only" data-tab="clients" hidden><span class="ico">⌂</span>Clients<span class="nav-badge client-badge" hidden>0</span></button>
+    <button type="button" class="tabbar-item seller-only" data-tab="planning" hidden><span class="ico">▦</span>Planning</button>
     <button type="button" class="tabbar-item" data-tab="taches"><span class="ico">☑</span>À faire<span id="task-badge-m" class="nav-badge" hidden>0</span></button>
     <!-- Cinq onglets ne suffisent pas : la Mémoire, le Planning et les
          Réglages — donc la quarantaine — étaient purement inaccessibles
@@ -1150,7 +1155,7 @@
      ============================================================ -->
 <script type="module">
 import { supabase, CONFIG_OK } from './js/supabase.js';
-import { getSession, loadProfile, signIn, signOut, displayName, roleLabel, isManager, currentUser } from './js/auth.js';
+import { getSession, loadProfile, signIn, signOut, displayName, roleLabel, isManager, isSeller, currentUser } from './js/auth.js';
 import { startTour, maybeStartTour } from './js/tour.js';
 import { initInvoices, renderInvoices, refreshInvoices, openInvoiceModal, focusSearch, invoicesCache } from './js/invoices.js';
 import { initSuppliers, renderSuppliers, resetSupplierView } from './js/suppliers.js';
@@ -1179,6 +1184,9 @@ let activeTab = 'dashboard';
 
 /** Affiche un onglet et déclenche son rendu */
 function showTab(name) {
+  // Un vendeur n'a pas accès à la comptabilité : tout autre écran le
+  // ramène aux dossiers clients (la base, de toute façon, ne lui rendrait rien).
+  if (isSeller() && !['clients', 'planning', 'taches'].includes(name)) name = 'clients';
   activeTab = name;
   // Le bouton flottant crée une FACTURE : il n'a rien à faire sur les
   // écrans qui n'en parlent pas, et sur téléphone il recouvrait le bouton
@@ -1212,20 +1220,26 @@ async function enterApp(user) {
   $('#user-role').textContent = roleLabel();
   // Les écrans de gestion n'apparaissent que pour le gérant
   $$('.manager-only').forEach((el) => { el.hidden = !isManager(); });
-  try {
-    await refreshInvoices();
-  } catch (err) {
-    console.error(err);
-    toast(errorMessage(err, 'Chargement des données impossible.'), 'error');
+  // Un vendeur : les dossiers clients, le planning, ses tâches — rien d'autre
+  const vendeur = isSeller();
+  $$('.staff-only').forEach((el) => { el.hidden = vendeur; });
+  $$('.seller-only').forEach((el) => { el.hidden = !vendeur; });
+  if (!vendeur) {
+    try {
+      await refreshInvoices();
+    } catch (err) {
+      console.error(err);
+      toast(errorMessage(err, 'Chargement des données impossible.'), 'error');
+    }
   }
-  showTab('dashboard');
-  refreshReviewBadge();
+  showTab(vendeur ? 'clients' : 'dashboard');
+  if (!vendeur) refreshReviewBadge();
   refreshTaskBadge();
   refreshClientBadge({ connexion: true });
   remplirDestinataires();
 
   // Visite guidée au tout premier login de cet utilisateur
-  maybeStartTour(currentUser?.id, isManager() ? 'manager' : 'secretary', showTab);
+  if (!vendeur) maybeStartTour(currentUser?.id, isManager() ? 'manager' : 'secretary', showTab);
 }
 
 function leaveApp() {
@@ -1441,6 +1455,7 @@ document.addEventListener('keydown', (e) => {
   const modalOpen = $$('.modal:not([hidden])').length > 0;
   if (typing || modalOpen) return;
 
+  if (isSeller() && ['n', 'N', '/'].includes(e.key)) return;
   if (e.key === 'n' || e.key === 'N') { e.preventDefault(); showTab('invoices'); openInvoiceModal(); }
   else if (e.key === '/') { e.preventDefault(); openSearch(); }
   else if (e.key === '?') { e.preventDefault(); openModal('modal-shortcuts'); }
@@ -1449,7 +1464,7 @@ document.addEventListener('keydown', (e) => {
 });
 
 // Bouton « Encoder la première » des états vides du tableau de bord
-window.addEventListener('vk:new-invoice', () => { showTab('invoices'); openInvoiceModal(); });
+window.addEventListener('vk:new-invoice', () => { if (isSeller()) return; showTab('invoices'); openInvoiceModal(); });
 
 // ---------- Événements applicatifs ----------
 window.addEventListener('vk:data', () => { if (activeTab !== 'invoices') renderActive(); });
