@@ -20,9 +20,9 @@
 // la réponse et classe. Un relais à la fois par dossier (client_relais).
 // =====================================================================
 import { supabase } from './supabase.js';
-import { isManager, currentUser } from './auth.js';
+import { isManager, currentUser, displayName } from './auth.js';
 import {
-  $, $$, escapeHtml, toast, errorMessage, confirmDialog, fmtDate, todayISO
+  $, $$, escapeHtml, toast, errorMessage, confirmDialog, fmtDate, longDate, todayISO
 } from './ui.js';
 
 let dossiers = [];
@@ -31,6 +31,7 @@ let recherche = '';
 let ouvert = null;          // id du dossier affiché, null = la liste
 let notes = [];
 let suite = null;           // id de la fiche dont le formulaire « suite » est déplié
+let courriel = null;        // id de la fiche dont le mail au client est déplié
 let montrerFinies = false;
 let creation = { source: 'telephone', kind: 'pose' };
 let autres = null;          // le prénom de l'autre (Marie pour Jordan, Jordan pour Marie)
@@ -69,6 +70,12 @@ async function chargerDossiers() {
   dossiers = (typeof data === 'string' ? JSON.parse(data) : data) || [];
   if (autres === null) await chargerAutres();
 }
+
+/**
+ * Le relais n'existe qu'une fois sa migration (0042) appliquée : avant,
+ * la liste ne porte pas la colonne, et l'écran ne propose rien.
+ */
+const relaisActif = () => dossiers.some((d) => 'relais' in d);
 
 /** Le prénom à afficher sur les boutons du relais : « Confier à Marie ». */
 async function chargerAutres() {
@@ -200,7 +207,7 @@ function listeHtml() {
   const montres = Object.keys(FILTRES).filter((k) => !['relais', 'reponses'].includes(k) || compte(k) || k === filtre);
   const visibles = dossiers.filter(FILTRES[filtre].test).filter((d) => correspond(d, recherche));
   // Confier d'un coup les SAV en cours qui ont un « reste à faire »
-  const aConfier = isManager() && filtre === 'sav'
+  const aConfier = isManager() && filtre === 'sav' && relaisActif()
     ? visibles.filter((d) => d.relais !== 'a_traiter' && String(d.todo || '').trim()) : [];
   return `
     <div class="cl-filtres">
@@ -251,6 +258,91 @@ function formSuiteHtml(j) {
     </div>`;
 }
 
+// ---------------------------------------------------------------------
+// Le mail au client : un récapitulatif de sa fiche
+// ---------------------------------------------------------------------
+// Il part de la messagerie de qui l'envoie (lien mailto) : le client
+// répond à une vraie personne, et rien ne part sans avoir été relu. Le
+// texte est prérempli depuis la fiche, puis modifiable librement.
+const MAGASIN = 'Vanden Borre Kitchen Boncelles';
+const ORIGINE = { telephone: 'votre appel', magasin: 'votre passage au magasin', mail: 'votre mail' };
+
+function texteMail(j, d) {
+  const pose = j.kind === 'pose';
+  const le = (iso) => longDate(String(iso).slice(0, 10));
+  const lignes = [`Bonjour${d.name ? ` ${d.name}` : ''},`, ''];
+  const quand = j.created_at ? ` du ${fmtDate(String(j.created_at).slice(0, 10))}` : '';
+  lignes.push(j.source && ORIGINE[j.source]
+    ? `Suite à ${ORIGINE[j.source]}${quand}, nous vous confirmons que votre ${pose ? 'dossier de pose' : 'demande de service après-vente'} est bien enregistré${pose ? '' : 'e'}.`
+    : `Nous vous confirmons que votre ${pose ? 'dossier de pose' : 'demande de service après-vente'} est bien enregistré${pose ? '' : 'e'}.`);
+  lignes.push('');
+  if (j.title) lignes.push(`${pose ? 'Objet' : 'Demande'} : ${j.title}`);
+  if (j.remarks) lignes.push(`Informations notées : ${j.remarks}`);
+  if (!pose && j.order_ref) lignes.push(`Référence de commande : ${j.order_ref}`);
+  if (j.title || j.remarks || (!pose && j.order_ref)) lignes.push('');
+
+  if (pose) {
+    if (j.delivery_date) lignes.push(`Livraison prévue le ${le(j.delivery_date)}.`);
+    lignes.push(j.pose_date
+      ? `La pose est planifiée le ${le(j.pose_date)}.`
+      : 'La date de pose vous sera communiquée prochainement.');
+  } else if (j.intervention_date && !['cloture', 'nouvelle_intervention'].includes(j.status)) {
+    lignes.push(`Notre intervention est planifiée le ${le(j.intervention_date)}.`);
+  } else if (j.status === 'commande') {
+    lignes.push('Le nécessaire a été commandé. Nous vous recontacterons dès sa réception pour fixer la date d\'intervention.');
+  } else if (j.status === 'recu') {
+    lignes.push('Le nécessaire est arrivé au magasin. La date d\'intervention vous sera communiquée très prochainement.');
+  } else if (j.status === 'cloture') {
+    lignes.push('Ce dossier de service après-vente est à présent clôturé.');
+  } else {
+    lignes.push('La date d\'intervention vous sera communiquée plus tard.');
+  }
+
+  if (d.address || d.phone) {
+    lignes.push('', 'Merci de vérifier vos coordonnées :');
+    if (d.address) lignes.push(`Adresse : ${d.address}`);
+    if (d.phone) lignes.push(`Téléphone : ${d.phone}`);
+  }
+  lignes.push('', 'Pour toute question, il vous suffit de répondre à ce mail.', '',
+    'Bien cordialement,', displayName() ? `${displayName()} — ${MAGASIN}` : MAGASIN);
+  return lignes.join('\n');
+}
+
+const objetMail = (j) => j.kind === 'pose'
+  ? `Votre dossier de pose — ${MAGASIN}` : `Votre dossier SAV — ${MAGASIN}`;
+
+/** mailto : les fins de ligne en CRLF, comme le veut la norme */
+const lienMail = (a, objet, corps) => `mailto:${encodeURIComponent(a || '')}`
+  + `?subject=${encodeURIComponent(objet)}&body=${encodeURIComponent(corps.replace(/\r?\n/g, '\r\n'))}`;
+
+function formMailHtml(j, d) {
+  if (!d.email) {
+    return `
+      <div class="cl-suite cl-mail">
+        <p class="small"><strong>Mail au client</strong><br>
+          <span class="muted">Ajoute d'abord l'e-mail du client, en haut du dossier.</span></p>
+        <div class="cl-actions">
+          <button type="button" class="btn btn-sm" data-mail-email>Saisir l'e-mail</button>
+          <button type="button" class="btn btn-ghost btn-sm" data-mail-fermer>Fermer</button>
+        </div>
+      </div>`;
+  }
+  const objet = objetMail(j);
+  const corps = texteMail(j, d);
+  return `
+    <div class="cl-suite cl-mail" data-mail-fiche="${j.id}">
+      <p class="small"><strong>Mail à ${escapeHtml(d.email)}</strong><br>
+        <span class="muted">Relis et corrige si besoin : le mail s'ouvre ensuite dans ta messagerie, prêt à partir.</span></p>
+      <input type="text" class="search" data-mail-objet value="${escapeHtml(objet)}" aria-label="Objet du mail">
+      <textarea rows="14" data-mail-corps aria-label="Texte du mail">${escapeHtml(corps)}</textarea>
+      <div class="cl-actions">
+        <a class="btn btn-primary btn-sm" data-mail-envoyer href="${escapeHtml(lienMail(d.email, objet, corps))}">✉ Ouvrir dans ma messagerie</a>
+        <button type="button" class="btn btn-sm" data-mail-copier>Copier le texte</button>
+        <button type="button" class="btn btn-ghost btn-sm" data-mail-fermer>Fermer</button>
+      </div>
+    </div>`;
+}
+
 function ficheHtml(j, d) {
   const e = etat(j);
   const pose = j.kind === 'pose';
@@ -296,8 +388,10 @@ function ficheHtml(j, d) {
             placeholder="Tout ce qui est utile : accès, pièce en stock, à rappeler…">${escapeHtml(j.remarks || '')}</textarea></label>
       </div>
 
+      ${courriel === j.id ? formMailHtml(j, d) : ''}
       ${close ? `
         <div class="cl-actions">
+          ${courriel === j.id ? '' : `<button type="button" class="btn btn-sm" data-mail="${j.id}">✉ Mail au client</button>`}
           ${avecSuite
             ? '<span class="muted small">La suite est dans la fiche SAV qui en est issue.</span>'
             : `<button type="button" class="btn btn-sm" data-rouvrir="${j.id}">Rouvrir la fiche</button>`}
@@ -306,6 +400,7 @@ function ficheHtml(j, d) {
         <div class="cl-actions">
           <button type="button" class="btn btn-sm cl-ok" data-cloturer="${j.id}">✓ ${pose ? 'Pose terminée' : 'Clôturer le SAV'}</button>
           <button type="button" class="btn btn-sm cl-sav" data-suite="${j.id}">${pose ? '⚠ Ouvrir un SAV' : '↻ Nouvelle intervention'}</button>
+          ${courriel === j.id ? '' : `<button type="button" class="btn btn-sm" data-mail="${j.id}">✉ Mail au client</button>`}
           ${isManager() ? `<button type="button" class="btn btn-ghost btn-sm" data-suppr-fiche="${j.id}">Supprimer la fiche</button>` : ''}
         </div>`}
     </div>`;
@@ -344,6 +439,7 @@ function contactHtml(d) {
  * la marque traitée sans attendre.
  */
 function relaisHtml(d) {
+  if (!relaisActif()) return '';
   const quand = d.relais_le ? fmtDate(String(d.relais_le).slice(0, 10)) : '';
   if (d.relais === 'a_traiter') {
     return `
@@ -542,6 +638,8 @@ async function majDossier(cle, valeur) {
   if (error) { console.error(error); return toast(errorMessage(error, 'Enregistrement impossible.'), 'error'); }
   d[cle] = v || null;
   toast('Enregistré.', 'ok', 1400);
+  // Le mail au client attendait cette adresse
+  if (cle === 'email' && courriel) await renderClients();
 }
 
 async function majFiche(id, patch, { redessiner = true, message = null } = {}) {
@@ -609,6 +707,39 @@ async function confierLot(ids) {
   await renderClients();
 }
 
+/** Le texte retouché à la main : le lien suit chaque frappe */
+function majLienMail() {
+  const zone = $('[data-mail-fiche]');
+  const d = dossiers.find((x) => x.id === ouvert);
+  if (!zone || !d) return;
+  $('[data-mail-envoyer]', zone).href = lienMail(d.email, $('[data-mail-objet]', zone).value, $('[data-mail-corps]', zone).value);
+}
+
+async function copierMail() {
+  const zone = $('[data-mail-fiche]');
+  if (!zone) return;
+  try {
+    await navigator.clipboard.writeText(`${$('[data-mail-objet]', zone).value}\n\n${$('[data-mail-corps]', zone).value}`);
+    toast('Texte copié.', 'ok', 1600);
+  } catch { toast('Copie impossible : sélectionne le texte à la main.', 'error'); }
+}
+
+/**
+ * Une trace dans le fil : on ne peut pas savoir si le mail est vraiment
+ * parti, seulement qu'il a été préparé — la note le dit tel quel.
+ */
+async function mailOuvert() {
+  const d = dossiers.find((x) => x.id === ouvert);
+  const zone = $('[data-mail-fiche]');
+  if (!d || !zone) return;
+  const job = zone.dataset.mailFiche;
+  const { error } = await supabase.rpc('client_note_add', {
+    p_file: ouvert, p_body: `Mail récapitulatif préparé pour ${d.email}`, p_job: job
+  });
+  if (error) console.error(error);
+  setTimeout(() => { courriel = null; renderClients(); }, 400);
+}
+
 async function noter() {
   const champ = $('#client-note');
   const texte = champ?.value.trim();
@@ -649,11 +780,17 @@ function cabler() {
   const boite = $('#clients-body');
 
   boite.addEventListener('click', (e) => {
+    const envoi = e.target.closest('[data-mail-envoyer]');
+    if (envoi) { mailOuvert(); return; }   // le lien mailto fait le reste
     const b = e.target.closest('button, [data-ouvrir]');
     if (!b || e.target.closest('a')) return;
     const ds = b.dataset;
-    if (ds.ouvrir) { ouvert = ds.ouvrir; suite = null; montrerFinies = false; renderClients().then(() => window.scrollTo(0, 0)); return; }
-    if ('retour' in ds) { ouvert = null; suite = null; return renderClients(); }
+    if (ds.ouvrir) { ouvert = ds.ouvrir; suite = null; courriel = null; montrerFinies = false; renderClients().then(() => window.scrollTo(0, 0)); return; }
+    if ('retour' in ds) { ouvert = null; suite = null; courriel = null; return renderClients(); }
+    if (ds.mail) { courriel = ds.mail; return renderClients().then(() => $('.cl-mail')?.scrollIntoView({ block: 'nearest' })); }
+    if ('mailFermer' in ds) { courriel = null; return renderClients(); }
+    if ('mailCopier' in ds) return copierMail();
+    if ('mailEmail' in ds) { const c = $('[data-champ-dossier="email"]'); c?.scrollIntoView({ block: 'center' }); c?.focus(); return; }
     if (ds.filtre) { filtre = ds.filtre; filtreChoisi = true; return renderClients(); }
     if (ds.relais) return relais(ds.relais);
     if (ds.confierLot) return confierLot(ds.confierLot.split(','));
@@ -679,8 +816,13 @@ function cabler() {
 
   // Les champs s'enregistrent en quittant le champ : pas de bouton
   // « Enregistrer » à oublier.
+  boite.addEventListener('input', (e) => {
+    if (e.target.matches('[data-mail-objet], [data-mail-corps]')) majLienMail();
+  });
+
   boite.addEventListener('change', (e) => {
     const t = e.target;
+    if (t.matches('[data-mail-objet], [data-mail-corps]')) return;
     if (t.dataset.champDossier) return majDossier(t.dataset.champDossier, t.value);
     if (t.dataset.champFiche) {
       const cle = t.dataset.champFiche;

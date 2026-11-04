@@ -2284,6 +2284,8 @@ kbd {
   padding: 10px; display: flex; flex-direction: column; gap: 8px;
 }
 .cl-suite p { margin: 0; }
+.cl-mail { border-color: var(--border-info); background: var(--info-soft); }
+.cl-mail textarea { width: 100%; font: inherit; font-size: 13px; line-height: 1.45; }
 .cl-suite .search { width: 100%; padding: 9px 11px; }
 .cl-finies-btn { margin-bottom: 8px; }
 
