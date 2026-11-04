@@ -2301,6 +2301,8 @@ kbd {
   font: inherit; font-size: 12px; text-align: left; padding: 5px 9px; min-height: 30px; cursor: pointer;
   border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--text);
 }
+.cl-prevenir { border-color: var(--info); color: var(--info); background: var(--info-soft); font-weight: 600; }
+.cl-mail-changes { border-color: var(--info); }
 .cl-phrase.active { background: var(--info); border-color: var(--info); color: var(--vbk-white); }
 .cl-suite .search { width: 100%; padding: 9px 11px; }
 .cl-finies-btn { margin-bottom: 8px; }

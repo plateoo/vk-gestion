@@ -272,6 +272,7 @@ const ORIGINE = { telephone: 'votre appel', magasin: 'votre passage au magasin',
 // informations de la fiche ; on coche ce qui part, on décoche ce qui
 // doit rester chez nous.
 const MODELES = {
+  maj:          { label: 'Mise à jour',    blocs: ['demande', 'contact'] },
   confirmation: { label: 'Fiche créée',   blocs: ['demande', 'infos', 'ref', 'dates', 'adresse', 'tel', 'contact'] },
   date:         { label: 'Date planifiée', blocs: ['demande', 'dates', 'adresse', 'contact'] },
   info:         { label: 'Message libre',  blocs: ['demande', 'contact'] }
@@ -300,10 +301,112 @@ const PHRASES = [
   'Le nécessaire est en commande : nous revenons vers vous dès sa réception.'
 ];
 
-let mailOpts = null;        // { modele, blocs: Set, phrases: Set, ajout } du mail déplié
+let mailOpts = null;        // { modele, blocs: Set, phrases: Set, ajout, changes: Set } du mail déplié
 
-function optsParDefaut(modele) {
-  return { modele, blocs: new Set(MODELES[modele].blocs), phrases: new Set(), ajout: '' };
+function optsParDefaut(modele, j = null, d = null) {
+  const ch = j && d ? changements(j, d) : [];
+  return { modele, blocs: new Set(MODELES[modele].blocs), phrases: new Set(), ajout: '',
+           changes: new Set(ch.filter((c) => c.coche).map((c) => c.cle)) };
+}
+
+// ---------------------------------------------------------------------
+// Ce qui a changé depuis le dernier mail
+// ---------------------------------------------------------------------
+// Le fil du dossier note chaque changement d'étape, de date et de
+// référence (déclencheur client_jobs_fil), avec la fiche concernée. Le
+// dernier « Mail récapitulatif préparé » de la fiche sert de repère : ce
+// qui est écrit après, le client ne le sait pas encore.
+const NOTE_MAIL = 'Mail récapitulatif préparé';
+const NOTES_INTERNES = /^(Mail récapitulatif préparé|À traiter :|Traité|Pas traité)/;
+
+function dernierMail(j) {
+  return notes.filter((n) => n.job_id === j.id && String(n.body).startsWith(NOTE_MAIL))
+    .map((n) => n.created_at).sort().pop() || null;
+}
+
+/** La date d'avant, lue dans « déplacée du A au B » ou « retirée (était le A) » */
+function dateAvant(body) {
+  const m = String(body).match(/(?:déplacée du|était le) (\d{2})\/(\d{2})\/(\d{4})/);
+  return m ? `${m[3]}-${m[2]}-${m[1]}` : null;
+}
+
+/**
+ * Les changements à annoncer, chacun avec sa phrase pour le client.
+ * Plusieurs changements du même genre n'en font qu'un : le client veut
+ * savoir où on en est, pas par où on est passé.
+ */
+function changements(j, d) {
+  const depuis = dernierMail(j);
+  const apres = notes.filter((n) => (!depuis || n.created_at > depuis) && !String(n.body).startsWith(NOTE_MAIL))
+    .sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)));
+  const auto = apres.filter((n) => n.automatique && n.job_id === j.id);
+  const le = (iso) => longDate(String(iso).slice(0, 10));
+  const pose = j.kind === 'pose';
+  const out = [];
+
+  const etapes = auto.filter((n) => /^(SAV|Pose) : .+ → /.test(n.body));
+  const dateNotes = (mot) => auto.filter((n) => String(n.body).startsWith(mot + ' '));
+  const interv = dateNotes('Intervention');
+  const livr = dateNotes('Livraison');
+  const posee = dateNotes('Pose').filter((n) => !/^Pose : /.test(n.body));
+  // Une date fixée pour la première fois, en même temps que l'étape
+  // « planifié », se dit en une phrase : celle de l'étape.
+  const dateDejaDite = (liste, valeur) => liste.length && !dateAvant(liste[0].body) && valeur
+    && etapes.length && ['planifie', 'planifiee'].includes(j.status);
+
+  if (etapes.length) {
+    const ancien = String(etapes[0].body).split(' : ')[1].split(' → ')[0];
+    const phrase = {
+      commande: `La pièce nécessaire a été commandée${j.order_ref ? ` (référence ${j.order_ref})` : ''}. Nous vous recontacterons dès sa réception pour fixer une date d'intervention.`,
+      recu: 'Bonne nouvelle : la pièce est arrivée au magasin. Il nous reste à convenir avec vous d\'une date d\'intervention.',
+      planifie: j.intervention_date ? `Votre intervention est planifiée le ${le(j.intervention_date)}.` : 'Votre intervention va être planifiée : nous vous communiquerons la date très prochainement.',
+      cloture: 'Votre dossier de service après-vente est à présent clôturé. Merci pour votre confiance.',
+      a_traiter: 'Votre demande est de nouveau en cours de traitement : nous revenons vers vous rapidement.',
+      nouvelle_intervention: 'Une nouvelle intervention est nécessaire : nous revenons vers vous pour l\'organiser.',
+      planifiee: j.pose_date ? `Votre pose est planifiée le ${le(j.pose_date)}.` : 'Votre pose va être planifiée.',
+      a_planifier: 'La date de votre pose reste à fixer : nous vous la communiquerons prochainement.',
+      terminee: 'La pose est terminée. Merci pour votre confiance.',
+      sav: 'La pose est terminée ; un point reste à régler : nous revenons vers vous pour l\'organiser.'
+    }[j.status];
+    if (phrase && ETATS[j.kind]?.[j.status]?.label !== ancien) {
+      out.push({ cle: 'etape', label: `Étape : ${ancien} → ${etat(j).label}`, phrase, coche: true });
+    }
+  }
+  const dateChange = (liste, valeur, cle, quoi, nom) => {
+    if (!liste.length || dateDejaDite(liste, valeur)) return;
+    const avant = dateAvant(liste[0].body);
+    if (avant && valeur === avant) return;               // revenue à la date d'origine
+    const phrase = !valeur
+      ? `La date ${nom} prévue le ${le(avant)} est annulée : nous vous recontacterons pour en fixer une nouvelle.`
+      : avant ? `La date ${nom} est modifiée : ${quoi} aura lieu le ${le(valeur)} (au lieu du ${le(avant)}).`
+      : `${quoi[0].toUpperCase() + quoi.slice(1)} est fixée au ${le(valeur)}.`;
+    out.push({ cle, label: `${nom === 'd\'intervention' ? 'Intervention' : nom === 'de livraison' ? 'Livraison' : 'Pose'} : ${valeur ? fmtDate(valeur) : 'date retirée'}${avant ? ` (était le ${fmtDate(avant)})` : ''}`, phrase, coche: true });
+  };
+  if (pose) {
+    dateChange(livr, j.delivery_date, 'livraison', 'la livraison', 'de livraison');
+    dateChange(posee, j.pose_date, 'pose', 'la pose', 'de pose');
+  } else {
+    dateChange(interv, j.intervention_date, 'intervention', 'l\'intervention', 'd\'intervention');
+  }
+  if (auto.some((n) => String(n.body).startsWith('Référence de commande')) && j.order_ref && !out.some((c) => c.cle === 'etape' && j.status === 'commande')) {
+    out.push({ cle: 'ref', label: `Référence de commande : ${j.order_ref}`, phrase: `Votre référence de commande : ${j.order_ref}.`, coche: true });
+  }
+  // Les notes écrites à la main : souvent internes, donc à cocher exprès
+  apres.filter((n) => !n.automatique && (!n.job_id || n.job_id === j.id) && !NOTES_INTERNES.test(n.body))
+    .forEach((n) => out.push({ cle: `note:${n.id}`, label: `Note : ${n.body}`, phrase: n.body, coche: false, note: true }));
+  return out;
+}
+
+/** La sorte de mail qui convient : une mise à jour dès qu'il y a du neuf */
+function modeleProbable(j) {
+  const ch = changements(j, dossiers.find((x) => x.id === ouvert) || {});
+  if (!ch.some((c) => !c.note)) return 'confirmation';
+  if (dernierMail(j)) return 'maj';
+  // Sans mail précédent, ce qui a été réglé le jour même de la création
+  // fait partie de la confirmation.
+  const jour = String(j.created_at || '').slice(0, 10);
+  const tard = notes.some((n) => n.automatique && n.job_id === j.id && String(n.created_at).slice(0, 10) > jour);
+  return tard ? 'maj' : 'confirmation';
 }
 
 /** Où en est la date : ce qu'on peut en dire au client */
@@ -330,7 +433,9 @@ function texteMail(j, d, o = optsParDefaut('confirmation')) {
   const quoi = pose ? 'dossier de pose' : 'demande de service après-vente';
   const lignes = [`Bonjour${d.name ? ` ${d.name}` : ''},`, ''];
 
-  if (o.modele === 'confirmation') {
+  if (o.modele === 'maj') {
+    lignes.push(`Nous revenons vers vous au sujet de votre ${quoi}${j.title ? ` (${j.title})` : ''} pour vous informer de son avancement.`);
+  } else if (o.modele === 'confirmation') {
     const quand = j.created_at ? ` du ${fmtDate(String(j.created_at).slice(0, 10))}` : '';
     const fin = `nous vous confirmons que votre ${quoi} est bien enregistré${pose ? '' : 'e'}.`;
     lignes.push(j.source && ORIGINE[j.source] ? `Suite à ${ORIGINE[j.source]}${quand}, ${fin}` : fin[0].toUpperCase() + fin.slice(1));
@@ -339,12 +444,16 @@ function texteMail(j, d, o = optsParDefaut('confirmation')) {
   }
 
   const details = [];
-  if (a('demande')) details.push(`${pose ? 'Objet' : 'Demande'} : ${j.title}`);
+  if (a('demande') && !(o.modele === 'maj' && j.title)) details.push(`${pose ? 'Objet' : 'Demande'} : ${j.title}`);
   if (a('infos')) details.push(`Informations notées : ${j.remarks}`);
   if (a('ref')) details.push(`Référence de commande : ${j.order_ref}`);
   if (a('reste')) details.push(`Prochaine étape : ${d.todo}`);
   if (details.length) lignes.push('', ...details);
 
+  if (o.modele === 'maj') {
+    const ch = changements(j, d).filter((c) => o.changes.has(c.cle)).map((c) => c.phrase);
+    lignes.push('', ...(ch.length ? ch : ['Votre dossier suit son cours : nous revenons vers vous dès qu\'il y a du nouveau.']));
+  }
   if (o.blocs.has('dates')) lignes.push('', ...phraseDate(j));
 
   const ajouts = [...PHRASES.filter((x) => o.phrases.has(x)), ...(o.ajout.trim() ? [o.ajout.trim()] : [])];
@@ -362,6 +471,7 @@ function texteMail(j, d, o = optsParDefaut('confirmation')) {
 
 function objetMail(j, modele = 'confirmation') {
   const pose = j.kind === 'pose';
+  if (modele === 'maj') return `Suivi de votre dossier ${pose ? 'de pose' : 'SAV'} — ${MAGASIN}`;
   if (modele === 'date') return `${pose ? 'Date de pose' : 'Date d\'intervention'} — ${MAGASIN}`;
   return `Votre dossier ${pose ? 'de pose' : 'SAV'} — ${MAGASIN}`;
 }
@@ -382,7 +492,9 @@ function formMailHtml(j, d) {
         </div>
       </div>`;
   }
-  const o = mailOpts || (mailOpts = optsParDefaut('confirmation'));
+  const o = mailOpts || (mailOpts = optsParDefaut(modeleProbable(j), j, d));
+  const ch = changements(j, d);
+  const depuis = dernierMail(j);
   const objet = objetMail(j, o.modele);
   const corps = texteMail(j, d, o);
   const blocs = BLOCS.filter((b) => String(b.valeur(j, d) || '').trim());
@@ -393,6 +505,17 @@ function formMailHtml(j, d) {
       <div class="cl-choix" role="group" aria-label="Sorte de mail">
         ${Object.entries(MODELES).map(([k, m]) => `<button type="button" class="${k === o.modele ? 'active' : ''}" data-mail-modele="${k}">${m.label}</button>`).join('')}
       </div>
+
+      ${o.modele === 'maj' ? `
+      <fieldset class="cl-mail-cases cl-mail-changes">
+        <legend>Ce qui a changé ${depuis ? `depuis le dernier mail (${escapeHtml(fmtDate(String(depuis).slice(0, 10)))})` : 'depuis la création de la fiche'}</legend>
+        ${ch.length ? ch.map((c) => `
+          <label class="cl-case">
+            <input type="checkbox" data-mail-change="${escapeHtml(c.cle)}" ${o.changes.has(c.cle) ? 'checked' : ''}>
+            <span><strong>${escapeHtml(c.label.slice(0, 140))}</strong>
+              ${c.note ? '<em class="cl-aide">note du dossier : à cocher si elle est pour le client</em>' : ''}</span>
+          </label>`).join('') : '<p class="muted small">Rien de neuf dans le fil depuis. Écris ci-dessous ce que tu veux annoncer.</p>'}
+      </fieldset>` : ''}
 
       <fieldset class="cl-mail-cases">
         <legend>Ce que le mail reprend de la fiche</legend>
@@ -421,6 +544,17 @@ function formMailHtml(j, d) {
         <button type="button" class="btn btn-ghost btn-sm" data-mail-fermer>Fermer</button>
       </div>
     </div>`;
+}
+
+/**
+ * Le bouton du mail se fait remarquer quand la fiche a bougé depuis le
+ * dernier mail : le client n'est pas encore au courant.
+ */
+function boutonMail(j, d) {
+  const neuf = d.email && modeleProbable(j) === 'maj';
+  return neuf
+    ? `<button type="button" class="btn btn-sm cl-prevenir" data-mail="${j.id}">✉ Prévenir le client du changement</button>`
+    : `<button type="button" class="btn btn-sm" data-mail="${j.id}">✉ Mail au client</button>`;
 }
 
 function ficheHtml(j, d) {
@@ -471,7 +605,7 @@ function ficheHtml(j, d) {
       ${courriel === j.id ? formMailHtml(j, d) : ''}
       ${close ? `
         <div class="cl-actions">
-          ${courriel === j.id ? '' : `<button type="button" class="btn btn-sm" data-mail="${j.id}">✉ Mail au client</button>`}
+          ${courriel === j.id ? '' : boutonMail(j, d)}
           ${avecSuite
             ? '<span class="muted small">La suite est dans la fiche SAV qui en est issue.</span>'
             : `<button type="button" class="btn btn-sm" data-rouvrir="${j.id}">Rouvrir la fiche</button>`}
@@ -480,7 +614,7 @@ function ficheHtml(j, d) {
         <div class="cl-actions">
           <button type="button" class="btn btn-sm cl-ok" data-cloturer="${j.id}">✓ ${pose ? 'Pose terminée' : 'Clôturer le SAV'}</button>
           <button type="button" class="btn btn-sm cl-sav" data-suite="${j.id}">${pose ? '⚠ Ouvrir un SAV' : '↻ Nouvelle intervention'}</button>
-          ${courriel === j.id ? '' : `<button type="button" class="btn btn-sm" data-mail="${j.id}">✉ Mail au client</button>`}
+          ${courriel === j.id ? '' : boutonMail(j, d)}
           ${isManager() ? `<button type="button" class="btn btn-ghost btn-sm" data-suppr-fiche="${j.id}">Supprimer la fiche</button>` : ''}
         </div>`}
     </div>`;
@@ -884,7 +1018,7 @@ function cabler() {
       // Changer de sorte de mail reprend ses cases par défaut ; les phrases
       // et le texte ajoutés restent.
       const garde = mailOpts || optsParDefaut('confirmation');
-      mailOpts = { ...optsParDefaut(ds.mailModele), phrases: garde.phrases, ajout: garde.ajout };
+      mailOpts = { ...optsParDefaut(ds.mailModele), phrases: garde.phrases, ajout: garde.ajout, changes: garde.changes };
       return renderClients();
     }
     if (ds.mailPhrase) {
@@ -929,6 +1063,10 @@ function cabler() {
   boite.addEventListener('change', (e) => {
     const t = e.target;
     if (t.matches('[data-mail-objet], [data-mail-corps], [data-mail-ajout]')) return;
+    if (t.dataset.mailChange && mailOpts) {
+      if (t.checked) mailOpts.changes.add(t.dataset.mailChange); else mailOpts.changes.delete(t.dataset.mailChange);
+      return majApercu();
+    }
     if (t.dataset.mailBloc && mailOpts) {
       if (t.checked) mailOpts.blocs.add(t.dataset.mailBloc); else mailOpts.blocs.delete(t.dataset.mailBloc);
       return majApercu();
