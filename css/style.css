@@ -2286,6 +2286,22 @@ kbd {
 .cl-suite p { margin: 0; }
 .cl-mail { border-color: var(--border-info); background: var(--info-soft); }
 .cl-mail textarea { width: 100%; font: inherit; font-size: 13px; line-height: 1.45; }
+.cl-mail .cl-choix { align-self: flex-start; flex-wrap: wrap; }
+.cl-mail-cases {
+  margin: 0; padding: 8px 10px; border: 1px solid var(--border-info); border-radius: var(--radius);
+  background: var(--surface); display: flex; flex-direction: column; gap: 6px; min-width: 0;
+}
+.cl-mail-cases legend { font-size: 12px; font-weight: 600; color: var(--muted); padding: 0 4px; }
+.cl-case { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; font-weight: 400; color: var(--text); cursor: pointer; min-height: 28px; }
+.cl-case input { margin: 2px 0 0; padding: 0; flex: none; width: 16px; height: 16px; min-height: 0; }
+.cl-case span { min-width: 0; overflow-wrap: anywhere; }
+.cl-aide { display: block; font-size: 11px; font-style: normal; color: var(--warn); }
+.cl-phrases { display: flex; flex-wrap: wrap; gap: 6px; }
+.cl-phrase {
+  font: inherit; font-size: 12px; text-align: left; padding: 5px 9px; min-height: 30px; cursor: pointer;
+  border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--text);
+}
+.cl-phrase.active { background: var(--info); border-color: var(--info); color: var(--vbk-white); }
 .cl-suite .search { width: 100%; padding: 9px 11px; }
 .cl-finies-btn { margin-bottom: 8px; }
 

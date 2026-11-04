@@ -267,49 +267,104 @@ function formSuiteHtml(j) {
 const MAGASIN = 'Vanden Borre Kitchen Boncelles';
 const ORIGINE = { telephone: 'votre appel', magasin: 'votre passage au magasin', mail: 'votre mail' };
 
-function texteMail(j, d) {
-  const pose = j.kind === 'pose';
+// Trois sortes de mail : la confirmation d'une fiche, l'annonce d'une
+// date, ou un mot au client sur son dossier. Chacun reprend les
+// informations de la fiche ; on coche ce qui part, on décoche ce qui
+// doit rester chez nous.
+const MODELES = {
+  confirmation: { label: 'Fiche créée',   blocs: ['demande', 'infos', 'ref', 'dates', 'adresse', 'tel', 'contact'] },
+  date:         { label: 'Date planifiée', blocs: ['demande', 'dates', 'adresse', 'contact'] },
+  info:         { label: 'Message libre',  blocs: ['demande', 'contact'] }
+};
+
+// Ce que la fiche peut apporter au mail. « valeur » vide = case absente.
+const BLOCS = [
+  { cle: 'demande', label: (j) => j.kind === 'pose' ? 'Objet' : 'Demande', valeur: (j) => j.title },
+  { cle: 'infos',   label: () => 'Informations notées', valeur: (j) => j.remarks,
+    aide: 'reprend les remarques de la fiche : rien d\'interne ?' },
+  { cle: 'ref',     label: () => 'Référence de commande', valeur: (j) => j.kind === 'sav' ? j.order_ref : '' },
+  { cle: 'dates',   label: (j) => j.kind === 'pose' ? 'Dates de livraison et de pose' : 'Date d\'intervention', valeur: (j) => phraseDate(j).join(' ') },
+  { cle: 'adresse', label: () => 'Adresse', valeur: (j, d) => d.address },
+  { cle: 'tel',     label: () => 'Téléphone', valeur: (j, d) => d.phone },
+  { cle: 'reste',   label: () => 'Ce qu\'il reste à faire', valeur: (j, d) => d.todo, aide: 'note interne, décochée d\'office' },
+  { cle: 'contact', label: () => '« Répondez à ce mail pour toute question »', valeur: () => 'oui' }
+];
+
+// Les informations qu'on oublie le plus souvent de donner
+const PHRASES = [
+  'Merci de nous confirmer votre présence à cette date.',
+  'Merci de nous indiquer vos disponibilités.',
+  'Notre technicien vous appellera avant son passage.',
+  'Merci de prévoir un accès dégagé à la zone d\'intervention.',
+  'Pourriez-vous nous envoyer une photo du problème en réponse à ce mail ?',
+  'Le nécessaire est en commande : nous revenons vers vous dès sa réception.'
+];
+
+let mailOpts = null;        // { modele, blocs: Set, phrases: Set, ajout } du mail déplié
+
+function optsParDefaut(modele) {
+  return { modele, blocs: new Set(MODELES[modele].blocs), phrases: new Set(), ajout: '' };
+}
+
+/** Où en est la date : ce qu'on peut en dire au client */
+function phraseDate(j) {
   const le = (iso) => longDate(String(iso).slice(0, 10));
+  if (j.kind === 'pose') {
+    return [
+      j.delivery_date ? `Livraison prévue le ${le(j.delivery_date)}.` : '',
+      j.pose_date ? `La pose est planifiée le ${le(j.pose_date)}.` : 'La date de pose vous sera communiquée prochainement.'
+    ].filter(Boolean);
+  }
+  if (j.intervention_date && !['cloture', 'nouvelle_intervention'].includes(j.status)) {
+    return [`Notre intervention est planifiée le ${le(j.intervention_date)}.`];
+  }
+  if (j.status === 'commande') return ['Le nécessaire a été commandé. Nous vous recontacterons dès sa réception pour fixer la date d\'intervention.'];
+  if (j.status === 'recu') return ['Le nécessaire est arrivé au magasin. La date d\'intervention vous sera communiquée très prochainement.'];
+  if (j.status === 'cloture') return ['Ce dossier de service après-vente est à présent clôturé.'];
+  return ['La date d\'intervention vous sera communiquée plus tard.'];
+}
+
+function texteMail(j, d, o = optsParDefaut('confirmation')) {
+  const pose = j.kind === 'pose';
+  const a = (cle) => o.blocs.has(cle) && String(BLOCS.find((b) => b.cle === cle).valeur(j, d) || '').trim();
+  const quoi = pose ? 'dossier de pose' : 'demande de service après-vente';
   const lignes = [`Bonjour${d.name ? ` ${d.name}` : ''},`, ''];
-  const quand = j.created_at ? ` du ${fmtDate(String(j.created_at).slice(0, 10))}` : '';
-  lignes.push(j.source && ORIGINE[j.source]
-    ? `Suite à ${ORIGINE[j.source]}${quand}, nous vous confirmons que votre ${pose ? 'dossier de pose' : 'demande de service après-vente'} est bien enregistré${pose ? '' : 'e'}.`
-    : `Nous vous confirmons que votre ${pose ? 'dossier de pose' : 'demande de service après-vente'} est bien enregistré${pose ? '' : 'e'}.`);
-  lignes.push('');
-  if (j.title) lignes.push(`${pose ? 'Objet' : 'Demande'} : ${j.title}`);
-  if (j.remarks) lignes.push(`Informations notées : ${j.remarks}`);
-  if (!pose && j.order_ref) lignes.push(`Référence de commande : ${j.order_ref}`);
-  if (j.title || j.remarks || (!pose && j.order_ref)) lignes.push('');
 
-  if (pose) {
-    if (j.delivery_date) lignes.push(`Livraison prévue le ${le(j.delivery_date)}.`);
-    lignes.push(j.pose_date
-      ? `La pose est planifiée le ${le(j.pose_date)}.`
-      : 'La date de pose vous sera communiquée prochainement.');
-  } else if (j.intervention_date && !['cloture', 'nouvelle_intervention'].includes(j.status)) {
-    lignes.push(`Notre intervention est planifiée le ${le(j.intervention_date)}.`);
-  } else if (j.status === 'commande') {
-    lignes.push('Le nécessaire a été commandé. Nous vous recontacterons dès sa réception pour fixer la date d\'intervention.');
-  } else if (j.status === 'recu') {
-    lignes.push('Le nécessaire est arrivé au magasin. La date d\'intervention vous sera communiquée très prochainement.');
-  } else if (j.status === 'cloture') {
-    lignes.push('Ce dossier de service après-vente est à présent clôturé.');
+  if (o.modele === 'confirmation') {
+    const quand = j.created_at ? ` du ${fmtDate(String(j.created_at).slice(0, 10))}` : '';
+    const fin = `nous vous confirmons que votre ${quoi} est bien enregistré${pose ? '' : 'e'}.`;
+    lignes.push(j.source && ORIGINE[j.source] ? `Suite à ${ORIGINE[j.source]}${quand}, ${fin}` : fin[0].toUpperCase() + fin.slice(1));
   } else {
-    lignes.push('La date d\'intervention vous sera communiquée plus tard.');
+    lignes.push(`Nous revenons vers vous au sujet de votre ${quoi}${o.modele === 'date' ? ' pour vous communiquer la date prévue' : ''}.`);
   }
 
-  if (d.address || d.phone) {
+  const details = [];
+  if (a('demande')) details.push(`${pose ? 'Objet' : 'Demande'} : ${j.title}`);
+  if (a('infos')) details.push(`Informations notées : ${j.remarks}`);
+  if (a('ref')) details.push(`Référence de commande : ${j.order_ref}`);
+  if (a('reste')) details.push(`Prochaine étape : ${d.todo}`);
+  if (details.length) lignes.push('', ...details);
+
+  if (o.blocs.has('dates')) lignes.push('', ...phraseDate(j));
+
+  const ajouts = [...PHRASES.filter((x) => o.phrases.has(x)), ...(o.ajout.trim() ? [o.ajout.trim()] : [])];
+  if (ajouts.length) lignes.push('', ...ajouts);
+
+  if (a('adresse') || a('tel')) {
     lignes.push('', 'Merci de vérifier vos coordonnées :');
-    if (d.address) lignes.push(`Adresse : ${d.address}`);
-    if (d.phone) lignes.push(`Téléphone : ${d.phone}`);
+    if (a('adresse')) lignes.push(`Adresse : ${d.address}`);
+    if (a('tel')) lignes.push(`Téléphone : ${d.phone}`);
   }
-  lignes.push('', 'Pour toute question, il vous suffit de répondre à ce mail.', '',
-    'Bien cordialement,', displayName() ? `${displayName()} — ${MAGASIN}` : MAGASIN);
+  if (o.blocs.has('contact')) lignes.push('', 'Pour toute question, il vous suffit de répondre à ce mail.');
+  lignes.push('', 'Bien cordialement,', displayName() ? `${displayName()} — ${MAGASIN}` : MAGASIN);
   return lignes.join('\n');
 }
 
-const objetMail = (j) => j.kind === 'pose'
-  ? `Votre dossier de pose — ${MAGASIN}` : `Votre dossier SAV — ${MAGASIN}`;
+function objetMail(j, modele = 'confirmation') {
+  const pose = j.kind === 'pose';
+  if (modele === 'date') return `${pose ? 'Date de pose' : 'Date d\'intervention'} — ${MAGASIN}`;
+  return `Votre dossier ${pose ? 'de pose' : 'SAV'} — ${MAGASIN}`;
+}
 
 /** mailto : les fins de ligne en CRLF, comme le veut la norme */
 const lienMail = (a, objet, corps) => `mailto:${encodeURIComponent(a || '')}`
@@ -327,12 +382,37 @@ function formMailHtml(j, d) {
         </div>
       </div>`;
   }
-  const objet = objetMail(j);
-  const corps = texteMail(j, d);
+  const o = mailOpts || (mailOpts = optsParDefaut('confirmation'));
+  const objet = objetMail(j, o.modele);
+  const corps = texteMail(j, d, o);
+  const blocs = BLOCS.filter((b) => String(b.valeur(j, d) || '').trim());
   return `
     <div class="cl-suite cl-mail" data-mail-fiche="${j.id}">
-      <p class="small"><strong>Mail à ${escapeHtml(d.email)}</strong><br>
-        <span class="muted">Relis et corrige si besoin : le mail s'ouvre ensuite dans ta messagerie, prêt à partir.</span></p>
+      <p class="small"><strong>Mail à ${escapeHtml(d.email)}</strong></p>
+
+      <div class="cl-choix" role="group" aria-label="Sorte de mail">
+        ${Object.entries(MODELES).map(([k, m]) => `<button type="button" class="${k === o.modele ? 'active' : ''}" data-mail-modele="${k}">${m.label}</button>`).join('')}
+      </div>
+
+      <fieldset class="cl-mail-cases">
+        <legend>Ce que le mail reprend de la fiche</legend>
+        ${blocs.map((b) => `
+          <label class="cl-case">
+            <input type="checkbox" data-mail-bloc="${b.cle}" ${o.blocs.has(b.cle) ? 'checked' : ''}>
+            <span><strong>${escapeHtml(b.label(j))}</strong>${b.cle === 'contact' ? '' : ` <span class="muted">${escapeHtml(String(b.valeur(j, d)).slice(0, 90))}</span>`}
+              ${b.aide ? `<em class="cl-aide">${escapeHtml(b.aide)}</em>` : ''}</span>
+          </label>`).join('')}
+      </fieldset>
+
+      <fieldset class="cl-mail-cases">
+        <legend>Informations utiles à ajouter</legend>
+        <div class="cl-phrases">
+          ${PHRASES.map((x, i) => `<button type="button" class="cl-phrase ${o.phrases.has(x) ? 'active' : ''}" data-mail-phrase="${i}">${o.phrases.has(x) ? '✓ ' : '+ '}${escapeHtml(x)}</button>`).join('')}
+        </div>
+        <textarea rows="2" data-mail-ajout placeholder="Autre chose à dire au client : horaire, consigne, rappel…">${escapeHtml(o.ajout)}</textarea>
+      </fieldset>
+
+      <p class="small muted">Le mail, tel qu'il partira. Tu peux encore le retoucher ici, en dernier : changer une case ci-dessus le réécrit.</p>
       <input type="text" class="search" data-mail-objet value="${escapeHtml(objet)}" aria-label="Objet du mail">
       <textarea rows="14" data-mail-corps aria-label="Texte du mail">${escapeHtml(corps)}</textarea>
       <div class="cl-actions">
@@ -707,6 +787,17 @@ async function confierLot(ids) {
   await renderClients();
 }
 
+/** Une case ou une phrase a changé : le mail se réécrit */
+function majApercu() {
+  const zone = $('[data-mail-fiche]');
+  const d = dossiers.find((x) => x.id === ouvert);
+  const j = d?.jobs.find((x) => x.id === zone?.dataset.mailFiche);
+  if (!zone || !j) return;
+  $('[data-mail-corps]', zone).value = texteMail(j, d, mailOpts);
+  $('[data-mail-objet]', zone).value = objetMail(j, mailOpts.modele);
+  majLienMail();
+}
+
 /** Le texte retouché à la main : le lien suit chaque frappe */
 function majLienMail() {
   const zone = $('[data-mail-fiche]');
@@ -787,8 +878,22 @@ function cabler() {
     const ds = b.dataset;
     if (ds.ouvrir) { ouvert = ds.ouvrir; suite = null; courriel = null; montrerFinies = false; renderClients().then(() => window.scrollTo(0, 0)); return; }
     if ('retour' in ds) { ouvert = null; suite = null; courriel = null; return renderClients(); }
-    if (ds.mail) { courriel = ds.mail; return renderClients().then(() => $('.cl-mail')?.scrollIntoView({ block: 'nearest' })); }
+    if (ds.mail) { courriel = ds.mail; mailOpts = null; return renderClients().then(() => $('.cl-mail')?.scrollIntoView({ block: 'nearest' })); }
     if ('mailFermer' in ds) { courriel = null; return renderClients(); }
+    if (ds.mailModele) {
+      // Changer de sorte de mail reprend ses cases par défaut ; les phrases
+      // et le texte ajoutés restent.
+      const garde = mailOpts || optsParDefaut('confirmation');
+      mailOpts = { ...optsParDefaut(ds.mailModele), phrases: garde.phrases, ajout: garde.ajout };
+      return renderClients();
+    }
+    if (ds.mailPhrase) {
+      const x = PHRASES[Number(ds.mailPhrase)];
+      if (mailOpts.phrases.has(x)) mailOpts.phrases.delete(x); else mailOpts.phrases.add(x);
+      b.classList.toggle('active', mailOpts.phrases.has(x));
+      b.textContent = `${mailOpts.phrases.has(x) ? '✓ ' : '+ '}${x}`;
+      return majApercu();
+    }
     if ('mailCopier' in ds) return copierMail();
     if ('mailEmail' in ds) { const c = $('[data-champ-dossier="email"]'); c?.scrollIntoView({ block: 'center' }); c?.focus(); return; }
     if (ds.filtre) { filtre = ds.filtre; filtreChoisi = true; return renderClients(); }
@@ -817,12 +922,17 @@ function cabler() {
   // Les champs s'enregistrent en quittant le champ : pas de bouton
   // « Enregistrer » à oublier.
   boite.addEventListener('input', (e) => {
-    if (e.target.matches('[data-mail-objet], [data-mail-corps]')) majLienMail();
+    if (e.target.matches('[data-mail-objet], [data-mail-corps]')) return majLienMail();
+    if (e.target.matches('[data-mail-ajout]') && mailOpts) { mailOpts.ajout = e.target.value; return majApercu(); }
   });
 
   boite.addEventListener('change', (e) => {
     const t = e.target;
-    if (t.matches('[data-mail-objet], [data-mail-corps]')) return;
+    if (t.matches('[data-mail-objet], [data-mail-corps], [data-mail-ajout]')) return;
+    if (t.dataset.mailBloc && mailOpts) {
+      if (t.checked) mailOpts.blocs.add(t.dataset.mailBloc); else mailOpts.blocs.delete(t.dataset.mailBloc);
+      return majApercu();
+    }
     if (t.dataset.champDossier) return majDossier(t.dataset.champDossier, t.value);
     if (t.dataset.champFiche) {
       const cle = t.dataset.champFiche;
