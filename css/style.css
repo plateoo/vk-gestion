@@ -2380,3 +2380,26 @@ kbd {
   background: var(--green-bg); color: var(--green); border: 1px solid var(--border-ok);
 }
 .cl-carte-actions { display: flex; justify-content: flex-end; }
+.cl-traite-ok { display: flex; gap: 10px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+.cl-note.annulee .cl-note-texte { text-decoration: line-through; color: var(--muted); }
+.cl-note-annuler {
+  font: inherit; font-size: 11px; background: none; border: none; padding: 0; cursor: pointer;
+  color: var(--info); text-decoration: underline;
+}
+
+/* La barre d'actions du dossier : traité, problème, clôturer */
+.cl-barre { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; align-items: stretch; }
+.cl-barre > .btn, .cl-barre > .cl-traite-ok { flex: 1 1 180px; justify-content: center; min-height: 44px; margin: 0; }
+.cl-barre .cl-traite-btn { width: auto; margin: 0; }
+.cl-probleme {
+  display: flex; gap: 10px; justify-content: space-between; align-items: center; flex-wrap: wrap;
+  margin-bottom: 10px; padding: 10px 12px; border-radius: var(--radius-card);
+  background: var(--red-bg); color: var(--red); border: 1px solid var(--border-danger); border-left: 4px solid var(--red);
+}
+.cl-probleme p { margin: 4px 0 0; color: var(--text); white-space: pre-wrap; }
+.cl-probleme-txt { color: var(--red); font-weight: 600; }
+.cl-clos {
+  display: flex; gap: 10px; justify-content: space-between; align-items: center; flex-wrap: wrap;
+  margin-bottom: 10px; padding: 10px 12px; border-radius: var(--radius-card);
+  background: var(--surface-hover); border: 1px solid var(--border-strong); font-weight: 600;
+}

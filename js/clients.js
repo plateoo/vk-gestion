@@ -149,7 +149,8 @@ async function chargerNotes(id) {
 }
 
 /** Un dossier est en cours tant qu'il n'a pas de fiche, ou qu'une fiche est ouverte. */
-const enCours = (d) => !d.jobs.length || d.jobs.some((j) => !finie(j));
+// Un dossier clôturé à la main est rangé, quelles que soient ses fiches.
+const enCours = (d) => !d.closed_at && (!d.jobs.length || d.jobs.some((j) => !finie(j)));
 
 // Les filtres du relais se lisent du point de vue de qui regarde.
 const pourMoi = (d) => d.relais === 'a_traiter' && d.relais_pour === moi();
@@ -167,6 +168,7 @@ const FILTRES = {
   poses:      { label: 'Poses à venir',     test: (d) => d.jobs.some((j) => j.kind === 'pose' && j.status === 'planifiee') },
   sav:        { label: 'SAV en cours',      test: (d) => d.jobs.some((j) => j.kind === 'sav' && !finie(j)) },
   demandes:   { label: 'Demandes en cours', test: (d) => d.jobs.some((j) => j.kind === 'demande' && !finie(j)) },
+  problemes:  { label: '⚠ Problèmes',        test: (d) => !!d.probleme },
   clotures:   { label: 'Clôturés',          test: (d) => !enCours(d) },
   tous:       { label: 'Tous',              test: () => true }
 };
@@ -218,6 +220,8 @@ function carteHtml(d) {
       ${d.address ? `<span class="muted small">${escapeHtml(d.address)}</span>` : ''}
       <div class="cl-fiches">
         ${(d.relais === 'a_traiter' && d.relais_urgent) || (d.todo_urgent && String(d.todo || '').trim()) ? '<span class="badge st-red cl-urgent">URGENT</span>' : ''}
+        ${d.probleme ? '<span class="badge st-red cl-urgent">⚠ Problème</span>' : ''}
+        ${d.closed_at ? '<span class="badge st-grey">Dossier clôturé</span>' : ''}
         ${estTraite(d) ? '<span class="badge st-green">✓ Traité</span>' : ''}
         ${retard(d) ? `<span class="badge st-red">En retard de ${retard(d)} j</span>` : d.todo_due && String(d.todo || '').trim() ? `<span class="badge st-blue">Pour le ${escapeHtml(fmtDate(d.todo_due))}</span>` : ''}
         ${d.relais ? `<span class="badge ${RELAIS[d.relais].cls} cl-relais-badge">${escapeHtml(RELAIS[d.relais].texte(d))}</span>` : ''}
@@ -232,8 +236,10 @@ function carteHtml(d) {
         <p class="cl-dernier muted small">Consigne : ${escapeHtml(d.relais_consigne || '')}</p>
         ${d.relais_reponse ? `<p class="cl-dernier small">« ${escapeHtml(d.relais_reponse)} » — ${escapeHtml(d.relais_par_name || '')}</p>` : ''}` : ''}
       ${d.last_note && !d.last_note.automatique && !d.relais ? `<p class="cl-dernier muted small">« ${escapeHtml(d.last_note.body)} » — ${escapeHtml(d.last_note.author_name || '')}</p>` : ''}
+      ${d.probleme ? `<p class="cl-todo cl-probleme-txt">⚠ ${escapeHtml(d.probleme)}</p>` : ''}
       ${d.last_work ? `<p class="cl-dernier small cl-fait">${escapeHtml(d.last_work.body)} — ${escapeHtml(d.last_work.author_name || '')}</p>` : ''}
-      ${'todo_due' in d && String(d.todo || '').trim() ? `<div class="cl-carte-actions"><button type="button" class="btn btn-sm cl-ok" data-traite="${d.id}">✓ Dossier traité</button></div>` : ''}
+      ${d.closed_at ? '' : 'todo_due' in d && String(d.todo || '').trim() ? `<div class="cl-carte-actions"><button type="button" class="btn btn-sm cl-ok" data-traite="${d.id}">✓ Dossier traité</button></div>`
+        : estTraite(d) && 'id' in d.last_work ? `<div class="cl-carte-actions"><button type="button" class="btn btn-sm btn-ghost" data-traite-annuler="${d.id}">Annuler « traité »</button></div>` : ''}
       ${d.created_name ? `<p class="cl-qui muted small">Créé par ${escapeHtml(d.created_name)}${d.updated_name && d.updated_name !== d.created_name ? ` · modifié par ${escapeHtml(d.updated_name)}` : ''}</p>` : ''}
     </li>`;
 }
@@ -247,10 +253,10 @@ function listeHtml() {
   }
   // Les filtres du relais et des sortes rares n'apparaissent que s'ils ont
   // quelque chose à montrer ; « Mes dossiers » sert surtout aux vendeurs.
-  const facultatifs = [...FILTRES_RELAIS, 'urgents', 'retard', 'mesures', 'demandes', ...(isSeller() ? [] : ['miens'])];
+  const facultatifs = [...FILTRES_RELAIS, 'urgents', 'retard', 'problemes', 'mesures', 'demandes', ...(isSeller() ? [] : ['miens'])];
   const montres = Object.keys(FILTRES).filter((k) => !facultatifs.includes(k) || compte(k) || k === filtre);
   // L'urgent passe devant, puis le retard
-  const poids = (d) => (pourMoi(d) && d.relais_urgent ? 4 : 0) + (d.todo_urgent && String(d.todo || '').trim() ? 2 : 0) + (retard(d) ? 1 : 0);
+  const poids = (d) => (pourMoi(d) && d.relais_urgent ? 8 : 0) + (d.probleme ? 4 : 0) + (d.todo_urgent && String(d.todo || '').trim() ? 2 : 0) + (retard(d) ? 1 : 0);
   const visibles = dossiers.filter(FILTRES[filtre].test).filter((d) => correspond(d, recherche))
     .sort((a, b) => poids(b) - poids(a));
   const urgents = dossiers.filter((d) => pourMoi(d) && d.relais_urgent).length;
@@ -746,8 +752,10 @@ function ficheHtml(j, d) {
 function noteHtml(n) {
   const quand = String(n.created_at).slice(0, 16).replace('T', ' à ');
   return `
-    <li class="cl-note ${n.automatique ? 'auto' : ''}">
-      <span class="cl-note-meta">${escapeHtml(n.author_name || '—')} · ${escapeHtml(quand)}</span>
+    <li class="cl-note ${n.automatique ? 'auto' : ''}${n.annule_le ? ' annulee' : ''}">
+      <span class="cl-note-meta">${escapeHtml(n.author_name || '—')} · ${escapeHtml(quand)}${
+        n.annule_le ? ` · annulé par ${escapeHtml(n.annule_par || '—')}` : ''}${
+        n.work_kind && !n.annule_le && 'avant' in n ? ` · <button type="button" class="cl-note-annuler" data-travail-annuler="${n.id}">Annuler</button>` : ''}</span>
       <span class="cl-note-texte">${escapeHtml(n.body)}</span>
     </li>`;
 }
@@ -851,9 +859,53 @@ function retard(d) {
 const estTraite = (d) => d.last_work?.kind === 'traite' && !String(d.todo || '').trim() && !(d.relais === 'a_traiter');
 function traiteHtml(d) {
   if (estTraite(d)) {
-    return `<p class="cl-traite-ok">✓ ${escapeHtml(String(d.last_work.body).replace(/^✓\s*/, ''))} — ${escapeHtml(d.last_work.author_name || '')}</p>`;
+    return `<div class="cl-traite-ok">
+      <span>✓ ${escapeHtml(String(d.last_work.body).replace(/^✓\s*/, ''))} — ${escapeHtml(d.last_work.author_name || '')}</span>
+      ${'id' in d.last_work ? `<button type="button" class="btn btn-sm btn-ghost" data-traite-annuler="${d.id}">Annuler</button>` : ''}
+    </div>`;
   }
   return `<button type="button" class="btn cl-ok cl-traite-btn" data-traite="${d.id}">✓ Dossier traité</button>`;
+}
+
+let signalement = false;    // le formulaire « Signaler un problème » est-il déplié ?
+
+/**
+ * La barre d'actions du dossier : traité, problème, clôturer — en haut,
+ * là où le regard tombe en ouvrant le dossier.
+ */
+function actionsHtml(d) {
+  if (!('probleme' in d)) return '';                 // avant la migration 0044
+  if (d.closed_at) {
+    return `
+      <div class="cl-clos">
+        <span>🔒 Dossier clôturé le ${escapeHtml(fmtDate(String(d.closed_at).slice(0, 10)))}${d.closed_name ? ` par ${escapeHtml(d.closed_name)}` : ''}</span>
+        <button type="button" class="btn btn-sm" data-dossier-rouvrir="${d.id}">Rouvrir le dossier</button>
+      </div>`;
+  }
+  return `
+    ${d.probleme ? `
+      <div class="cl-probleme">
+        <div><strong>⚠ Problème</strong> <span class="small">signalé par ${escapeHtml(d.probleme_par || '—')}${d.probleme_le ? ` le ${escapeHtml(fmtDate(String(d.probleme_le).slice(0, 10)))}` : ''}</span>
+          <p>${escapeHtml(d.probleme)}</p></div>
+        <div class="cl-actions">
+          <button type="button" class="btn btn-sm" data-probleme-ouvrir>Modifier</button>
+          <button type="button" class="btn btn-sm cl-ok" data-probleme-resolu>✓ Problème résolu</button>
+        </div>
+      </div>` : ''}
+    ${signalement ? `
+      <div class="card pad cl-bloc cl-signaler">
+        <label class="field"><span class="sub"><strong>Quel est le problème ?</strong></span>
+          <textarea id="probleme-texte" rows="2" placeholder="Ex. : le client conteste la facture, pièce livrée cassée, attention chien…">${escapeHtml(d.probleme || '')}</textarea></label>
+        <div class="cl-actions">
+          <button type="button" class="btn btn-sm btn-primary" data-probleme-ok>Enregistrer</button>
+          <button type="button" class="btn btn-sm btn-ghost" data-probleme-annuler>Annuler</button>
+        </div>
+      </div>` : ''}
+    <div class="cl-barre">
+      ${'todo_due' in d ? traiteHtml(d) : ''}
+      ${d.probleme || signalement ? '' : '<button type="button" class="btn cl-sav" data-probleme-ouvrir>⚠ Signaler un problème</button>'}
+      <button type="button" class="btn" data-dossier-cloturer="${d.id}">🔒 Clôturer le dossier</button>
+    </div>`;
 }
 
 const TRAVAUX = { mail: 'Mail envoyé', appel: 'Client appelé', devis: 'Devis envoyé', commande: 'Commande passée', rdv: 'Rendez-vous fixé', visite: 'Passage chez le client', autre: 'Autre' };
@@ -906,6 +958,7 @@ function dossierHtml(d) {
     <div class="cl-retour">
       <button type="button" class="btn btn-sm" data-retour>← Tous les clients</button>
     </div>
+    ${actionsHtml(d)}
 
     <div class="card pad cl-bloc">
       ${d.address ? `<p class="cl-adresse">${escapeHtml(d.address)}</p>` : ''}
@@ -922,7 +975,6 @@ function dossierHtml(d) {
     </div>
 
     <div class="card pad cl-bloc${retard(d) ? ' cl-en-retard' : ''}">
-      ${'todo_due' in d ? traiteHtml(d) : ''}
       <label class="field"><span class="sub"><strong>Ce qu'il reste à faire</strong></span>
         <textarea rows="3" data-champ-dossier="todo" placeholder="Ex. : poser les plinthes, régler la porte du frigo…">${escapeHtml(d.todo || '')}</textarea></label>
       ${'todo_due' in d ? `
@@ -1259,7 +1311,41 @@ async function marquerTraite(id) {
   const d = dossiers.find((x) => x.id === id);
   const r = await rpc('client_travail', { p_file: id, p_kind: 'traite', p_date: todayISO(), p_texte: null, p_job: null, p_fini: true }, 'Enregistrement impossible.');
   if (!r) return;
-  toast(`« ${d?.name || 'Dossier'} » marqué traité.`, 'ok', 2200);
+  toast(`« ${d?.name || 'Dossier'} » marqué traité.`, 'ok', 6000,
+    { label: 'Annuler', onClick: () => annulerTravail(id) });
+  await renderClients();
+}
+
+async function signalerProbleme(texte) {
+  const t = texte.trim();
+  if (!t && !dossiers.find((x) => x.id === ouvert)?.probleme) { $('#probleme-texte')?.focus(); return toast('Écris quel est le problème.', 'error'); }
+  const r = await rpc('client_probleme', { p_file: ouvert, p_texte: t || null }, 'Enregistrement impossible.');
+  if (!r) return;
+  signalement = false;
+  toast(t ? 'Problème signalé : il s\'affiche sur le dossier et dans la liste.' : 'Problème résolu.', 'ok', 2600);
+  await renderClients();
+}
+
+async function cloturerDossier(id, rouvrir) {
+  const d = dossiers.find((x) => x.id === id);
+  if (!rouvrir) {
+    const ouvertes = (d?.jobs || []).filter((j) => !finie(j)).length;
+    const ok = await confirmDialog(`Clôturer le dossier « ${d?.name || ''} » ?\nIl quitte « En cours » et se range dans « Clôturés » ; on peut le rouvrir à tout moment.`
+      + (ouvertes ? `\n\n${ouvertes} fiche${ouvertes > 1 ? 's' : ''} encore ouverte${ouvertes > 1 ? 's' : ''} resteront telles quelles.` : ''), 'Clôturer');
+    if (!ok) return;
+  }
+  const r = await rpc('client_dossier_cloturer', { p_file: id, p_rouvrir: rouvrir }, rouvrir ? 'Réouverture impossible.' : 'Clôture impossible.');
+  if (!r) return;
+  toast(rouvrir ? 'Dossier rouvert.' : 'Dossier clôturé.', 'ok', 5000,
+    rouvrir ? null : { label: 'Annuler', onClick: () => cloturerDossier(id, true) });
+  await renderClients();
+}
+
+/** Annuler « Dossier traité » (ou un travail noté) : le reste à faire revient tel quel */
+async function annulerTravail(fileId, noteId = null) {
+  const r = await rpc('client_travail_annuler', { p_file: fileId, p_note: noteId }, 'Annulation impossible.');
+  if (!r) return;
+  toast(noteId ? 'Travail annulé.' : '« Dossier traité » annulé : le reste à faire est revenu.', 'ok', 2600);
   await renderClients();
 }
 
@@ -1399,7 +1485,7 @@ function cabler() {
     const b = e.target.closest('button, [data-ouvrir]');
     if (!b || e.target.closest('a')) return;
     const ds = b.dataset;
-    if (ds.ouvrir) { ouvert = ds.ouvrir; suite = null; courriel = null; montrerFinies = false; renderClients().then(() => window.scrollTo(0, 0)); return; }
+    if (ds.ouvrir) { ouvert = ds.ouvrir; suite = null; courriel = null; signalement = false; montrerFinies = false; renderClients().then(() => window.scrollTo(0, 0)); return; }
     if ('retour' in ds) { ouvert = null; suite = null; courriel = null; return renderClients(); }
     if (ds.mail) { courriel = ds.mail; mailOpts = null; return renderClients().then(() => $('.cl-mail')?.scrollIntoView({ block: 'nearest' })); }
     if ('mailFermer' in ds) { courriel = null; return renderClients(); }
@@ -1424,6 +1510,14 @@ function cabler() {
     if (ds.travailKind) { travailKind = ds.travailKind; $$('[data-travail-kind]').forEach((x) => x.classList.toggle('active', x === b)); return; }
     if ('travail' in ds) return noterTravail();
     if (ds.traite) return marquerTraite(ds.traite);
+    if ('problemeOuvrir' in ds) { signalement = true; return renderClients().then(() => $('#probleme-texte')?.focus()); }
+    if ('problemeAnnuler' in ds) { signalement = false; return renderClients(); }
+    if ('problemeOk' in ds) return signalerProbleme($('#probleme-texte')?.value || '');
+    if ('problemeResolu' in ds) return signalerProbleme('');
+    if (ds.dossierCloturer) return cloturerDossier(ds.dossierCloturer, false);
+    if (ds.dossierRouvrir) return cloturerDossier(ds.dossierRouvrir, true);
+    if (ds.traiteAnnuler) return annulerTravail(ds.traiteAnnuler);
+    if (ds.travailAnnuler) return annulerTravail(ouvert, ds.travailAnnuler);
     if ('docAjouter' in ds) return choisirDocuments();
     if (ds.docOuvrir) return ouvrirDocument(ds.docOuvrir);
     if (ds.docSuppr) return supprimerDocument(ds.docSuppr);
