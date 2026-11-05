@@ -30,6 +30,8 @@ let filtre = 'encours';
 let recherche = '';
 let ouvert = null;          // id du dossier affiché, null = la liste
 let notes = [];
+let documents = [];         // les documents du dossier ouvert
+let travailKind = 'mail';   // la sorte de travail choisie dans « Noter un travail fait »
 let suite = null;           // id de la fiche dont le formulaire « suite » est déplié
 let courriel = null;        // id de la fiche dont le mail au client est déplié
 let montrerFinies = false;
@@ -132,6 +134,13 @@ export async function refreshClientBadge({ connexion = false } = {}) {
   } catch { /* une pastille absente ne bloque rien */ }
 }
 
+async function chargerDocuments(id) {
+  documents = [];
+  const { data, error } = await supabase.from('client_documents').select('*').eq('file_id', id).order('created_at', { ascending: false });
+  // Avant la migration 0043 la table n'existe pas : pas de document, pas d'erreur
+  if (!error) documents = data || [];
+}
+
 async function chargerNotes(id) {
   const { data, error } = await supabase.from('client_notes')
     .select('*').eq('file_id', id).order('created_at', { ascending: false });
@@ -149,6 +158,8 @@ const FILTRES = {
   relais:     { label: 'À traiter pour toi', test: pourMoi },
   reponses:   { label: 'Réponses reçues',    test: reponseAMoi },
   confies:    { label: 'Confiés en attente', test: (d) => d.relais === 'a_traiter' && d.relais_de === moi() },
+  urgents:    { label: 'Urgents',           test: (d) => (d.todo_urgent && String(d.todo || '').trim()) || pourMoi(d) && d.relais_urgent },
+  retard:     { label: 'En retard',         test: (d) => retard(d) > 0 },
   encours:    { label: 'En cours',          test: enCours },
   miens:      { label: 'Mes dossiers',      test: (d) => d.created_by === moi() || d.relais_pour === moi() || d.relais_de === moi() },
   mesures:    { label: 'Mesurages à planifier', test: (d) => d.jobs.some((j) => j.kind === 'mesure' && j.status === 'a_planifier') },
@@ -206,7 +217,9 @@ function carteHtml(d) {
       </div>
       ${d.address ? `<span class="muted small">${escapeHtml(d.address)}</span>` : ''}
       <div class="cl-fiches">
-        ${d.relais === 'a_traiter' && d.relais_urgent ? '<span class="badge st-red cl-urgent">URGENT</span>' : ''}
+        ${(d.relais === 'a_traiter' && d.relais_urgent) || (d.todo_urgent && String(d.todo || '').trim()) ? '<span class="badge st-red cl-urgent">URGENT</span>' : ''}
+        ${estTraite(d) ? '<span class="badge st-green">✓ Traité</span>' : ''}
+        ${retard(d) ? `<span class="badge st-red">En retard de ${retard(d)} j</span>` : d.todo_due && String(d.todo || '').trim() ? `<span class="badge st-blue">Pour le ${escapeHtml(fmtDate(d.todo_due))}</span>` : ''}
         ${d.relais ? `<span class="badge ${RELAIS[d.relais].cls} cl-relais-badge">${escapeHtml(RELAIS[d.relais].texte(d))}</span>` : ''}
         ${montrees.map((j) => `
           <span class="badge ${etat(j).cls}">${SORTES[j.kind] || j.kind} · ${escapeHtml(etat(j).label)}</span>`).join('')}
@@ -219,6 +232,8 @@ function carteHtml(d) {
         <p class="cl-dernier muted small">Consigne : ${escapeHtml(d.relais_consigne || '')}</p>
         ${d.relais_reponse ? `<p class="cl-dernier small">« ${escapeHtml(d.relais_reponse)} » — ${escapeHtml(d.relais_par_name || '')}</p>` : ''}` : ''}
       ${d.last_note && !d.last_note.automatique && !d.relais ? `<p class="cl-dernier muted small">« ${escapeHtml(d.last_note.body)} » — ${escapeHtml(d.last_note.author_name || '')}</p>` : ''}
+      ${d.last_work ? `<p class="cl-dernier small cl-fait">${escapeHtml(d.last_work.body)} — ${escapeHtml(d.last_work.author_name || '')}</p>` : ''}
+      ${'todo_due' in d && String(d.todo || '').trim() ? `<div class="cl-carte-actions"><button type="button" class="btn btn-sm cl-ok" data-traite="${d.id}">✓ Dossier traité</button></div>` : ''}
       ${d.created_name ? `<p class="cl-qui muted small">Créé par ${escapeHtml(d.created_name)}${d.updated_name && d.updated_name !== d.created_name ? ` · modifié par ${escapeHtml(d.updated_name)}` : ''}</p>` : ''}
     </li>`;
 }
@@ -232,11 +247,12 @@ function listeHtml() {
   }
   // Les filtres du relais et des sortes rares n'apparaissent que s'ils ont
   // quelque chose à montrer ; « Mes dossiers » sert surtout aux vendeurs.
-  const facultatifs = [...FILTRES_RELAIS, 'mesures', 'demandes', ...(isSeller() ? [] : ['miens'])];
+  const facultatifs = [...FILTRES_RELAIS, 'urgents', 'retard', 'mesures', 'demandes', ...(isSeller() ? [] : ['miens'])];
   const montres = Object.keys(FILTRES).filter((k) => !facultatifs.includes(k) || compte(k) || k === filtre);
-  // L'urgent passe devant
+  // L'urgent passe devant, puis le retard
+  const poids = (d) => (pourMoi(d) && d.relais_urgent ? 4 : 0) + (d.todo_urgent && String(d.todo || '').trim() ? 2 : 0) + (retard(d) ? 1 : 0);
   const visibles = dossiers.filter(FILTRES[filtre].test).filter((d) => correspond(d, recherche))
-    .sort((a, b) => Number(pourMoi(b) && b.relais_urgent) - Number(pourMoi(a) && a.relais_urgent));
+    .sort((a, b) => poids(b) - poids(a));
   const urgents = dossiers.filter((d) => pourMoi(d) && d.relais_urgent).length;
   // Confier d'un coup les SAV en cours qui ont un « reste à faire »
   const aConfier = !isSeller() && filtre === 'sav' && relaisActif() && collegues().length
@@ -344,7 +360,7 @@ let mailOpts = null;        // { modele, blocs: Set, phrases: Set, ajout, change
 function optsParDefaut(modele, j = null, d = null) {
   const ch = j && d ? changements(j, d) : [];
   return { modele, blocs: new Set(MODELES[modele].blocs), phrases: new Set(), ajout: '',
-           changes: new Set(ch.filter((c) => c.coche).map((c) => c.cle)) };
+           changes: new Set(ch.filter((c) => c.coche).map((c) => c.cle)), docs: new Set(), liens: {} };
 }
 
 // ---------------------------------------------------------------------
@@ -516,6 +532,12 @@ function texteMail(j, d, o = optsParDefaut('confirmation')) {
   const ajouts = [...PHRASES.filter((x) => o.phrases.has(x)), ...(o.ajout.trim() ? [o.ajout.trim()] : [])];
   if (ajouts.length) lignes.push('', ...ajouts);
 
+  const joints = documents.filter((x) => o.docs?.has(x.id) && o.liens?.[x.id]);
+  if (joints.length) {
+    lignes.push('', joints.length > 1 ? 'Vous trouverez les documents ici (liens valables 30 jours) :' : 'Vous trouverez le document ici (lien valable 30 jours) :');
+    joints.forEach((x) => lignes.push(`- ${x.name} : ${o.liens[x.id]}`));
+  }
+
   if (a('adresse') || a('tel')) {
     lignes.push('', 'Merci de vérifier vos coordonnées :');
     if (a('adresse')) lignes.push(`Adresse : ${d.address}`);
@@ -584,6 +606,21 @@ function formMailHtml(j, d) {
           </label>`).join('')}
       </fieldset>
 
+      ${'todo_due' in d ? `
+      <fieldset class="cl-mail-cases">
+        <legend>Documents à joindre</legend>
+        ${documents.map((x) => `
+          <label class="cl-case">
+            <input type="checkbox" data-mail-doc="${x.id}" ${o.docs.has(x.id) ? 'checked' : ''}>
+            <span><strong>${escapeHtml(x.name)}</strong> <span class="muted">${escapeHtml(x.created_name || '')}</span></span>
+          </label>`).join('') || '<p class="muted small">Aucun document dans ce dossier.</p>'}
+        <div class="cl-actions">
+          <button type="button" class="btn btn-sm" data-mail-doc-ajouter>+ Ajouter un document</button>
+        </div>
+        <p class="muted small">Chaque document coché part sous forme de lien de téléchargement, valable 30 jours.${
+          peutPartager() ? ' Sur téléphone, « Partager avec les pièces jointes » les joint vraiment au mail.' : ''}</p>
+      </fieldset>` : ''}
+
       <fieldset class="cl-mail-cases">
         <legend>Informations utiles à ajouter</legend>
         <div class="cl-phrases">
@@ -597,6 +634,7 @@ function formMailHtml(j, d) {
       <textarea rows="14" data-mail-corps aria-label="Texte du mail">${escapeHtml(corps)}</textarea>
       <div class="cl-actions">
         <a class="btn btn-primary btn-sm" data-mail-envoyer href="${escapeHtml(lienMail(d.email, objet, corps))}">✉ Ouvrir dans ma messagerie</a>
+        ${peutPartager() && o.docs.size ? '<button type="button" class="btn btn-sm" data-mail-partager>📎 Partager avec les pièces jointes</button>' : ''}
         <button type="button" class="btn btn-sm" data-mail-copier>Copier le texte</button>
         <button type="button" class="btn btn-ghost btn-sm" data-mail-fermer>Fermer</button>
       </div>
@@ -795,6 +833,72 @@ function relaisHtml(d) {
     </div>`;
 }
 
+// ---------------------------------------------------------------------
+// L'échéance, le travail fait, les documents
+// ---------------------------------------------------------------------
+/** Jours de retard du reste à faire (0 = pas en retard) */
+function retard(d) {
+  if (!d.todo_due || !String(d.todo || '').trim()) return 0;
+  const j = Math.round((Date.parse(todayISO()) - Date.parse(d.todo_due)) / 86400000);
+  return j > 0 ? j : 0;
+}
+
+/**
+ * « Dossier traité » : un geste, une date, un nom. Le reste à faire,
+ * son échéance et l'urgence s'effacent ; la carte le dit en vert, pour
+ * que personne ne refasse le travail.
+ */
+const estTraite = (d) => d.last_work?.kind === 'traite' && !String(d.todo || '').trim() && !(d.relais === 'a_traiter');
+function traiteHtml(d) {
+  if (estTraite(d)) {
+    return `<p class="cl-traite-ok">✓ ${escapeHtml(String(d.last_work.body).replace(/^✓\s*/, ''))} — ${escapeHtml(d.last_work.author_name || '')}</p>`;
+  }
+  return `<button type="button" class="btn cl-ok cl-traite-btn" data-traite="${d.id}">✓ Dossier traité</button>`;
+}
+
+const TRAVAUX = { mail: 'Mail envoyé', appel: 'Client appelé', devis: 'Devis envoyé', commande: 'Commande passée', rdv: 'Rendez-vous fixé', visite: 'Passage chez le client', autre: 'Autre' };
+
+function travailHtml(d) {
+  if (!('todo_due' in d)) return '';           // avant la migration 0043
+  return `
+    <div class="card pad cl-bloc cl-travail">
+      <p class="cl-relais-titre"><strong>Noter un travail fait</strong>
+        <span class="muted small">avec sa date : on sait qui a fait quoi, et quand</span></p>
+      <div class="cl-phrases" role="group" aria-label="Ce qui a été fait">
+        ${Object.entries(TRAVAUX).map(([k, l]) => `<button type="button" class="cl-phrase ${k === travailKind ? 'active' : ''}" data-travail-kind="${k}">${l}</button>`).join('')}
+      </div>
+      <div class="cl-travail-ligne">
+        <label class="field"><span class="sub">Le</span>
+          <input type="date" id="travail-date" value="${todayISO()}" max="${todayISO()}"></label>
+        <label class="field cl-travail-texte"><span class="sub">Précision (facultatif)</span>
+          <input type="text" id="travail-texte" placeholder="Ex. : devis complémentaire envoyé, client absent…"></label>
+      </div>
+      <div class="cl-actions">
+        ${String(d.todo || '').trim() ? '<label class="cl-case"><input type="checkbox" id="travail-fini"><span>Le reste à faire est terminé</span></label>' : ''}
+        <button type="button" class="btn btn-sm btn-primary" data-travail>Enregistrer</button>
+      </div>
+    </div>`;
+}
+
+function documentsHtml(d) {
+  if (!('todo_due' in d)) return '';
+  return `
+    <div class="cl-section-tete">
+      <h2>Documents</h2>
+      <span class="spacer"></span>
+      <button type="button" class="btn btn-sm" data-doc-ajouter>+ Ajouter un document</button>
+    </div>
+    <div class="card pad cl-bloc">
+      ${documents.length ? `<ul class="cl-docs">${documents.map((x) => `
+        <li>
+          <button type="button" class="cl-doc-nom" data-doc-ouvrir="${x.id}">📄 ${escapeHtml(x.name)}</button>
+          <span class="muted small">${escapeHtml(x.created_name || '')} · ${escapeHtml(fmtDate(String(x.created_at).slice(0, 10)))}</span>
+          ${isManager() ? `<button type="button" class="btn btn-ghost btn-sm" data-doc-suppr="${x.id}">Supprimer</button>` : ''}
+        </li>`).join('')}</ul>`
+        : '<p class="muted small">Devis, plan, photo… Ajoute-les ici : ils pourront être joints au mail du client.</p>'}
+    </div>`;
+}
+
 function dossierHtml(d) {
   const ouvertes = d.jobs.filter((j) => !finie(j));
   const finies = d.jobs.filter(finie);
@@ -817,10 +921,20 @@ function dossierHtml(d) {
       </div>
     </div>
 
-    <div class="card pad cl-bloc">
+    <div class="card pad cl-bloc${retard(d) ? ' cl-en-retard' : ''}">
+      ${'todo_due' in d ? traiteHtml(d) : ''}
       <label class="field"><span class="sub"><strong>Ce qu'il reste à faire</strong></span>
         <textarea rows="3" data-champ-dossier="todo" placeholder="Ex. : poser les plinthes, régler la porte du frigo…">${escapeHtml(d.todo || '')}</textarea></label>
+      ${'todo_due' in d ? `
+        <div class="cl-echeance">
+          <label class="field"><span class="sub">À faire pour le</span>
+            <input type="date" data-champ-dossier="todo_due" value="${d.todo_due || ''}"></label>
+          <label class="cl-case cl-case-urgent"><input type="checkbox" data-champ-dossier="todo_urgent" ${d.todo_urgent ? 'checked' : ''}><span><strong>Urgent</strong></span></label>
+          ${retard(d) ? `<span class="badge st-red">En retard de ${retard(d)} jour${retard(d) > 1 ? 's' : ''}</span>` : ''}
+        </div>` : ''}
     </div>
+
+    ${travailHtml(d)}
 
     ${relaisHtml(d)}
 
@@ -840,6 +954,8 @@ function dossierHtml(d) {
       <button type="button" class="btn btn-ghost btn-sm cl-finies-btn" data-finies>
         ${montrerFinies ? '▾' : '▸'} Fiches terminées (${finies.length})</button>
       ${montrerFinies ? finies.map((j) => ficheHtml(j, d)).join('') : ''}` : ''}
+
+    ${documentsHtml(d)}
 
     <div class="cl-section-tete"><h2>Notes</h2></div>
     <div class="card pad cl-bloc">
@@ -894,7 +1010,7 @@ export async function renderClients() {
   try {
     await chargerDossiers();
     if (ouvert && !dossiers.some((d) => d.id === ouvert)) ouvert = null;
-    if (ouvert) await chargerNotes(ouvert);
+    if (ouvert) await Promise.all([chargerNotes(ouvert), chargerDocuments(ouvert)]);
     poserPastille(dossiers.filter(FILTRES[isManager() ? 'reponses' : 'relais'].test).length);
   } catch (err) {
     console.error(err);
@@ -947,6 +1063,13 @@ async function creer() {
 async function majDossier(cle, valeur) {
   const d = dossiers.find((x) => x.id === ouvert);
   if (!d) return;
+  if (typeof valeur === 'boolean') {
+    const { error } = await supabase.from('client_files').update({ [cle]: valeur }).eq('id', d.id);
+    if (error) { console.error(error); return toast(errorMessage(error, 'Enregistrement impossible.'), 'error'); }
+    d[cle] = valeur;
+    toast(valeur ? 'Marqué urgent.' : 'Plus urgent.', 'ok', 1400);
+    return;
+  }
   const v = cle === 'email' ? valeur.trim().toLowerCase() : valeur.trim();
   if (cle === 'name' && !v) { toast('Le nom ne peut pas être vide.', 'error'); return renderClients(); }
   if ((d[cle] || '') === v) return;
@@ -954,6 +1077,8 @@ async function majDossier(cle, valeur) {
   if (error) { console.error(error); return toast(errorMessage(error, 'Enregistrement impossible.'), 'error'); }
   d[cle] = v || null;
   toast('Enregistré.', 'ok', 1400);
+  // L'échéance change le bandeau « en retard »
+  if (cle === 'todo_due') await renderClients();
   // Le mail au client attendait cette adresse
   if (cle === 'email' && courriel) await renderClients();
 }
@@ -1036,6 +1161,56 @@ async function confierLot(ids) {
   await renderClients();
 }
 
+/** Le partage de fichiers (téléphone, Safari) : la vraie pièce jointe */
+const peutPartager = () => {
+  try { return !!navigator.canShare && navigator.canShare({ files: [new File(['x'], 'x.pdf', { type: 'application/pdf' })] }); } catch { return false; }
+};
+
+/** Cocher un document : son lien signé entre dans le mail */
+async function basculerDocMail(id, coche) {
+  if (!mailOpts) return;
+  if (!coche) { mailOpts.docs.delete(id); return renderClients(); }
+  const doc = documents.find((x) => x.id === id);
+  if (!doc) return;
+  try {
+    mailOpts.liens[id] = mailOpts.liens[id] || await lienSigne(doc);
+    mailOpts.docs.add(id);
+  } catch (err) {
+    console.error(err);
+    toast(errorMessage(err, 'Lien de téléchargement impossible.'), 'error');
+  }
+  await renderClients();
+}
+
+/** Ajoutés depuis le mail : ils sont cochés d'office */
+async function cocherDocsMail(ajoutes) {
+  for (const x of ajoutes) await basculerDocMail(x.id, true);
+}
+
+async function partagerMail() {
+  const zone = $('[data-mail-fiche]');
+  if (!zone || !mailOpts) return;
+  const choisis = documents.filter((x) => mailOpts.docs.has(x.id));
+  try {
+    const files = [];
+    for (const x of choisis) {
+      const { data, error } = await supabase.storage.from('clients').download(x.path);
+      if (error) throw error;
+      files.push(new File([data], x.name, { type: x.content_type || data.type || 'application/octet-stream' }));
+    }
+    const d = dossiers.find((y) => y.id === ouvert);
+    // Le partage ne sait pas remplir le destinataire : on le copie.
+    try { await navigator.clipboard.writeText(d?.email || ''); } catch { /* facultatif */ }
+    await navigator.share({ files, title: $('[data-mail-objet]', zone).value, text: $('[data-mail-corps]', zone).value });
+    toast(`Choisis « Mail » ; l'adresse ${d?.email || ''} est copiée, colle-la dans « À ».`, 'ok', 6000);
+    mailOuvert();
+  } catch (err) {
+    if (err?.name === 'AbortError') return;
+    console.error(err);
+    toast(errorMessage(err, 'Partage impossible : utilise les liens du mail.'), 'error');
+  }
+}
+
 /** Une case ou une phrase a changé : le mail se réécrit */
 function majApercu() {
   const zone = $('[data-mail-fiche]');
@@ -1078,6 +1253,105 @@ async function mailOuvert() {
   });
   if (error) console.error(error);
   setTimeout(() => { courriel = null; renderClients(); }, 400);
+}
+
+async function marquerTraite(id) {
+  const d = dossiers.find((x) => x.id === id);
+  const r = await rpc('client_travail', { p_file: id, p_kind: 'traite', p_date: todayISO(), p_texte: null, p_job: null, p_fini: true }, 'Enregistrement impossible.');
+  if (!r) return;
+  toast(`« ${d?.name || 'Dossier'} » marqué traité.`, 'ok', 2200);
+  await renderClients();
+}
+
+async function noterTravail() {
+  const fini = !!$('#travail-fini')?.checked;
+  const r = await rpc('client_travail', {
+    p_file: ouvert, p_kind: travailKind, p_date: $('#travail-date')?.value || null,
+    p_texte: $('#travail-texte')?.value.trim() || null, p_job: null, p_fini: fini
+  }, 'Enregistrement impossible.');
+  if (!r) return;
+  toast(`${TRAVAUX[travailKind] === 'Autre' ? 'Travail' : TRAVAUX[travailKind]} noté${fini ? ', reste à faire terminé' : ''}.`, 'ok', 2200);
+  await renderClients();
+}
+
+// ---------------------------------------------------------------------
+// Les documents du dossier
+// ---------------------------------------------------------------------
+const DOC_MAX = 25 * 1024 * 1024;
+let choixDocs = null;       // le sélecteur de fichiers, créé à la demande
+let apresAjout = null;      // rappel après un ajout fait depuis le mail
+
+function choisirDocuments(rappel = null) {
+  apresAjout = rappel;
+  if (!choixDocs) {
+    choixDocs = document.createElement('input');
+    choixDocs.type = 'file';
+    choixDocs.multiple = true;
+    choixDocs.accept = '.pdf,.doc,.docx,.xls,.xlsx,.txt,image/*';
+    choixDocs.hidden = true;
+    document.body.appendChild(choixDocs);
+    choixDocs.addEventListener('change', () => ajouterDocuments(choixDocs.files));
+  }
+  choixDocs.value = '';
+  choixDocs.click();
+}
+
+async function ajouterDocuments(fichiers) {
+  const liste = [...(fichiers || [])];
+  if (!liste.length || !ouvert) return;
+  const ajoutes = [];
+  for (const f of liste) {
+    if (f.size > DOC_MAX) { toast(`« ${f.name} » dépasse 25 Mo.`, 'error'); continue; }
+    const safe = f.name.replace(/[^A-Za-z0-9._-]+/g, '-').slice(-80) || 'document';
+    const path = `${ouvert}/${crypto.randomUUID()}-${safe}`;
+    const { error: e1 } = await supabase.storage.from('clients').upload(path, f, { contentType: f.type || undefined, upsert: false });
+    if (e1) { console.error(e1); toast(errorMessage(e1, `Envoi de « ${f.name} » impossible.`), 'error'); continue; }
+    const { data, error: e2 } = await supabase.from('client_documents')
+      .insert({ file_id: ouvert, path, name: f.name, content_type: f.type || null, size: f.size }).select().single();
+    if (e2) { console.error(e2); toast(errorMessage(e2, `« ${f.name} » non enregistré.`), 'error'); continue; }
+    ajoutes.push(data);
+  }
+  if (!ajoutes.length) return;
+  toast(`${ajoutes.length} document${ajoutes.length > 1 ? 's' : ''} ajouté${ajoutes.length > 1 ? 's' : ''}.`, 'ok', 1800);
+  const rappel = apresAjout;
+  apresAjout = null;
+  await renderClients();
+  if (rappel) await rappel(ajoutes);
+}
+
+/** Un lien de téléchargement signé : 30 jours, de quoi laisser le client ouvrir son devis */
+async function lienSigne(doc, jours = 30) {
+  const { data, error } = await supabase.storage.from('clients').createSignedUrl(doc.path, jours * 86400, { download: doc.name });
+  if (error) throw error;
+  return data.signedUrl;
+}
+
+async function ouvrirDocument(id) {
+  const doc = documents.find((x) => x.id === id);
+  if (!doc) return;
+  // La fenêtre s'ouvre tout de suite : un navigateur bloque celle qu'on
+  // ouvre après une attente.
+  const fenetre = window.open('', '_blank');
+  try {
+    const { data, error } = await supabase.storage.from('clients').createSignedUrl(doc.path, 600);
+    if (error) throw error;
+    if (fenetre) fenetre.location = data.signedUrl; else window.location.href = data.signedUrl;
+  } catch (err) {
+    fenetre?.close();
+    toast(errorMessage(err, 'Document introuvable.'), 'error');
+  }
+}
+
+async function supprimerDocument(id) {
+  const doc = documents.find((x) => x.id === id);
+  if (!doc) return;
+  const ok = await confirmDialog(`Supprimer « ${doc.name} » du dossier ?\nUn lien déjà envoyé au client ne fonctionnera plus.`, 'Supprimer');
+  if (!ok) return;
+  const { error } = await supabase.from('client_documents').delete().eq('id', id);
+  if (error) return toast(errorMessage(error, 'Suppression impossible.'), 'error');
+  await supabase.storage.from('clients').remove([doc.path]);
+  toast('Document supprimé.');
+  await renderClients();
 }
 
 async function noter() {
@@ -1133,7 +1407,7 @@ function cabler() {
       // Changer de sorte de mail reprend ses cases par défaut ; les phrases
       // et le texte ajoutés restent.
       const garde = mailOpts || optsParDefaut('confirmation');
-      mailOpts = { ...optsParDefaut(ds.mailModele), phrases: garde.phrases, ajout: garde.ajout, changes: garde.changes };
+      mailOpts = { ...optsParDefaut(ds.mailModele), phrases: garde.phrases, ajout: garde.ajout, changes: garde.changes, docs: garde.docs, liens: garde.liens };
       return renderClients();
     }
     if (ds.mailPhrase) {
@@ -1147,6 +1421,14 @@ function cabler() {
     if ('mailEmail' in ds) { const c = $('[data-champ-dossier="email"]'); c?.scrollIntoView({ block: 'center' }); c?.focus(); return; }
     if (ds.filtre) { filtre = ds.filtre; filtreChoisi = true; return renderClients(); }
     if (ds.relais) return relais(ds.relais, ds.pour || null);
+    if (ds.travailKind) { travailKind = ds.travailKind; $$('[data-travail-kind]').forEach((x) => x.classList.toggle('active', x === b)); return; }
+    if ('travail' in ds) return noterTravail();
+    if (ds.traite) return marquerTraite(ds.traite);
+    if ('docAjouter' in ds) return choisirDocuments();
+    if (ds.docOuvrir) return ouvrirDocument(ds.docOuvrir);
+    if (ds.docSuppr) return supprimerDocument(ds.docSuppr);
+    if ('mailDocAjouter' in ds) return choisirDocuments(cocherDocsMail);
+    if ('mailPartager' in ds) return partagerMail();
     if (ds.confierLot) return confierLot(ds.confierLot.split(','));
     if (ds.nouvelleFiche) return nouvelleFiche(ds.nouvelleFiche);
     if (ds.etape) {
@@ -1181,6 +1463,7 @@ function cabler() {
   boite.addEventListener('change', (e) => {
     const t = e.target;
     if (t.matches('[data-mail-objet], [data-mail-corps], [data-mail-ajout]')) return;
+    if (t.dataset.mailDoc) return basculerDocMail(t.dataset.mailDoc, t.checked);
     if (t.dataset.mailChange && mailOpts) {
       if (t.checked) mailOpts.changes.add(t.dataset.mailChange); else mailOpts.changes.delete(t.dataset.mailChange);
       return majApercu();
@@ -1189,7 +1472,7 @@ function cabler() {
       if (t.checked) mailOpts.blocs.add(t.dataset.mailBloc); else mailOpts.blocs.delete(t.dataset.mailBloc);
       return majApercu();
     }
-    if (t.dataset.champDossier) return majDossier(t.dataset.champDossier, t.value);
+    if (t.dataset.champDossier) return majDossier(t.dataset.champDossier, t.type === 'checkbox' ? t.checked : t.value);
     if (t.dataset.champFiche) {
       const cle = t.dataset.champFiche;
       const date = t.type === 'date';

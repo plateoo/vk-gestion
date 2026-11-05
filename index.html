@@ -205,7 +205,12 @@
       <div class="page-head">
         <h1>À contrôler</h1>
         <p class="muted small">Factures reçues par e-mail, en attente de vérification.</p>
+        <div class="page-actions">
+          <!-- Une facture qui n'est pas sortie de la boîte mail : on la dépose -->
+          <button type="button" class="btn btn-outline js-deposer" title="PDF, XML ou photo : lu comme une facture reçue par mail">⇪ Déposer des factures</button>
+        </div>
       </div>
+      <div id="mails-sans-facture" hidden></div>
       <div id="catchup" class="card pad catchup" hidden></div>
 
       <!-- Ouvert depuis le tableau des factures, l'écran ne montre que le
@@ -337,6 +342,7 @@
         <div class="page-actions">
           <!-- Bouton de marque en contour : il côtoie des lignes en retard (rouge d'alerte) -->
           <button type="button" id="btn-new-invoice" class="btn btn-outline">+ Nouvelle facture</button>
+          <button type="button" class="btn js-deposer" title="PDF, XML ou photo : lu comme une facture reçue par mail">⇪ Déposer</button>
           <div class="dropdown">
             <button type="button" id="btn-export" class="btn">Exporter ▾</button>
             <div id="export-menu" class="dd-menu" hidden>
@@ -683,6 +689,8 @@
        comme destination. Conservées vides : le code qui les alimente ne
        doit pas tomber sur du vide, et un écran de moins ne vaut pas une
        chasse aux références dans cinq fichiers. -->
+  <!-- Le choix de fichiers du dépôt de factures, partagé par tous les boutons -->
+  <input type="file" id="depot-input" multiple hidden>
   <span id="review-badge" hidden></span>
   <span id="review-badge-m" hidden></span>
 
@@ -1169,6 +1177,7 @@ import { initPlanning, renderPlanning } from './js/planning.js';
 import { initTaches, renderTaches, refreshTaskBadge, remplirDestinataires } from './js/taches.js';
 import { renderMemoire } from './js/memoire.js';
 import { initClients, renderClients, refreshClientBadge } from './js/clients.js';
+import { initDepot, renderMailsSansFacture } from './js/depot.js';
 import { initSettings, renderSettings } from './js/settings.js';
 import { initSearch, openSearch } from './js/search.js';
 import { initPayments, renderPayments } from './js/payments.js';
@@ -1200,7 +1209,7 @@ function showTab(name) {
   if (name === 'taches') renderTaches();
   if (name === 'clients') renderClients();
   if (name === 'memoire') renderMemoire();
-  if (name === 'review') renderReview();
+  if (name === 'review') { renderReview(); renderMailsSansFacture(); }
   if (name === 'payments') renderPayments();
   if (name === 'admin') renderAdmin();
   if (name === 'settings') renderSettings();
@@ -1482,6 +1491,7 @@ initCalc();
 initPlanning();
 initTaches();
 initClients();
+initDepot();
 // Le planning montre, le tableau permet d'agir : un jour cliqué y renvoie.
 window.addEventListener('vk:goto', (e) => showTab(e.detail));
 initSuppliers();

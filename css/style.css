@@ -2341,3 +2341,42 @@ kbd {
   .cl-note-ajout { flex-direction: column; align-items: stretch; }
   .cl-contact .btn { flex: 1 1 100%; justify-content: center; min-height: 42px; font-size: 15px; }
 }
+
+/* ---------------------------------------------------------------
+   Dépôt de factures à la main, mails sans facture
+   --------------------------------------------------------------- */
+.depot-survol { outline: 3px dashed var(--info); outline-offset: -6px; background: var(--info-soft); }
+#mails-sans-facture { margin-bottom: 12px; }
+.msf summary { cursor: pointer; display: flex; gap: 6px; flex-wrap: wrap; align-items: baseline; }
+.msf > p { margin: 8px 0; }
+.msf-liste { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.msf-ligne {
+  display: flex; gap: 10px; align-items: center; justify-content: space-between; flex-wrap: wrap;
+  padding: 8px 0; border-top: 1px solid var(--border);
+}
+.msf-texte { display: flex; flex-direction: column; min-width: 0; gap: 2px; }
+.msf-texte strong { overflow-wrap: anywhere; }
+.msf-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+
+/* Le reste à faire daté, le travail fait, les documents */
+.cl-echeance { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; margin-top: 8px; }
+.cl-echeance .field { max-width: 200px; }
+.cl-en-retard { border-color: var(--border-danger); }
+.cl-travail { display: flex; flex-direction: column; gap: 8px; }
+.cl-travail-ligne { display: flex; gap: 10px; flex-wrap: wrap; }
+.cl-travail-ligne .field { min-width: 0; }
+.cl-travail-texte { flex: 1 1 220px; }
+.cl-fait { color: var(--green); }
+.cl-docs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.cl-docs li { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.cl-doc-nom {
+  font: inherit; font-size: 14px; font-weight: 600; background: none; border: none; padding: 4px 0;
+  color: var(--info); cursor: pointer; text-align: left; overflow-wrap: anywhere; min-height: 32px;
+}
+.cl-doc-nom:hover { text-decoration: underline; }
+.cl-traite-btn { width: 100%; justify-content: center; font-weight: 700; margin-bottom: 10px; min-height: 44px; }
+.cl-traite-ok {
+  margin: 0 0 10px; padding: 10px 12px; border-radius: var(--radius); font-weight: 600;
+  background: var(--green-bg); color: var(--green); border: 1px solid var(--border-ok);
+}
+.cl-carte-actions { display: flex; justify-content: flex-end; }
